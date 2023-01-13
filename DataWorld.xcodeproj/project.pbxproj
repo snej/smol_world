@@ -8,6 +8,9 @@
 
 /* Begin PBXBuildFile section */
 		27AA27F32970833900BF17A5 /* main.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27F22970833900BF17A5 /* main.cpp */; };
+		27AA27FB2970835E00BF17A5 /* Heap.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27FA2970835E00BF17A5 /* Heap.cc */; };
+		27AA27FE2970BFF300BF17A5 /* Val.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27FD2970BFF300BF17A5 /* Val.cc */; };
+		27AA28012970C04900BF17A5 /* Objects.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27AA28002970C04900BF17A5 /* Objects.cc */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,6 +28,12 @@
 /* Begin PBXFileReference section */
 		27AA27EF2970833900BF17A5 /* DataWorld */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = DataWorld; sourceTree = BUILT_PRODUCTS_DIR; };
 		27AA27F22970833900BF17A5 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
+		27AA27F92970835E00BF17A5 /* Heap.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Heap.hh; sourceTree = "<group>"; };
+		27AA27FA2970835E00BF17A5 /* Heap.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Heap.cc; sourceTree = "<group>"; };
+		27AA27FC2970BFF300BF17A5 /* Val.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Val.hh; sourceTree = "<group>"; };
+		27AA27FD2970BFF300BF17A5 /* Val.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Val.cc; sourceTree = "<group>"; };
+		27AA27FF2970C04900BF17A5 /* Objects.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Objects.hh; sourceTree = "<group>"; };
+		27AA28002970C04900BF17A5 /* Objects.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Objects.cc; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -58,6 +67,12 @@
 			isa = PBXGroup;
 			children = (
 				27AA27F22970833900BF17A5 /* main.cpp */,
+				27AA27F92970835E00BF17A5 /* Heap.hh */,
+				27AA27FA2970835E00BF17A5 /* Heap.cc */,
+				27AA27FC2970BFF300BF17A5 /* Val.hh */,
+				27AA27FD2970BFF300BF17A5 /* Val.cc */,
+				27AA27FF2970C04900BF17A5 /* Objects.hh */,
+				27AA28002970C04900BF17A5 /* Objects.cc */,
 			);
 			path = DataWorld;
 			sourceTree = "<group>";
@@ -90,6 +105,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastUpgradeCheck = 1420;
+				ORGANIZATIONNAME = "Jens Alfke";
 				TargetAttributes = {
 					27AA27EE2970833900BF17A5 = {
 						CreatedOnToolsVersion = 14.2;
@@ -119,7 +135,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				27AA28012970C04900BF17A5 /* Objects.cc in Sources */,
+				27AA27FE2970BFF300BF17A5 /* Val.cc in Sources */,
 				27AA27F32970833900BF17A5 /* main.cpp in Sources */,
+				27AA27FB2970835E00BF17A5 /* Heap.cc in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
