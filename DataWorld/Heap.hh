@@ -1,7 +1,7 @@
 //
 // Heap.hh
 //
-// 
+// Copyright © 2023 Jens Alfke. All rights reserved.
 //
 
 #pragma once
@@ -57,7 +57,7 @@ public:
     /// Sets the heap's root value.
     void setRoot(Val);
 
-    template <class T> void setRoot(T* obj);
+    template <class T> void setRoot(T* obj)     {setRoot(obj->asVal(this));}
     template <class T> T* getRootAs() const;
 
     /// Resets the Heap to an empty state.
@@ -120,6 +120,13 @@ private:
 };
 
 
+#define IN_MUT_HEAP Heap* heap //= nullptr
+#define IN_HEAP     Heap const* heap //= nullptr
+
+static inline Heap* GetHeap(Heap* h)              {return h ? h : Heap::current();}
+static inline Heap const* GetHeap(Heap const* h)  {return h ? h : Heap::current();}
+
+
 /// A typical copying garbage collector that copies all live objects into another Heap.
 /// At the end it swaps the memory of the two Heaps, so the original heap is now clean,
 /// and the other heap can be freed or reused for the next GC.
@@ -154,50 +161,3 @@ private:
     std::unique_ptr<Heap> _tempHeap;
     Heap &_fromHeap, &_toHeap;
 };
-
-
-/// An untyped 'pointer' within a Heap.
-/// It's represented as a 32-bit offset from the start of the heap.
-class PtrBase {
-public:
-    PtrBase(void const* addr, Heap const* heap)  :_pos(heap->pos(addr)) { }
-    explicit PtrBase(heappos pos)           :_pos(pos) {assert(Heap::isAligned(pos)); }
-    heappos pos() const                     {return _pos;}
-    void* get(Heap* heap) const             {return heap->at(_pos);}
-    const void* get(Heap const* heap) const {return heap->at(_pos);}
-//    void* get() const                       {return get(Heap::current());}
-
-    explicit operator bool() const          {return _pos != 0;}
-private:
-    heappos _pos;
-};
-
-
-/// A 'pointer' within a heap, to a value of type `T` (in practice, an `Object` subclass.)
-template <class T>
-class Ptr : public PtrBase {
-public:
-    Ptr(T const* addr, Heap const *heap)  :PtrBase(addr, heap) { }
-//    Ptr(T *addr)                        :Ptr(addr, Heap::current()) { }
-    explicit Ptr(heappos pos)           :PtrBase(pos) { }
-    explicit Ptr(PtrBase ptr)           :PtrBase(ptr) { }
-
-    T* get(Heap const* heap) const      {return (T*)PtrBase::get(heap);}
-//    T* get() const                      {return (T*)PtrBase::get();}
-
-//    T* operator* () const               {return get();}
-//    T* operator-> () const              {return get();}
-};
-
-
-
-template <class T> void Heap::setRoot(T* obj) {
-    setRoot(Ptr(obj, this));
-}
-
-
-template <class T> void GarbageCollector::update(T*& obj) {
-    Ptr ptr(obj, &_fromHeap);
-    update(ptr);
-    obj = (T*)ptr.get(&_toHeap);
-}

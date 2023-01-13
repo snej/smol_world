@@ -23,7 +23,7 @@ int main(int argc, const char * argv[]) {
         cout << arr << endl;
         heap.setRoot(&arr);
         assert(heap.root().isArray());
-        assert(heap.root().asArray().get(&heap) == &arr);
+        assert(heap.root().asArray(&heap) == &arr);
 
         arr[0] = 1234;
         arr[1] = -4567;
@@ -32,8 +32,8 @@ int main(int argc, const char * argv[]) {
         cout << str << endl;
         assert(str->count() == 10);
         assert(str->get() == "Cowabunga!");
-        arr[2] = Ptr(str, &heap);
-        arr[3] = Ptr(str, &heap);
+        arr[2] = str->asVal(&heap);
+        arr[3] = str->asVal(&heap);
 
         String::create("Garbage!", &heap);
 
@@ -52,7 +52,7 @@ int main(int argc, const char * argv[]) {
         assert(root);
         cout << root << "... at " << (void*)root << endl;
 
-        String *str = (*root)[2].asString().get(&heap);
+        String *str = (*root)[2].asString(&heap);
         cout << "String: " << str << "... at " << (void*)str << endl;
 
         cout << "before GC: " << heap.used() << " bytes\n";

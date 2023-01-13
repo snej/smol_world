@@ -59,13 +59,14 @@ protected:
     template <typename T> T const* items() const    {return (T const*)_items;}
 
     // Used by GC:
-    PtrBase getForwardingAddress() const {
-        return PtrBase(hasFlag(GC) ? (_count & ~GC) : 0);
+    heappos getForwardingAddress() const {
+        return hasFlag(GC) ? (_count & ~GC) : 0;
     }
 
-    void setForwardingAddress(PtrBase fwd) {
+    void setForwardingAddress(heappos fwd) {
+        assert(fwd > 0);
         assert(!hasFlag(GC));
-        _count = GC | fwd.pos();
+        _count = GC | fwd;
     }
 
 private:
@@ -74,30 +75,38 @@ private:
 };
 
 
-/// A string object. Stores UTF-8 characters, no nul termination.
-class String : public Object {
+template <class T, Val::TagBits TAG>
+class ObjectOf : public Object {
 public:
-    static String* create(const char *str, size_t size, Heap *heap /*= nullptr*/) {
+    static constexpr Val::TagBits kTag = TAG;
+
+    Val asVal(IN_HEAP) const        {return Val(this, heap);}
+
+protected:
+    ObjectOf(size_t count, const void *items, size_t itemSize) :Object(count, items, itemSize) { }
+};
+
+
+/// A string object. Stores UTF-8 characters, no nul termination.
+class String : public ObjectOf<String, Val::StringTag> {
+public:
+    static String* create(const char *str, size_t size, IN_MUT_HEAP) {
         return new (heap, size) String(str, size);
     }
 
-    static String* create(string_view str, Heap *heap /*= nullptr*/) {
+    static String* create(string_view str, IN_MUT_HEAP) {
         return create(str.data(), str.size(), heap);
     }
 
     string_view get() const {return string_view(items<char>(), count());}
 
-    Ptr<String> ptr(Heap *heap) {return Ptr(this, heap);}
-
-    static constexpr Val::TagBits kTag = Val::StringTag;
-
 private:
-    String(const char *str, size_t size) :Object(size, str, 1) { }
+    String(const char *str, size_t size) :ObjectOf(size, str, 1) { }
 };
 
 
 /// An array of `Val`s.
-class Array : public Object {
+class Array : public ObjectOf<Array, Val::ArrayTag> {
 public:
     static Array* create(heapsize count, Heap *heap /*= nullptr*/) {
         return new (heap, count * sizeof(Val)) Array(nullptr, count);
@@ -106,42 +115,35 @@ public:
         return new (heap, vals.size() * sizeof(Val)) Array(vals.begin(), vals.size());
     }
 
-    Val* get()              {return items<Val>();}
-    const Val* get() const  {return items<Val>();}
+    /// Direct access to array of Val
+    Val* data()              {return items<Val>();}
+    const Val* data() const  {return items<Val>();}
 
-    Ptr<Array> ptr(Heap *heap) {return Ptr(this, heap);}
-
-    Val& operator[] (heapsize i)  {assert(i < count()); return get()[i];}
+    Val& operator[] (heapsize i)  {assert(i < count()); return data()[i];}
 
     using iterator = Val*;
     using const_iterator = const Val*;
 
-    iterator begin()                {return get();}
-    iterator end()                  {return get() + count();}
-    const_iterator begin() const    {return get();}
-    const_iterator end() const      {return get() + count();}
-
-    static constexpr Val::TagBits kTag = Val::ArrayTag;
+    iterator begin()                {return data();}
+    iterator end()                  {return data() + count();}
+    const_iterator begin() const    {return data();}
+    const_iterator end() const      {return data() + count();}
 
 private:
-    Array(const Val *vals, size_t count) :Object(count, vals, sizeof(Val)) { }
+    Array(const Val *vals, size_t count) :ObjectOf(count, vals, sizeof(Val)) { }
 };
 
 
 /// A dictionary mapping strings to `Val`s.
-class Dict : public Object {
+class Dict : public ObjectOf<Dict, Val::DictTag> {
 public:
-    static constexpr Val::TagBits kTag = Val::DictTag;
+
 };
 
 
-template <class T> Ptr<T> Val::asPtr() const {
+template <class T> T* Val::as(Heap const* heap) const {
     assert(tag() == T::kTag);
-    return Ptr<T>(asPos());
-}
-
-template <class T> T* Val::as(Heap const* heap) {
-    return asPtr<T>().get(heap);
+    return (T*)heap->at(asPos());
 }
 
 
@@ -151,3 +153,11 @@ std::ostream& operator<<(std::ostream&, String const*);
 std::ostream& operator<<(std::ostream&, Array const*);
 static inline std::ostream& operator<<(std::ostream& out, String const& str) {return out << &str;}
 static inline std::ostream& operator<<(std::ostream& out, Array const& arr) {return out << &arr;}
+
+
+
+template <class T> void GarbageCollector::update(T*& obj) {
+    Val val = obj->asVal(&_fromHeap);
+    update(val);
+    obj = val.as<T>(&_toHeap);
+}

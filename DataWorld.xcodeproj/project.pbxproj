@@ -34,6 +34,7 @@
 		27AA27FD2970BFF300BF17A5 /* Val.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Val.cc; sourceTree = "<group>"; };
 		27AA27FF2970C04900BF17A5 /* Objects.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Objects.hh; sourceTree = "<group>"; };
 		27AA28002970C04900BF17A5 /* Objects.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Objects.cc; sourceTree = "<group>"; };
+		27AA28052971D73700BF17A5 /* Ptr.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Ptr.hh; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,6 +74,7 @@
 				27AA27FD2970BFF300BF17A5 /* Val.cc */,
 				27AA27FF2970C04900BF17A5 /* Objects.hh */,
 				27AA28002970C04900BF17A5 /* Objects.cc */,
+				27AA28052971D73700BF17A5 /* Ptr.hh */,
 			);
 			path = DataWorld;
 			sourceTree = "<group>";

@@ -37,7 +37,7 @@ public:
     :_val(uint32_t((i << 1) | IntTag))                  {assert(i >= MinInt && i <= MaxInt);}
 
     template <class T>
-    Val(Ptr<T> const& ptr)                              :Val(ptr, T::kTag) { }
+    Val(T const* ptr, IN_HEAP)                          :Val(heap->pos(ptr), T::kTag) { }
 
     constexpr ValType type() {
         if (_val & IntTag)
@@ -54,32 +54,30 @@ public:
     constexpr int asInt() const                         {assert(isInt()); return int32_t(_val) >> 1;}
 
     constexpr bool isString() const                     {return tag() == StringTag;}
-    Ptr<String> asString() const                        {return asPtr<String>();}
+    String* asString(IN_HEAP) const                     {return as<String>(heap);}
 
     constexpr bool isArray() const                      {return tag() == ArrayTag;}
-    Ptr<Array> asArray() const                          {return asPtr<Array>();}
+    Array* asArray(IN_HEAP) const                       {return as<Array>(heap);}
 
     constexpr bool isDict() const                       {return tag() == DictTag;}
-    Ptr<Dict> asDict() const                            {return asPtr<Dict>();}
+    Dict* asDict(IN_HEAP) const                         {return as<Dict>(heap);}
 
-    constexpr bool isPtr() const                        {return !isInt() && !isNull();}
-    PtrBase asPtrBase() const                           {assert(isPtr()); return PtrBase(asPos());}
+    constexpr bool isObject() const                     {return !isInt() && !isNull();}
 
     heappos asPos() const {
-        assert(isPtr());
+        assert(isObject());
         return heappos((_val >> 1) & ~Heap::AlignmentMask);
     }
 
-    template <class T> T* as(Heap const* heap);
-
-    template <class T> Ptr<T> asPtr() const;  // implementation in Objects.hh
+    template <class T> T* as(IN_HEAP) const;
 
 private:
+    friend class GarbageCollector;
     friend class Heap;
     friend class String;
     friend class Array;
     friend class Dict;
-    
+
     enum TagBits : uint32_t {
         IntTag      = 0b001,     // Anything with the LSB set is an integer
         StringTag   = 0b000,
@@ -88,12 +86,16 @@ private:
         _spareTag   = 0b110,
     };
 
+    template <class T, TagBits TAG> friend class ObjectOf;
+
     static constexpr int TagSize = 3;
     static constexpr uint32_t TagMask = (1 << TagSize) - 1;
 
-    Val(PtrBase const& ptr, TagBits tag)
-    :_val((ptr.pos() << 1) | tag)
-    { }
+    Val(heappos pos, TagBits tag)
+    :_val((pos << 1) | tag)
+    {
+        assert(Heap::isAligned(pos));
+    }
 
     constexpr TagBits tag() const                       {return TagBits(_val & TagMask);}
 
@@ -113,5 +115,5 @@ template <class T> T* Heap:: getRootAs() const {
 template <class T>
 void GarbageCollector::update(Ptr<T>& ptr) {
     Val dstVal = scanValue(ptr);
-    ptr = dstVal.asPtr<T>();
+    ptr = dstVal.as<T>();
 }

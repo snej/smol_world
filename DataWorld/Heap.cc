@@ -1,6 +1,8 @@
 //
 // Heap.cc
 //
+// Copyright © 2023 Jens Alfke. All rights reserved.
+//
 
 #include "Heap.hh"
 #include "Val.hh"
@@ -38,7 +40,7 @@ Heap Heap::existing(void *base, size_t used, size_t capacity) {
     auto header = (Header*)heap._base;
     if (header->magic != kMagic)
         throw std::runtime_error("Invalid Heap: wrong magic number");
-    if (header->root.isPtr()) {
+    if (header->root.isObject()) {
         heappos rootPos = header->root.asPos();
         if (rootPos < sizeof(Header) || rootPos >= used)
             throw std::runtime_error("Invalid Heap: bad root offset");
@@ -85,27 +87,27 @@ void GarbageCollector::scanRoot() {
 Val GarbageCollector::scanValue(Val val) {
     switch (val.type()) {
         case ValType::String: {
-            auto str = val.asString().get(&_fromHeap);
+            String* str = val.asString(&_fromHeap);
             if (auto fwd = str->getForwardingAddress())
-                return Ptr<String>(fwd);
+                return Val(fwd, Val::StringTag);
             auto dstStr = String::create(str->get(), &_toHeap);
-            Ptr dstPtr(dstStr, &_toHeap);
-            str->setForwardingAddress(dstPtr);
-            return dstPtr;
+            Val dst(dstStr, &_toHeap);
+            str->setForwardingAddress(dst.asPos());
+            return dst;
         }
         case ValType::Array: {
-            auto array = val.asArray().get(&_fromHeap);
+            Array* array = val.asArray(&_fromHeap);
             if (auto fwd = array->getForwardingAddress())
-                return Ptr<Array>(fwd);
+                return Val(fwd, Val::ArrayTag);
             auto count = array->count();
             auto dstArray = Array::create(count, &_toHeap);
-            Ptr dstPtr(dstArray, &_toHeap);
+            Val dst(dstArray, &_toHeap);
             auto iter = array->begin();
-            array->setForwardingAddress(dstPtr);
+            array->setForwardingAddress(dst.asPos());
             for (heapsize i = 0; i < count; ++i, ++iter) {
                 (*dstArray)[i] = scanValue(*iter);
             }
-            return dstPtr;
+            return dst;
         }
         case ValType::Dict: {
             abort();//TODO
