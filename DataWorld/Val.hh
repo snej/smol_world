@@ -71,6 +71,12 @@ public:
 
     template <class T> T* as(IN_HEAP) const;
 
+    friend bool operator== (Val a, Val b)               {return a._val == b._val;}
+    friend bool operator!= (Val a, Val b)               {return a._val != b._val;}
+
+    // key comparator for Dicts
+    static bool keyCmp(Val a, Val b)                    {return a._val > b._val;} // descending order
+
 private:
     friend class GarbageCollector;
     friend class Heap;
@@ -86,7 +92,8 @@ private:
         _spareTag   = 0b110,
     };
 
-    template <class T, TagBits TAG> friend class ObjectOf;
+    template <Val::TagBits TAG> friend class TaggedObject;
+    template <class T, typename ITEM, Val::TagBits TAG> friend class Collection;
 
     static constexpr int TagSize = 3;
     static constexpr uint32_t TagMask = (1 << TagSize) - 1;

@@ -86,36 +86,28 @@ void GarbageCollector::scanRoot() {
 
 Val GarbageCollector::scanValue(Val val) {
     switch (val.type()) {
-        case ValType::String: {
-            String* str = val.asString(&_fromHeap);
-            if (auto fwd = str->getForwardingAddress())
-                return Val(fwd, Val::StringTag);
-            auto dstStr = String::create(str->get(), &_toHeap);
-            Val dst(dstStr, &_toHeap);
-            str->setForwardingAddress(dst.asPos());
-            return dst;
-        }
-        case ValType::Array: {
-            Array* array = val.asArray(&_fromHeap);
-            if (auto fwd = array->getForwardingAddress())
-                return Val(fwd, Val::ArrayTag);
-            auto count = array->count();
-            auto dstArray = Array::create(count, &_toHeap);
-            Val dst(dstArray, &_toHeap);
-            auto iter = array->begin();
-            array->setForwardingAddress(dst.asPos());
-            for (heapsize i = 0; i < count; ++i, ++iter) {
-                (*dstArray)[i] = scanValue(*iter);
-            }
-            return dst;
-        }
-        case ValType::Dict: {
-            abort();//TODO
-        }
-        default:
-            return val;
+        case ValType::String:   return scanValueAs<String>(val);
+        case ValType::Array:    return scanValueAs<Array>(val);
+        case ValType::Dict:     return scanValueAs<Dict>(val);
+        default:                return val;
     }
 }
+
+
+template <class T>
+Val GarbageCollector::scanValueAs(Val val) {
+    T *obj = val.as<T>(&_fromHeap);
+    if (heappos fwd = obj->getForwardingAddress())
+        return Val(fwd, T::kTag);
+    auto capacity = obj->capacity();
+    auto begin = obj->begin(), end = obj->end();
+    T *dstObj = T::createUninitialized(capacity, &_toHeap);
+    Val dst(dstObj, &_toHeap);
+    obj->setForwardingAddress(dst.asPos());
+    dstObj->populate(begin, end, [this](Val oldVal) {return scanValue(oldVal);});
+    return dst;
+}
+
 
 void GarbageCollector::update(Val &val) {
     val = scanValue(val);

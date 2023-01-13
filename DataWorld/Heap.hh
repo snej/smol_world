@@ -127,6 +127,8 @@ static inline Heap* GetHeap(Heap* h)              {return h ? h : Heap::current(
 static inline Heap const* GetHeap(Heap const* h)  {return h ? h : Heap::current();}
 
 
+
+
 /// A typical copying garbage collector that copies all live objects into another Heap.
 /// At the end it swaps the memory of the two Heaps, so the original heap is now clean,
 /// and the other heap can be freed or reused for the next GC.
@@ -157,6 +159,8 @@ public:
 
 private:
     void scanRoot();
+    template <class T> Val scanValueAs(Val val);
+
     
     std::unique_ptr<Heap> _tempHeap;
     Heap &_fromHeap, &_toHeap;
