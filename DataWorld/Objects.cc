@@ -34,36 +34,36 @@ void Dict::sort(size_t count) {
 
 // Returns the DictEntry with this key, or else the pos where it should go (DictEntry with next higher key),
 // or else the end.
-DictEntry* Dict::_findEntry(Val keyStr) {
-    return std::lower_bound(begin(), endAll(), DictEntry{keyStr, nullval}, Dict::keyCmp);
+DictEntry* Dict::_findEntry(Val key) {
+    return std::lower_bound(begin(), endAll(), DictEntry{key, nullval}, Dict::keyCmp);
 }
 
 
-Val* Dict::find(Val keyStr) {
-    if (DictEntry *ep = _findEntry(keyStr); ep != endAll() && ep->key == keyStr)
+Val* Dict::find(Val key) {
+    if (DictEntry *ep = _findEntry(key); ep != endAll() && ep->key == key)
         return &ep->value;
     else
         return nullptr;
 }
 
 
-bool Dict::set(Val keyStr, Val value) {
-    if (DictEntry *ep = _findEntry(keyStr); ep == endAll()) {
+bool Dict::set(Val key, Val value) {
+    if (DictEntry *ep = _findEntry(key); ep == endAll()) {
         return false; // not found and full!
-    } else if (ep->key == keyStr) {
+    } else if (ep->key == key) {
         ep->value = value;
         return true;
     } else {
         assert(!full());
         ::memmove(ep + 1, ep, (endAll() - ep - 1) * sizeof(DictEntry));
-        new (ep) DictEntry {keyStr, value};
+        new (ep) DictEntry {key, value};
         return true;
     }
 }
 
 
-bool Dict::replace(Val keyStr, Val newValue) {
-    if (Val *valp = find(keyStr)) {
+bool Dict::replace(Val key, Val newValue) {
+    if (Val *valp = find(key)) {
         *valp = newValue;
         return true;
     } else {
@@ -72,8 +72,8 @@ bool Dict::replace(Val keyStr, Val newValue) {
 }
 
 
-bool Dict::remove(Val keyStr) {
-    if (DictEntry *ep = _findEntry(keyStr)) {
+bool Dict::remove(Val key) {
+    if (DictEntry *ep = _findEntry(key)) {
         ::memmove(ep, ep + 1, (endAll() - ep) * sizeof(DictEntry));
         new (ep) DictEntry {nullval, nullval};
         return true;

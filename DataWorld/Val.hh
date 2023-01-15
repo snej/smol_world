@@ -23,7 +23,7 @@ class Array;
 class Dict;
 
 
-/// A polymorphic data value.
+/// A 32-bit polymorphic data value associated with a Heap.
 /// Can be null, an integer, or a reference to a String, Array, or Dict object in the heap.
 class Val {
 public:
@@ -37,7 +37,7 @@ public:
     :_val(uint32_t((i << 1) | IntTag))                  {assert(i >= MinInt && i <= MaxInt);}
 
     template <class T>
-    Val(T const* ptr, IN_HEAP)                          :Val(heap->pos(ptr), T::kTag) { }
+    Val(T const* ptr, IN_HEAP)                          :Val(heap->pos(ptr), T::Tag) { }
 
     constexpr ValType type() {
         if (_val & IntTag)
@@ -63,6 +63,7 @@ public:
     Dict* asDict(IN_HEAP) const                         {return as<Dict>(heap);}
 
     constexpr bool isObject() const                     {return !isInt() && !isNull();}
+    Object* asObject(IN_HEAP) const                     {return (Object*)heap->at(asPos());}
 
     heappos asPos() const {
         assert(isObject());
@@ -77,13 +78,6 @@ public:
     // key comparator for Dicts
     static bool keyCmp(Val a, Val b)                    {return a._val > b._val;} // descending order
 
-private:
-    friend class GarbageCollector;
-    friend class Heap;
-    friend class String;
-    friend class Array;
-    friend class Dict;
-
     enum TagBits : uint32_t {
         IntTag      = 0b001,     // Anything with the LSB set is an integer
         StringTag   = 0b000,
@@ -92,8 +86,10 @@ private:
         _spareTag   = 0b110,
     };
 
-    template <Val::TagBits TAG> friend class TaggedObject;
-    template <class T, typename ITEM, Val::TagBits TAG> friend class Collection;
+    constexpr TagBits tag() const                       {return TagBits(_val & TagMask);}
+
+private:
+    friend class GarbageCollector;
 
     static constexpr int TagSize = 3;
     static constexpr uint32_t TagMask = (1 << TagSize) - 1;
@@ -103,8 +99,6 @@ private:
     {
         assert(Heap::isAligned(pos));
     }
-
-    constexpr TagBits tag() const                       {return TagBits(_val & TagMask);}
 
     uint32_t _val;
 };
@@ -119,8 +113,8 @@ template <class T> T* Heap:: getRootAs() const {
     return root().as<T>(this);
 }
 
-template <class T>
-void GarbageCollector::update(Ptr<T>& ptr) {
-    Val dstVal = scanValue(ptr);
-    ptr = dstVal.as<T>();
-}
+//template <class T>
+//void GarbageCollector::update(Ptr<T>& ptr) {
+//    Val dstVal = scanValue(ptr);
+//    ptr = dstVal.as<T>();
+//}

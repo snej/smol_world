@@ -39,6 +39,24 @@ int main(int argc, const char * argv[]) {
 
         cout << arr << endl;
 
+        int n = 0;
+        cout << "Contents:\n";
+        heap.visit([&](Val val) {
+            n++;
+            cout << "\t" << val.asPos() << ": " << val << std::endl;
+            return true;
+        });
+        assert(n == 2);
+
+        n = 0;
+        cout << "Contents again:\n";
+        heap.visit([&](Val val) {
+            n++;
+            cout << "\t" << val.asPos() << ": " << val << std::endl;
+            return true;
+        });
+        assert(n == 2);
+
         persisted = string((char*)heap.base(), heap.used());
     }
 

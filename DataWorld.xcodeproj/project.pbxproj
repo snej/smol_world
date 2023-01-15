@@ -35,6 +35,7 @@
 		27AA27FF2970C04900BF17A5 /* Objects.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Objects.hh; sourceTree = "<group>"; };
 		27AA28002970C04900BF17A5 /* Objects.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Objects.cc; sourceTree = "<group>"; };
 		27AA28052971D73700BF17A5 /* Ptr.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Ptr.hh; sourceTree = "<group>"; };
+		27AA28082973859D00BF17A5 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -51,6 +52,7 @@
 		27AA27E62970833900BF17A5 = {
 			isa = PBXGroup;
 			children = (
+				27AA28082973859D00BF17A5 /* README.md */,
 				27AA27F12970833900BF17A5 /* DataWorld */,
 				27AA27F02970833900BF17A5 /* Products */,
 			);

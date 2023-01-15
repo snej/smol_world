@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -19,14 +20,12 @@ using heappos  = uint32_t;      ///< A position in a Heap, relative to its base.
 using heapsize = uint32_t;      ///< Like `size_t` for Heaps.
 
 class Object;
-class PtrBase;
-template <class T> class Ptr;
 class Val;
 
 
 /// A simple container for dynamic allocation.
-/// Intra-Heap pointers use `Ptr`, a 32-bit tagged pointer.
-/// Allocation uses a simple bump / arena allocator. Allocations are 4-byte aligned.
+/// Pointers within a Heap are 32-bit values, offsets from the heap's base address.
+/// Allocation uses a simple bump (arena) allocator. Allocations are 4-byte aligned.
 class Heap {
 public:
     static constexpr heappos AlignmentBits  = 2;
@@ -46,10 +45,10 @@ public:
 
     ~Heap()                             {if (_malloced) free(_base);}
 
-    const void* base() const            {return _base;}
-    const size_t capacity() const       {return _end - _base;}
-    const size_t used() const           {return _cur - _base;}
-    const size_t remaining() const      {return _end - _cur;}
+    const void* base() const            {return _base;}         ///< Address of start of heap.
+    const size_t capacity() const       {return _end - _base;}  ///< Maximum size it can grow to
+    const size_t used() const           {return _cur - _base;}  ///< Maximum byte-offset used
+    const size_t remaining() const      {return _end - _cur;}   ///< Bytes of capacity left
 
     /// The heap's root value. Starts as Null, but usually an Array or Dict.
     Val root() const;
@@ -65,67 +64,124 @@ public:
 
     void garbageCollectTo(Heap &dstHeap);
 
-    /// Swaps the memory of two heaps. Useful after GC.
-    friend void swap(Heap &a, Heap &b) {
-        std::swap(a._base, b._base);
-        std::swap(a._end, b._end);
-        std::swap(a._cur, b._cur);
-        std::swap(a._malloced, b._malloced);
-    }
-
     //---- Current Heap:
 
+    /// Makes this the current heap of the current thread.
     void enter();
+
+    /// Clears the current heap.
     void exit();
 
+    /// The current heap of the current thread, or nullptr if none.
     static Heap* current();
 
     //---- Allocation:
 
+    /// Allocates space for `size` bytes. The address will be 4-byte aligned.
+    /// If there's not enough space, calls the AllocFailureHandler and retries.
+    /// If there's no AllocFailureHandler, or it returns false, throws an exception.
     void* alloc(heapsize size) {
-        byte *result = (byte*)((uintptr_t(_cur) + AlignmentMask) & ~AlignmentMask);
-        byte* newCur = result + size;
-        if (newCur > _end) throw std::runtime_error("Heap overflow");
+        byte *result, *newCur;
+        do {
+            result = alignUp(_cur);
+            newCur = result + size;
+            if (newCur > _end) {
+                if (!_allocFailureHandler || !_allocFailureHandler(this, size))
+                    throw std::runtime_error("Heap overflow");
+            }
+        } while (newCur > _end);
         _cur = newCur;
         return result;
     }
 
+    /// Convenience wrapper to allocate an instance of `T`.
     template <typename T>
     T* alloc()                      {return (T*)alloc(sizeof(T));}
 
+    /// A callback that's invoked when the Heap doesn't have enough space for an allocation.
+    /// It should attempt to increase the free space, then return true.
+    /// If it can't, it must return false.
+    using AllocFailureHandler = bool(*)(Heap*,heapsize sizeNeeded);
+
+    /// Sets the allocation-failure handler.
+    void setAllocFailureHandler(AllocFailureHandler h)  {_allocFailureHandler = h;}
+
     //---- Address Translation:
 
+    /// Translates a `heappos` offset to a real address.
     void* at(heappos off)               {assert(validPos(off)); return _base + off;}
     const void* at(heappos off) const   {assert(validPos(off)); return _base + off;}
 
+    /// Translates a real address to a `heappos` offset.
     heappos pos(const void *ptr) const {
         assert(ptr >= _base && ptr < _end && isAligned(ptr));
         return heappos((byte*)ptr - _base);
     }
 
+    /// Returns true if a `heappos` is valid in this Heap, i.e. doesn't point past the end of
+    /// allocated memory.
     bool validPos(heappos pos) const;
 
     static inline bool isAligned(const void *ptr)   {return (uintptr_t(ptr) & AlignmentMask) == 0;}
     static inline bool isAligned(heappos pos)       {return (pos & AlignmentMask) == 0;}
 
-private:
+    template <typename T> static T* alignUp(T *addr) {
+        return (T*)((uintptr_t(addr) + AlignmentMask) & ~AlignmentMask);
+    }
 
+    Object* firstObject();
+    Object* nextObject(Object *obj);
+
+    using Visitor = std::function<bool(Val)>;
+
+    void visit(Visitor const&);
+
+private:
+    friend class GarbageCollector;
+    
     Heap(void *base, size_t capacity, bool malloced);
-    Val _gcCopy(Val, Heap&);
+    void clearObjectFlags(heapsize /*Object::Flags*/ flags);
 
     byte*   _base;
     byte*   _end;
     byte*   _cur;
+    AllocFailureHandler _allocFailureHandler = nullptr;
     bool    _malloced = false;
 };
 
 
-#define IN_MUT_HEAP Heap* heap //= nullptr
-#define IN_HEAP     Heap const* heap //= nullptr
+class ConstHeapRef {
+public:
+    ConstHeapRef()                  :_heap(Heap::current()) { }
+    ConstHeapRef(nullptr_t)         :ConstHeapRef() { }
+    ConstHeapRef(Heap const* h)     :_heap(h) { }
+    ConstHeapRef(Heap const& h)     :_heap(&h) { }
 
-static inline Heap* GetHeap(Heap* h)              {return h ? h : Heap::current();}
-static inline Heap const* GetHeap(Heap const* h)  {return h ? h : Heap::current();}
+    Heap const* operator* ()    {return _heap;}
+    Heap const* operator->()    {return _heap;}
 
+protected:
+    Heap const* _heap;
+};
+
+
+class HeapRef : ConstHeapRef {
+public:
+    HeapRef()           :ConstHeapRef() { }
+    HeapRef(nullptr_t)  :ConstHeapRef() { }
+    HeapRef(Heap *h)    :ConstHeapRef(h) { }
+    HeapRef(Heap &h)    :ConstHeapRef(h) { }
+
+    Heap* operator* () const    {return (Heap*)_heap;}
+    Heap* operator->() const    {return (Heap*)_heap;}
+};
+
+
+#define IN_MUT_HEAP HeapRef heap //= nullptr
+#define IN_HEAP     ConstHeapRef heap //= nullptr
+
+//static inline Heap* GetHeap(Heap* h)              {return h ? h : Heap::current();}
+//static inline Heap const* GetHeap(Heap const* h)  {return h ? h : Heap::current();}
 
 
 
@@ -151,17 +207,16 @@ public:
 
     // These are equivalent to scanValue but update the Val/Ptr/Object in place:
     void update(Val&);
-    template <class T> void update(Ptr<T>& ptr);
+//    template <class T> void update(Ptr<T>& ptr);
     template <class T> void update(T*&);
 
     // The destructor swaps the two heaps, so _fromHeap is now the live one.
-    ~GarbageCollector()     {_fromHeap.reset(); swap(_fromHeap, _toHeap);}
+    ~GarbageCollector()     {_fromHeap.reset(); std::swap(_fromHeap, _toHeap);}
 
 private:
     void scanRoot();
     template <class T> Val scanValueAs(Val val);
 
-    
     std::unique_ptr<Heap> _tempHeap;
     Heap &_fromHeap, &_toHeap;
 };

@@ -7,6 +7,7 @@
 #include "Heap.hh"
 #include "Val.hh"
 #include "Objects.hh"
+#include <deque>
 
 static constexpr uint32_t kMagic = 0xD217904A;
 
@@ -51,12 +52,72 @@ Heap Heap::existing(void *base, size_t used, size_t capacity) {
 bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos < used();}
 
 
-Val Heap::root() const            {return ((Header*)_base)->root;}
-void Heap::setRoot(Val val)       {((Header*)_base)->root = val;}
+Val Heap::root() const              {return ((Header*)_base)->root;}
+void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
 
 void Heap::enter()                  {assert(!sCurHeap); sCurHeap = this;}
 void Heap::exit()                   {assert(sCurHeap == this); sCurHeap = nullptr;}
 Heap* Heap::current()               {return sCurHeap;}
+
+
+Object* Heap::firstObject() {
+    return (Object*)(_base + sizeof(Header));
+}
+
+Object* Heap::nextObject(Object *obj) {
+    uintptr_t addr = (uintptr_t)obj + sizeof(Object) + obj->dataSize();
+    obj = alignUp((Object*)addr);
+    return (byte*)obj < _cur ? obj : nullptr;
+}
+
+void Heap::clearObjectFlags(heapsize /*Object::Flags*/ flags) {
+    for (auto obj = firstObject(); obj; obj = nextObject(obj))
+        obj->setFlag(Object::Flags(flags), false);
+}
+
+
+void Heap::visit(Visitor const& visitor) {
+    clearObjectFlags(Object::Visited);
+    std::deque<Val> stack;
+
+    auto process = [&](Val val) -> bool {
+        if (val.isObject()) {
+            Object *obj = val.asObject(this);
+            if (!obj->hasFlag(Object::Visited)) {
+                obj->setFlag(Object::Visited, true);
+                if (!visitor(val))
+                    return false;
+                if (val.isArray() || val.isDict())
+                    stack.push_back(val);
+            }
+        }
+        return true;
+    };
+
+    if (!process(root()))
+        return;
+    while (!stack.empty()) {
+        Val val = stack.front();
+        stack.pop_front();
+        switch (val.type()) {
+            case ValType::Array:
+                for (Val v : *val.as<Array>(this)) {
+                    if (!process(v))
+                        return;
+                }
+                break;
+            case ValType::Dict:
+                for (DictEntry const& e : *val.as<Dict>(this)) {
+                    if (!process(e.key) || !process(e.value))
+                        return;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+}
+
 
 
 #pragma mark - GARBAGE COLLECTION:
@@ -80,6 +141,7 @@ GarbageCollector::GarbageCollector(Heap &fromHeap, Heap &toHeap)
 
 
 void GarbageCollector::scanRoot() {
+    _fromHeap.clearObjectFlags(Object::Fwd);
     _toHeap.setRoot(scanValue(_fromHeap.root()));
 }
 
@@ -96,13 +158,13 @@ Val GarbageCollector::scanValue(Val val) {
 
 template <class T>
 Val GarbageCollector::scanValueAs(Val val) {
-    T *obj = val.as<T>(&_fromHeap);
+    T *obj = val.as<T>(_fromHeap);
     if (heappos fwd = obj->getForwardingAddress())
-        return Val(fwd, T::kTag);
+        return Val(fwd, T::Tag);
     auto capacity = obj->capacity();
     auto begin = obj->begin(), end = obj->end();
-    T *dstObj = T::createUninitialized(capacity, &_toHeap);
-    Val dst(dstObj, &_toHeap);
+    T *dstObj = T::createUninitialized(capacity, _toHeap);
+    Val dst(dstObj, _toHeap);
     obj->setForwardingAddress(dst.asPos());
     dstObj->populate(begin, end, [this](Val oldVal) {return scanValue(oldVal);});
     return dst;
