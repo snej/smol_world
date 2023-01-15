@@ -35,7 +35,7 @@ std::ostream& operator<<(std::ostream& out, Val val) {
             out << val.asInt();
             break;
         default:
-            out << kTypeNames[int(type)] << "@" << val.asPos();
+            out << kTypeNames[int(type)] << "@" << uintpos(val.asPos());
             break;
     }
     return out;

@@ -6,6 +6,7 @@
 
 #pragma once
 #include <cassert>
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -14,13 +15,23 @@
 #include <utility>
 
 
-using byte = std::byte;
-
-using heappos  = uint32_t;      ///< A position in a Heap, relative to its base.
-using heapsize = uint32_t;      ///< Like `size_t` for Heaps.
-
 class Object;
 class Val;
+
+
+using byte = std::byte;
+
+using  intpos =  int32_t;
+using uintpos = uint32_t;
+
+using heapsize = uintpos;      ///< Like `size_t` for Heaps.
+
+enum class heappos : uintpos { };      ///< A position in a Heap, relative to its base.
+
+static inline heappos operator+ (heappos p, intpos i) {return heappos(uintpos(p) + i);}
+static inline heappos operator- (heappos p, intpos i) {return heappos(uintpos(p) - i);}
+static inline std::strong_ordering operator<=> (heappos p, size_t i) {return uintpos(p) <=> i;}
+static inline std::strong_ordering operator<=> (heappos p, intpos i) {return int64_t(p) <=> int64_t(i);}
 
 
 /// A simple container for dynamic allocation.
@@ -28,8 +39,8 @@ class Val;
 /// Allocation uses a simple bump (arena) allocator. Allocations are 4-byte aligned.
 class Heap {
 public:
-    static constexpr heappos AlignmentBits  = 2;
-    static constexpr heappos Alignment  = 1 << AlignmentBits;
+    static constexpr int AlignmentBits  = 2;
+    static constexpr int Alignment  = 1 << AlignmentBits;
     static constexpr uintptr_t AlignmentMask  = (1 << AlignmentBits) - 1;
 
     static constexpr size_t  MaxSize = 1 << 31;
@@ -45,7 +56,7 @@ public:
 
     ~Heap()                             {if (_malloced) free(_base);}
 
-    const void* base() const            {return _base;}         ///< Address of start of heap.
+    const void*  base() const           {return _base;}         ///< Address of start of heap.
     const size_t capacity() const       {return _end - _base;}  ///< Maximum size it can grow to
     const size_t used() const           {return _cur - _base;}  ///< Maximum byte-offset used
     const size_t remaining() const      {return _end - _cur;}   ///< Bytes of capacity left
@@ -109,8 +120,8 @@ public:
     //---- Address Translation:
 
     /// Translates a `heappos` offset to a real address.
-    void* at(heappos off)               {assert(validPos(off)); return _base + off;}
-    const void* at(heappos off) const   {assert(validPos(off)); return _base + off;}
+    void* at(heappos off)               {assert(validPos(off)); return _base + uintpos(off);}
+    const void* at(heappos off) const   {assert(validPos(off)); return _base + uintpos(off);}
 
     /// Translates a real address to a `heappos` offset.
     heappos pos(const void *ptr) const {
@@ -123,7 +134,7 @@ public:
     bool validPos(heappos pos) const;
 
     static inline bool isAligned(const void *ptr)   {return (uintptr_t(ptr) & AlignmentMask) == 0;}
-    static inline bool isAligned(heappos pos)       {return (pos & AlignmentMask) == 0;}
+    static inline bool isAligned(heappos pos)       {return (uintpos(pos) & AlignmentMask) == 0;}
 
     template <typename T> static T* alignUp(T *addr) {
         return (T*)((uintptr_t(addr) + AlignmentMask) & ~AlignmentMask);

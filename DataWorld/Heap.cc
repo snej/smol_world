@@ -159,7 +159,7 @@ Val GarbageCollector::scanValue(Val val) {
 template <class T>
 Val GarbageCollector::scanValueAs(Val val) {
     T *obj = val.as<T>(_fromHeap);
-    if (heappos fwd = obj->getForwardingAddress())
+    if (heappos fwd = obj->getForwardingAddress(); fwd > 0)
         return Val(fwd, T::Tag);
     auto capacity = obj->capacity();
     auto begin = obj->begin(), end = obj->end();

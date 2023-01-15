@@ -95,7 +95,7 @@ private:
     static constexpr uint32_t TagMask = (1 << TagSize) - 1;
 
     Val(heappos pos, TagBits tag)
-    :_val((pos << 1) | tag)
+    :_val((uint32_t(pos) << 1) | tag)
     {
         assert(Heap::isAligned(pos));
     }

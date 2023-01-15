@@ -51,12 +51,12 @@ protected:
     const void* data() const                    {return &_meta + 1;}
 
     // Used by GC:
-    heappos getForwardingAddress() const        {return hasFlag(Fwd) ? (_meta & ~Fwd) : 0;}
+    heappos getForwardingAddress() const        {return heappos(hasFlag(Fwd) ? (_meta & ~Fwd) : 0);}
 
     void setForwardingAddress(heappos fwd) {
-        assert(fwd > 0 && !(fwd & Fwd));
+        assert(fwd > 0 && !(uintpos(fwd) & Fwd));
         assert(!hasFlag(Fwd));
-        _meta = Fwd | fwd;
+        _meta = Fwd | uintpos(fwd);
     }
 
 private:

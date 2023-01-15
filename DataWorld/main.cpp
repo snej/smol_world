@@ -43,7 +43,7 @@ int main(int argc, const char * argv[]) {
         cout << "Contents:\n";
         heap.visit([&](Val val) {
             n++;
-            cout << "\t" << val.asPos() << ": " << val << std::endl;
+            cout << "\t" << uintpos(val.asPos()) << ": " << val << std::endl;
             return true;
         });
         assert(n == 2);
@@ -52,7 +52,7 @@ int main(int argc, const char * argv[]) {
         cout << "Contents again:\n";
         heap.visit([&](Val val) {
             n++;
-            cout << "\t" << val.asPos() << ": " << val << std::endl;
+            cout << "\t" << uintpos(val.asPos()) << ": " << val << std::endl;
             return true;
         });
         assert(n == 2);
