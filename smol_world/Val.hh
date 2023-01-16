@@ -6,16 +6,17 @@
 
 #pragma once
 #include "Heap.hh"
+#include <array>
 #include <iosfwd>
 
 
 enum class ValType : uint8_t {
+    Null,
+    Bool,
+    Int,
     String,
     Array,
     Dict,
-    _Spare,
-    Null,
-    Int,
 };
 
 class String;
@@ -27,31 +28,29 @@ class Dict;
 /// Can be null, an integer, or a reference to a String, Array, or Dict object in the heap.
 class Val {
 public:
-    static constexpr int MaxInt = (1 << 30) - 1;
+    static constexpr int MaxInt = (1 << 28) - 1;
     static constexpr int MinInt = -MaxInt - 1;
 
-    constexpr Val()                                     :_val(0) { }
+    constexpr Val()                                     :_val(NullVal) { }
     Val(nullptr_t)                                      :Val() { }
 
+    constexpr explicit Val(bool b)                      :_val(b ? TrueVal : FalseVal) { }
+
     constexpr Val(int i)
-    :_val(uint32_t((i << 1) | IntTag))                  {assert(i >= MinInt && i <= MaxInt);}
+    :_val(uint32_t((i << 3) | IntTag))                  {assert(i >= MinInt && i <= MaxInt);}
 
     template <class T>
     Val(T const* ptr, IN_HEAP)                          :Val(heap->pos(ptr), T::Tag) { }
 
-    constexpr ValType type() {
-        if (_val & IntTag)
-            return ValType::Int;
-        else if (_val == 0)
-            return ValType::Null;
-        else
-            return ValType(tag() >> 1);
-    }
+    constexpr ValType type()                            {return kTagType[_val & 0x0F];}
 
-    constexpr bool isNull() const                       {return _val == 0;}
+    constexpr bool isNull() const                       {return _val == NullVal;}
 
-    constexpr bool isInt() const                        {return _val & 1;}
-    constexpr int asInt() const                         {assert(isInt()); return int32_t(_val) >> 1;}
+    constexpr bool isBool() const                       {return _val == FalseVal || _val == TrueVal;}
+    constexpr int asBool() const                        {return _val > FalseVal;}
+
+    constexpr bool isInt() const                        {return tag() == IntTag;}
+    constexpr int asInt() const                         {assert(isInt()); return int32_t(_val) >> TagSize;}
 
     constexpr bool isString() const                     {return tag() == StringTag;}
     String* asString(IN_HEAP) const                     {return as<String>(heap);}
@@ -62,7 +61,7 @@ public:
     constexpr bool isDict() const                       {return tag() == DictTag;}
     Dict* asDict(IN_HEAP) const                         {return as<Dict>(heap);}
 
-    constexpr bool isObject() const                     {return !isInt() && !isNull();}
+    constexpr bool isObject() const                     {return tag() >= StringTag;}
     Object* asObject(IN_HEAP) const                     {return (Object*)heap->at(asPos());}
 
     heappos asPos() const {
@@ -79,25 +78,33 @@ public:
     static bool keyCmp(Val a, Val b)                    {return a._val > b._val;} // descending order
 
     enum TagBits : uint32_t {
-        IntTag      = 0b001,     // Anything with the LSB set is an integer
-        StringTag   = 0b000,
-        ArrayTag    = 0b010,
+        SpecialTag  = 0b000,       // Special constants like null, false, true
+        IntTag      = 0b001,
+        StringTag   = 0b010,
+        ArrayTag    = 0b011,
         DictTag     = 0b100,
-        _spareTag   = 0b110,
+
+        NullVal   = 0b00000,
+        FalseVal  = 0b01000,
+        TrueVal   = 0b11000,
+
+        ObjectMask  = 0b00100,
     };
+
+    static constexpr int      TagSize = 3;
+    static constexpr uint32_t TagMask = (1 << TagSize) - 1;
 
     constexpr TagBits tag() const                       {return TagBits(_val & TagMask);}
 
 private:
     friend class GarbageCollector;
 
-    static constexpr int TagSize = 3;
-    static constexpr uint32_t TagMask = (1 << TagSize) - 1;
+    static const std::array<ValType,16> kTagType;
 
     Val(heappos pos, TagBits tag)
     :_val((uint32_t(pos) << 1) | tag)
     {
-        assert(Heap::isAligned(pos));
+        assert(pos > 0 && Heap::isAligned(pos));
     }
 
     uint32_t _val;

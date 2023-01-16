@@ -20,14 +20,27 @@
 #include <iostream>
 
 
-static const char* kTypeNames[6] = {
-    "string", "array", "dict", "???", "null", "int"
+static constexpr std::array<ValType,16> tagTypeFn() {
+    std::array<ValType,16> types { };
+    for (Val::TagBits t = Val::IntTag; t <= Val::DictTag; t = Val::TagBits(t+1)) {
+        for (int i = 0; i < 16; i += 8)
+            types[i + t] = ValType(t - Val::IntTag + int(ValType::Int));
+    }
+    types[Val::NullVal] = ValType::Null;
+    types[Val::FalseVal] = ValType::Bool;
+    return types;
+}
+
+const std::array<ValType,16> Val::kTagType = tagTypeFn();
+
+
+static const char* kTypeNames[9] = {
+    "string", "array", "dict", "?1?", "int", "?2?", "?3?", "?4?", "null"
 };
 
 
 std::ostream& operator<<(std::ostream& out, Val val) {
-    auto type = val.type();
-    switch(type) {
+    switch(auto type = val.type()) {
         case ValType::Null:
             out << "null";
             break;

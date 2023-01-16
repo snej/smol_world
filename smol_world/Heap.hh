@@ -147,6 +147,9 @@ public:
 
     void visit(Visitor const&);
 
+    void registerExternalRoots(Val rootArray[], size_t count);
+    void unregisterExternalRoots(Val rootArray[]);
+
 private:
     friend class GarbageCollector;
     

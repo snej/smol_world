@@ -26,7 +26,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		27AA27EF2970833900BF17A5 /* DataWorld */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = DataWorld; sourceTree = BUILT_PRODUCTS_DIR; };
+		27AA27EF2970833900BF17A5 /* smol_world */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = smol_world; sourceTree = BUILT_PRODUCTS_DIR; };
 		27AA27F22970833900BF17A5 /* main.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = main.cpp; sourceTree = "<group>"; };
 		27AA27F92970835E00BF17A5 /* Heap.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Heap.hh; sourceTree = "<group>"; };
 		27AA27FA2970835E00BF17A5 /* Heap.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Heap.cc; sourceTree = "<group>"; };
@@ -53,7 +53,7 @@
 			isa = PBXGroup;
 			children = (
 				27AA28082973859D00BF17A5 /* README.md */,
-				27AA27F12970833900BF17A5 /* DataWorld */,
+				27AA27F12970833900BF17A5 /* smol_world */,
 				27AA27F02970833900BF17A5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,12 +61,12 @@
 		27AA27F02970833900BF17A5 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				27AA27EF2970833900BF17A5 /* DataWorld */,
+				27AA27EF2970833900BF17A5 /* smol_world */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		27AA27F12970833900BF17A5 /* DataWorld */ = {
+		27AA27F12970833900BF17A5 /* smol_world */ = {
 			isa = PBXGroup;
 			children = (
 				27AA27F22970833900BF17A5 /* main.cpp */,
@@ -78,15 +78,15 @@
 				27AA28002970C04900BF17A5 /* Objects.cc */,
 				27AA28052971D73700BF17A5 /* Ptr.hh */,
 			);
-			path = DataWorld;
+			path = smol_world;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		27AA27EE2970833900BF17A5 /* DataWorld */ = {
+		27AA27EE2970833900BF17A5 /* smol_world */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 27AA27F62970833900BF17A5 /* Build configuration list for PBXNativeTarget "DataWorld" */;
+			buildConfigurationList = 27AA27F62970833900BF17A5 /* Build configuration list for PBXNativeTarget "smol_world" */;
 			buildPhases = (
 				27AA27EB2970833900BF17A5 /* Sources */,
 				27AA27EC2970833900BF17A5 /* Frameworks */,
@@ -96,9 +96,9 @@
 			);
 			dependencies = (
 			);
-			name = DataWorld;
+			name = smol_world;
 			productName = DataWorld;
-			productReference = 27AA27EF2970833900BF17A5 /* DataWorld */;
+			productReference = 27AA27EF2970833900BF17A5 /* smol_world */;
 			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
@@ -116,7 +116,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 27AA27EA2970833900BF17A5 /* Build configuration list for PBXProject "DataWorld" */;
+			buildConfigurationList = 27AA27EA2970833900BF17A5 /* Build configuration list for PBXProject "smol_world" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -129,7 +129,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				27AA27EE2970833900BF17A5 /* DataWorld */,
+				27AA27EE2970833900BF17A5 /* smol_world */,
 			);
 		};
 /* End PBXProject section */
@@ -281,7 +281,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		27AA27EA2970833900BF17A5 /* Build configuration list for PBXProject "DataWorld" */ = {
+		27AA27EA2970833900BF17A5 /* Build configuration list for PBXProject "smol_world" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				27AA27F42970833900BF17A5 /* Debug */,
@@ -290,7 +290,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		27AA27F62970833900BF17A5 /* Build configuration list for PBXNativeTarget "DataWorld" */ = {
+		27AA27F62970833900BF17A5 /* Build configuration list for PBXNativeTarget "smol_world" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				27AA27F72970833900BF17A5 /* Debug */,
