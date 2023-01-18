@@ -57,6 +57,8 @@ public:
         if (_malloced) free(_base);
     }
 
+    bool valid() const                  {return _base != nullptr;}
+
     const void*  base() const           {return _base;}         ///< Address of start of heap.
     const size_t capacity() const       {return _end - _base;}  ///< Maximum size it can grow to
     const size_t used() const           {return _cur - _base;}  ///< Maximum byte-offset used
@@ -149,7 +151,8 @@ private:
 
     friend class GarbageCollector;
     friend class UsingHeap;
-    
+
+    Heap()  :_base(nullptr), _end(nullptr), _cur(nullptr) { }
     Heap(void *base, size_t capacity, bool malloced);
     void clearForwarding();
 

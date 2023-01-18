@@ -8,6 +8,7 @@
 #include "Val.hh"
 #include "Collections.hh"
 #include <deque>
+#include <iostream>
 
 static constexpr uint32_t kMagic = 0xD217904A;
 
@@ -49,12 +50,16 @@ Heap Heap::existing(void *base, size_t used, size_t capacity) {
     Heap heap(base, capacity, false);
     heap._cur += used;
     auto header = (Header*)heap._base;
-    if (header->magic != kMagic)
-        throw std::runtime_error("Invalid Heap: wrong magic number");
+    if (header->magic != kMagic) {
+        std::cout << "Invalid Heap: wrong magic number\n";
+        return Heap();
+    }
     if (header->root.isObject()) {
         heappos rootPos = header->root.asPos();
-        if (rootPos < sizeof(Header) || rootPos >= used)
-            throw std::runtime_error("Invalid Heap: bad root offset");
+        if (rootPos < sizeof(Header) || rootPos >= used) {
+            std::cout << "Invalid Heap: bad root offset\n";
+            return Heap();
+        }
     }
     return heap;
 }
