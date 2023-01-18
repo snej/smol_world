@@ -15,14 +15,20 @@ using string_view = std::string_view;
 
 template <typename T>
 struct slice {
-    T*       data;
-    uint32_t count;
+    slice(T* b, T* e)       :_begin(b), _end(e) {assert(e >= b);}
+    slice(T* b, uint32_t s) :_begin(b), _end(b + s) { }
 
     using iterator = T*;
-    T* begin() const    {return data;}
-    T* end() const      {return data + count;}
+    T* begin() const    {return _begin;}
+    T* end() const      {return _end;}
 
-    T& operator[] (uint32_t i)  {assert(i < count); return data[i];}
+    size_t size() const {return _end - _begin;}
+    bool empty() const  {return _end == _begin;}
+
+    T& operator[] (uint32_t i)  {auto ptr = &_begin[i]; assert(ptr < _end); return *ptr;}
+private:
+    T* _begin;
+    T* _end;
 };
 
 
@@ -44,7 +50,7 @@ private:
 
     // Tag bits stored in an Object's meta word, alongsize its size.
     enum Tags : uint8_t {
-        Fwd          = 0b000001, // If set, all 31 remaining bits are the forwarding address
+        Fwd          = 0b000001,    // If set, all 31 remaining bits are the forwarding address
 
         Large        = 0b010000,    // If set, size is 32-bit not 16-bit
         Visited      = 0b100000,    // Marker used by Heap::visit()
@@ -60,8 +66,8 @@ private:
         Type_spare1  = uint8_t(Type::_spare1) << 1,
         Type_spare2  = uint8_t(Type::_spare2) << 1,
 
-        TagsMask     = (1 << TagBits) - 1,    // all tags
-        TypeMask     = 0b001110,    // type tags
+        TypeMask     = 0b001110,            // type tags
+        TagsMask     = (1 << TagBits) - 1,  // all tags
     };
 
     /// Static function that maps a Type to its Tags value
@@ -71,13 +77,20 @@ protected:
     static constexpr heapsize MaxSize = 1 << (32 - TagBits);
     static constexpr heapsize LargeSize = 1 << (16 - TagBits);
 
-    static void* operator new(size_t size, IN_MUT_HEAP, size_t extraSize) {
-        assert(size < MaxSize);
-        return heap->alloc(heapsize(size + extraSize));
+    static void* operator new(size_t size, IN_MUT_HEAP, size_t dataSize) {
+        assert(size == sizeof(Object)); // subclasses must not add extra data members!
+        if (dataSize == 0) {
+            size = 4;  // Object must allocate at least enough space to store forwarding pos
+        } else {
+            size += dataSize;
+            if (dataSize >= LargeSize)
+                size += 2;      // Add room for 32-bit dataSize
+            assert(size < MaxSize);
+        }
+        return heap->alloc(heapsize(size));
     }
 
-    explicit Object(heapsize totalSize, Type type) {
-        heapsize dataSize = totalSize - 2;
+    explicit Object(heapsize dataSize, Type type) {
         uint32_t meta = (dataSize << TagBits) | typeTag(type);
         if (meta > 0xFFFF)
             meta |= Large;
@@ -115,7 +128,10 @@ protected:
             return {(T*)((byte*)this + 2), uint32_t(((meta &= 0xFFFF) >> TagBits) / sizeof(T))};
     }
 
-    Object* nextObject()                        {return (Object*)(data().end());}
+    Object* nextObject() {
+        auto dat = data();
+        return (Object*)( dat.begin() + std::max(dat.size(), sizeof(uint32_t)) );
+    }
 
 private:
     friend class Heap;

@@ -42,7 +42,7 @@ void Dict::sort(size_t count) {
 
 slice<DictEntry> Dict::items() {
     slice<DictEntry> all = allItems();
-    return {all.data, uint32_t(_findEntry(all, nullval) - all.data)};
+    return {all.begin(), _findEntry(all, nullval)};
 }
 
 

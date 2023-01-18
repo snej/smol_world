@@ -31,11 +31,14 @@ protected:
     static T* createUninitialized(heapsize capacity, IN_MUT_HEAP) {
         return new (heap, capacity * sizeof(Item)) T(capacity);
     }
+    static T* create(const Item* data, size_t size, IN_MUT_HEAP) {
+        return new (heap, size * sizeof(Item)) T(data, size);
+    }
 
     explicit Collection(heapsize capacity)
-    :TypedObject<TYPE>(sizeof(Collection) + capacity * sizeof(Item)) { }
+    :TypedObject<TYPE>(capacity * sizeof(Item)) { }
 
-    Collection(size_t count, const Item *items)
+    Collection(const Item *items, size_t count)
     :Collection(heapsize(count))
     {
         assert(count <= MaxCount);
@@ -59,7 +62,7 @@ protected:
 class String : public Collection<String, char, Type::String> {
 public:
     static String* create(const char *str, size_t size, IN_MUT_HEAP) {
-        return new (heap, size) String(str, size);
+        return Collection::create(str, size, heap);
     }
 
     static String* create(string_view str, IN_MUT_HEAP) {
@@ -67,19 +70,14 @@ public:
     }
 
     const char* data() const        {return begin();}
-    string_view get() const         {auto i = items(); return {i.data, i.count};}
+    string_view get() const         {auto i = items(); return {i.begin(), i.size()};}
 
 private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
     friend class GarbageCollector;
 
     explicit String(heapsize capacity)   :Collection(capacity) { }
-    String(const char *str, size_t size) :Collection(size, str) { }
-
-    template <typename LAMBDA>      // (used only by the GC)
-    void populate(const char *chars, const char *endChars, LAMBDA remap) {
-        memcpy((char*)data(), chars, endChars - chars);
-    }
+    String(const char *str, size_t size) :Collection(str, size) { }
 };
 
 
@@ -88,10 +86,10 @@ private:
 class Array : public Collection<Array, Val, Type::Array> {
 public:
     static Array* create(heapsize count, IN_MUT_HEAP) {
-        return new (heap, count * sizeof(Val)) Array(nullptr, count);
+        return Collection::create(nullptr, count, heap);
     }
     static Array* create(std::initializer_list<Val> vals, IN_MUT_HEAP) {
-        return new (heap, vals.size() * sizeof(Val)) Array(vals.begin(), vals.size());
+        return Collection::create(vals.begin(), vals.size(), heap);
     }
 
     iterator begin()                {return Collection::begin();}
@@ -107,14 +105,7 @@ private:
     friend class GarbageCollector;
 
     explicit Array(heapsize capacity)    :Collection(capacity) { }
-    Array(const Val *vals, size_t count) :Collection(count, vals) { }
-
-//    template <typename LAMBDA>      // (used only by the GC)
-//    void populate(const Val *ents, const Val *endEnts, LAMBDA remap) {
-//        auto dst = begin();
-//        for (auto src = ents; src < endEnts; ++src)
-//            *dst++ = remap(*src);
-//    }
+    Array(const Val *vals, size_t count) :Collection(vals, count) { }
 };
 
 
@@ -132,16 +123,16 @@ class Dict : public Collection<Dict, DictEntry, Type::Dict> {
 public:
     /// Creates an empty dictionary with the given capacity.
     static Dict* create(heapsize capacity, IN_MUT_HEAP) {
-        return new (heap, capacity * sizeof(Val)) Dict(capacity, nullptr, 0);
+        return Collection::create(nullptr, capacity, heap);
     }
     /// Creates a dictionary from a list of key-value pairs. It will have no extra capacity.
     static Dict* create(std::initializer_list<DictEntry> vals, IN_MUT_HEAP) {
-        return create(vals, heapsize(vals.size()), heap);
+        return Collection::create(vals.begin(), vals.size(), heap);
     }
     /// Creates a dictionary from a list of key-value pairs.
     /// The capacity must be at least the number of pairs but can be larger.
     static Dict* create(std::initializer_list<DictEntry> vals, heapsize capacity, IN_MUT_HEAP) {
-        return new (heap, capacity * sizeof(Val)) Dict(capacity, vals.begin(), vals.size());
+        return new (heap, capacity * sizeof(Val)) Dict(vals.begin(), vals.size(), capacity);
     }
 
     heapsize capacity() const           {return Collection::capacity();}
@@ -176,25 +167,17 @@ private:
 
     explicit Dict(heapsize capacity)   :Collection(capacity) { }
 
-    Dict(heapsize capacity, const DictEntry *ents, size_t count)
-    :Collection(capacity, nullptr)
+    Dict(const DictEntry *ents, size_t count, heapsize capacity)
+    :Collection(nullptr, capacity)
     {
-        assert(capacity > 0 && capacity >= count);
+        assert(capacity >= count);
         if (count > 0) {
             ::memcpy(begin(), ents, count * sizeof(DictEntry));
             sort(count);
         }
     }
 
-    template <typename LAMBDA>      // (used only by the GC)
-    void populate(const DictEntry *ents, const DictEntry *endEnts, LAMBDA remap) {
-        assert(empty());
-        assert(endEnts - ents == capacity());
-        auto dst = begin();
-        for (auto src = ents; src < endEnts; ++src)
-            new (dst++) DictEntry{remap(src->key), remap(src->value)};
-        sort(endEnts - ents);
-    }
+    Dict(const DictEntry *ents, size_t count)       :Dict(ents, count, heapsize(count)) { }
 
     slice<DictEntry> allItems() const               {return Collection::items();}
     void sort(size_t count);

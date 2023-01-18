@@ -174,7 +174,7 @@ Object* GarbageCollector::scan(Object *srcObj) {
         auto dataSize = srcObj->dataSize();
 
         // Allocate an object of the same type & size in the destination heap:
-        Object *dstObj = new (_toHeap, srcObj->dataSize()) Object(sizeof(Object) + dataSize, type);
+        Object *dstObj = new (_toHeap, srcObj->dataSize()) Object(dataSize, type);
         assert(dstObj->dataSize() == srcObj->dataSize());
         auto fwdPos = _toHeap.pos(dstObj);
 
