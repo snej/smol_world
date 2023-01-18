@@ -1,90 +1,16 @@
 //
-// Objects.hh
+// Collections.hh
 //
 // Copyright © 2023 Jens Alfke. All rights reserved.
 //
 
 #pragma once
-#include "Val.hh"
-#include <initializer_list>
-#include <string_view>
+#include "Object.hh"
 
 
-using string_view = std::string_view;
-
-
-/// Abstract base of classes that live in a Heap and are referred to with Vals.
-class Object {
-public:
-
-    enum Flags : heapsize {
-        Fwd     = 0x80000000,       // Means the object has moved to a different address; used by GC
-        Visited = 0x40000000,       // Visited during Heap::visit()
-        _spare1 = 0x20000000,
-        _spare2 = 0x10000000,
-    };
-
-    Flags flags() const                             {return Flags(_meta);}
-    bool hasFlag(Flags f) const                     {return (_meta & f) != 0;}
-
-protected:
-    friend class Heap;
-    friend class GarbageCollector;
-
-    void setFlag(Flags f, bool state)               {if (state) _meta |= f; else _meta &= ~f;}
-
-    static constexpr heapsize MetaMask = 0x0FFFFFFF;
-
-    static void* operator new(size_t size, IN_MUT_HEAP, size_t extra) {
-        assert(size + extra < Heap::MaxSize);
-        return heap->alloc(heapsize(size + extra));
-    }
-
-    explicit Object(heapsize totalSize)         :_meta(totalSize - sizeof(Object)) { }
-
-    /// The integer stored in the object header (minus the flags.)
-    /// Collections use this as an item count; other classes can use it for other purposes.
-    heapsize dataSize() const                   {return _meta & MetaMask;}
-
-    /// A pointer to just after the object header (the `_meta` field.) Used by collections.
-    void* data()                                {return &_meta + 1;}
-    const void* data() const                    {return &_meta + 1;}
-
-    // Used by GC:
-    heappos getForwardingAddress() const        {return heappos(hasFlag(Fwd) ? (_meta & ~Fwd) : 0);}
-
-    void setForwardingAddress(heappos fwd) {
-        assert(fwd > 0 && !(uintpos(fwd) & Fwd));
-        assert(!hasFlag(Fwd));
-        _meta = Fwd | uintpos(fwd);
-    }
-
-private:
-    static void* operator new(size_t size) = delete;
-    static void operator delete(void*) = delete;
-
-    heapsize _meta;
-};
-
-
-
-// An Object that can be tagged by a Val. Defines the `Tag` class property used by various macros.
-template <Val::TagBits TAG>
-class TaggedObject : public Object {
-public:
-    static constexpr Val::TagBits Tag = TAG;
-
-    Val asVal(IN_HEAP) const    {return Val(this, heap);}
-
-protected:
-    explicit TaggedObject(heapsize totalSize) :Object(totalSize) { }
-};
-
-
-
-// Abstract base of String, Array, Dict
-template <class T, typename ITEM, Val::TagBits TAG>
-class Collection : public TaggedObject<TAG> {
+/// Abstract base of String, Array, Dict
+template <class T, typename ITEM, Type TYPE>
+class Collection : public TypedObject<TYPE> {
 public:
     using Item = ITEM;
 
@@ -102,8 +28,12 @@ public:
     const_iterator end() const      {return data() + capacity();}
 
 protected:
+    static T* createUninitialized(heapsize capacity, IN_MUT_HEAP) {
+        return new (heap, capacity * sizeof(Item)) T(capacity);
+    }
+
     explicit Collection(heapsize capacity)
-    :TaggedObject<TAG>(sizeof(Collection) + capacity * sizeof(Item)) { }
+    :TypedObject<TYPE>(sizeof(Collection) + capacity * sizeof(Item)) { }
 
     Collection(size_t count, const Item *items)
     :Collection(heapsize(count))
@@ -116,10 +46,6 @@ protected:
             ::memset(data(), 0, size);
     }
 
-    static T* createUninitialized(heapsize capacity, IN_MUT_HEAP) {
-        return new (heap, capacity * sizeof(Item)) T(capacity);
-    }
-
     Item* data()                    {return (Item*)Object::data();}
     const Item* data() const        {return (const Item*)Object::data();}
 
@@ -130,7 +56,7 @@ protected:
 
 
 /// A string object. Stores UTF-8 characters. Not zero-terminated.
-class String : public Collection<String, char, Val::StringTag> {
+class String : public Collection<String, char, Type::String> {
 public:
     static String* create(const char *str, size_t size, IN_MUT_HEAP) {
         return new (heap, size) String(str, size);
@@ -144,7 +70,7 @@ public:
     string_view get() const         {return string_view(data(), count());}
 
 private:
-    template <class T, typename ITEM, Val::TagBits TAG> friend class Collection;
+    template <class T, typename ITEM, Type TYPE> friend class Collection;
     friend class GarbageCollector;
 
     explicit String(heapsize capacity)   :Collection(capacity) { }
@@ -159,7 +85,7 @@ private:
 
 
 /// An array of `Val`s.
-class Array : public Collection<Array, Val, Val::ArrayTag> {
+class Array : public Collection<Array, Val, Type::Array> {
 public:
     static Array* create(heapsize count, IN_MUT_HEAP) {
         return new (heap, count * sizeof(Val)) Array(nullptr, count);
@@ -181,7 +107,7 @@ public:
     Val  operator[] (heapsize i) const  {assert(i < count()); return data()[i];}
 
 private:
-    template <class T, typename ITEM, Val::TagBits TAG> friend class Collection;
+    template <class T, typename ITEM, Type TYPE> friend class Collection;
     friend class GarbageCollector;
 
     explicit Array(heapsize capacity)    :Collection(capacity) { }
@@ -206,7 +132,7 @@ struct DictEntry {
 /// A key-value mapping.
 /// Keys can be anything but null, and are compared by identity (i.e. two Strings with the same
 /// contents are not the same key!) Values can be anything including null.
-class Dict : public Collection<Dict, DictEntry, Val::DictTag> {
+class Dict : public Collection<Dict, DictEntry, Type::Dict> {
 public:
     /// Creates an empty dictionary with the given capacity.
     static Dict* create(heapsize capacity, IN_MUT_HEAP) {
@@ -247,7 +173,7 @@ public:
     static bool keyCmp(DictEntry const& a, DictEntry const& b) {return Val::keyCmp(a.key, b.key);}
 
 private:
-    template <class T, typename ITEM, Val::TagBits TAG> friend class Collection;
+    template <class T, typename ITEM, Type TYPE> friend class Collection;
     friend class GarbageCollector;
 
     explicit Dict(heapsize capacity)   :Collection(capacity) { }
@@ -279,8 +205,7 @@ private:
 
 
 template <class T> T* Val::as(ConstHeapRef heap) const {
-    assert(tag() == T::Tag);
-    return (T*)asObject(heap);
+    return this->asObject(heap)->as<T>();
 }
 
 
@@ -293,8 +218,6 @@ static inline std::ostream& operator<<(std::ostream& out, Array const& arr) {ret
 
 
 
-template <class T> void GarbageCollector::update(T*& obj) {
-    Val val = obj->asVal(&_fromHeap);
-    update(val);
-    obj = val.as<T>(&_toHeap);
+template <class T> void GarbageCollector::update(T** obj) {
+    *obj = (T*)scan(*obj);
 }

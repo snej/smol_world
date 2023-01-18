@@ -6,7 +6,7 @@
 
 #include "Heap.hh"
 #include "Val.hh"
-#include "Objects.hh"
+#include "Collections.hh"
 #include <deque>
 
 static constexpr uint32_t kMagic = 0xD217904A;
@@ -16,7 +16,7 @@ struct Header {
     Val      root;  // Pointer to root object
 };
 
-static thread_local Heap* sCurHeap;
+static thread_local Heap const* sCurHeap;
 
 
 Heap::Heap(void *base, size_t capacity, bool malloced)
@@ -52,13 +52,14 @@ Heap Heap::existing(void *base, size_t used, size_t capacity) {
 bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos < used();}
 
 
-Val Heap::root() const              {return ((Header*)_base)->root;}
+Val Heap::rootVal() const           {return ((Header*)_base)->root;}
 void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
+Object* Heap::rootObject() const          {return rootVal().asObject(this);}
+void Heap::setRoot(Object* obj)     {setRoot(obj->asVal(this));}
 
-void Heap::enter()                  {assert(!sCurHeap); sCurHeap = this;}
-void Heap::exit()                   {assert(sCurHeap == this); sCurHeap = nullptr;}
-Heap* Heap::current()               {return sCurHeap;}
-
+Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
+void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
+Heap* Heap::current()               {return (Heap*)sCurHeap;}
 
 Object* Heap::firstObject() {
     return (Object*)(_base + sizeof(Header));
@@ -70,44 +71,41 @@ Object* Heap::nextObject(Object *obj) {
     return (byte*)obj < _cur ? obj : nullptr;
 }
 
-void Heap::clearObjectFlags(heapsize /*Object::Flags*/ flags) {
-    for (auto obj = firstObject(); obj; obj = nextObject(obj))
-        obj->setFlag(Object::Flags(flags), false);
-}
-
 
 void Heap::visit(Visitor const& visitor) {
-    clearObjectFlags(Object::Visited);
-    std::deque<Val> stack;
+    for (auto obj = firstObject(); obj; obj = nextObject(obj))
+        obj->clearVisited();
+
+    std::deque<Object*> stack;
 
     auto process = [&](Val val) -> bool {
         if (val.isObject()) {
             Object *obj = val.asObject(this);
-            if (!obj->hasFlag(Object::Visited)) {
-                obj->setFlag(Object::Visited, true);
-                if (!visitor(val))
+            if (!obj->isVisited()) {
+                obj->setVisited();
+                if (!visitor(obj))
                     return false;
-                if (val.isArray() || val.isDict())
-                    stack.push_back(val);
+                if (Object::typeContainsPointers(obj->type()) && obj->dataSize() > 0)
+                    stack.push_back(obj);
             }
         }
         return true;
     };
 
-    if (!process(root()))
+    if (!process(rootVal()))
         return;
     while (!stack.empty()) {
-        Val val = stack.front();
+        Object *obj = stack.front();
         stack.pop_front();
-        switch (val.type()) {
-            case ValType::Array:
-                for (Val v : *val.as<Array>(this)) {
+        switch (obj->type()) {
+            case Type::Array:
+                for (Val v : *obj->as<Array>()) {
                     if (!process(v))
                         return;
                 }
                 break;
-            case ValType::Dict:
-                for (DictEntry const& e : *val.as<Dict>(this)) {
+            case Type::Dict:
+                for (DictEntry const& e : *obj->as<Dict>()) {
                     if (!process(e.key) || !process(e.value))
                         return;
                 }
@@ -141,38 +139,50 @@ GarbageCollector::GarbageCollector(Heap &fromHeap, Heap &toHeap)
 
 
 void GarbageCollector::scanRoot() {
-    _fromHeap.clearObjectFlags(Object::Fwd);
-    _toHeap.setRoot(scanValue(_fromHeap.root()));
+#ifndef NDEBUG
+    for (auto obj = _fromHeap.firstObject(); obj; obj = _fromHeap.nextObject(obj))
+        assert(!obj->isForwarded());
+#endif
+    _toHeap.setRoot(scan(_fromHeap.rootVal()));
 }
 
 
-Val GarbageCollector::scanValue(Val val) {
-    switch (val.type()) {
-        case ValType::String:   return scanValueAs<String>(val);
-        case ValType::Array:    return scanValueAs<Array>(val);
-        case ValType::Dict:     return scanValueAs<Dict>(val);
-        default:                return val;
+Val GarbageCollector::scan(Val val) {
+    if (val.isObject()) {
+        Object *obj = val.asObject(_fromHeap);
+        return Val(scan(obj), _toHeap);
+    } else {
+        return val;
     }
 }
 
 
-template <class T>
-Val GarbageCollector::scanValueAs(Val val) {
-    T *obj = val.as<T>(_fromHeap);
-    if (heappos fwd = obj->getForwardingAddress(); fwd > 0)
-        return Val(fwd, T::Tag);
-    auto capacity = obj->capacity();
-    auto begin = obj->begin(), end = obj->end();
-    T *dstObj = T::createUninitialized(capacity, _toHeap);
-    Val dst(dstObj, _toHeap);
-    obj->setForwardingAddress(dst.asPos());
-    dstObj->populate(begin, end, [this](Val oldVal) {return scanValue(oldVal);});
-    return dst;
+Object* GarbageCollector::scan(Object *obj) {
+    if (obj->isForwarded()) {
+        return (Object*)_toHeap.at(obj->getForwardingAddress());
+    } else {
+        Type type = obj->type();
+        auto src = (const Val*)obj->data();
+        auto dataSize = obj->dataSize();
+
+        Object *dstObj = new (_toHeap, obj->dataSize()) Object(sizeof(Object) + dataSize, type);
+        auto dst = (Val*)dstObj->data();
+        obj->setForwardingAddress(_toHeap.pos(dstObj));
+
+        if (Object::typeContainsPointers(type)) {
+            heapsize count = dataSize / sizeof(Val);
+            for (heapsize i = 0; i < count; ++i)
+                *dst++ = scan(*src++);
+        } else {
+            ::memcpy(dst, src, dataSize);
+        }
+        return dstObj;
+    }
 }
 
 
-void GarbageCollector::update(Val &val) {
-    val = scanValue(val);
+void GarbageCollector::update(Val* val) {
+    *val = scan(*val);
 }
 
 

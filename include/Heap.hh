@@ -28,6 +28,8 @@ using heapsize = uintpos;      ///< Like `size_t` for Heaps.
 
 enum class heappos : uintpos { };      ///< A position in a Heap, relative to its base.
 
+static constexpr heappos nullpos {0};
+
 static inline heappos operator+ (heappos p, intpos i) {return heappos(uintpos(p) + i);}
 static inline heappos operator- (heappos p, intpos i) {return heappos(uintpos(p) - i);}
 static inline std::strong_ordering operator<=> (heappos p, size_t i) {return uintpos(p) <=> i;}
@@ -54,7 +56,10 @@ public:
     // Constructs a Heap from already-existing heap data. Throws if the data is not valid.
     static Heap existing(void *base, size_t used, size_t capacity);
 
-    ~Heap()                             {if (_malloced) free(_base);}
+    ~Heap() {
+        assert(this != current());
+        if (_malloced) free(_base);
+    }
 
     const void*  base() const           {return _base;}         ///< Address of start of heap.
     const size_t capacity() const       {return _end - _base;}  ///< Maximum size it can grow to
@@ -62,13 +67,14 @@ public:
     const size_t remaining() const      {return _end - _cur;}   ///< Bytes of capacity left
 
     /// The heap's root value. Starts as Null, but usually an Array or Dict.
-    Val root() const;
+    Val rootVal() const;
 
     /// Sets the heap's root value.
     void setRoot(Val);
 
-    template <class T> void setRoot(T* obj)     {setRoot(obj->asVal(this));}
-    template <class T> T* getRootAs() const;
+    Object* rootObject() const;
+    void setRoot(Object* obj);
+    template <class T> T* root() const;
 
     /// Resets the Heap to an empty state.
     void reset();
@@ -76,12 +82,6 @@ public:
     void garbageCollectTo(Heap &dstHeap);
 
     //---- Current Heap:
-
-    /// Makes this the current heap of the current thread.
-    void enter();
-
-    /// Clears the current heap.
-    void exit();
 
     /// The current heap of the current thread, or nullptr if none.
     static Heap* current();
@@ -143,8 +143,7 @@ public:
     Object* firstObject();
     Object* nextObject(Object *obj);
 
-    using Visitor = std::function<bool(Val)>;
-
+    using Visitor = std::function<bool(const Object*)>;
     void visit(Visitor const&);
 
     void registerExternalRoots(Val rootArray[], size_t count);
@@ -152,9 +151,14 @@ public:
 
 private:
     friend class GarbageCollector;
+    friend class UsingHeap;
     
     Heap(void *base, size_t capacity, bool malloced);
-    void clearObjectFlags(heapsize /*Object::Flags*/ flags);
+    void clearForwarding();
+
+    Heap const* enter() const;
+    void exit() const;
+    void exit(Heap const* newCurrent) const;
 
     byte*   _base;
     byte*   _end;
@@ -162,6 +166,21 @@ private:
     AllocFailureHandler _allocFailureHandler = nullptr;
     bool    _malloced = false;
 };
+
+
+
+/// Makes a heap current (on this thread) while in scope.
+/// When it exits scope, the previously-current heap is restored.
+class UsingHeap {
+public:
+    explicit UsingHeap(Heap const* heap)    :_heap(heap) {_prev = heap->enter();}
+    explicit UsingHeap(Heap const& heap)    :UsingHeap(&heap) { }
+    ~UsingHeap()                            {_heap->exit(_prev);}
+private:
+    Heap const* _heap;
+    Heap const* _prev;
+};
+
 
 
 class ConstHeapRef {
@@ -194,8 +213,7 @@ public:
 #define IN_MUT_HEAP HeapRef heap //= nullptr
 #define IN_HEAP     ConstHeapRef heap //= nullptr
 
-//static inline Heap* GetHeap(Heap* h)              {return h ? h : Heap::current();}
-//static inline Heap const* GetHeap(Heap const* h)  {return h ? h : Heap::current();}
+#define CUR_HEAP    ConstHeapRef(nullptr)
 
 
 
@@ -217,12 +235,13 @@ public:
     /// on any live references to values in `fromHeap`, or they'll be out of date.
     ///
     /// Do not do anything else with the heap while the GarbageCollector is in scope!
-    Val scanValue(Val v);
+    [[nodiscard]] Val scan(Val v);
+
+    [[nodiscard]] Object* scan(Object*);
 
     // These are equivalent to scanValue but update the Val/Ptr/Object in place:
-    void update(Val&);
-//    template <class T> void update(Ptr<T>& ptr);
-    template <class T> void update(T*&);
+    void update(Val* val);
+    template <class T> void update(T** obj);
 
     // The destructor swaps the two heaps, so _fromHeap is now the live one.
     ~GarbageCollector()     {_fromHeap.reset(); std::swap(_fromHeap, _toHeap);}

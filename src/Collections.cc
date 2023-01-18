@@ -1,5 +1,5 @@
 //
-// Objects.cc
+// Collections.cc
 //
 // Copyright © 2023 Jens Alfke. All rights reserved.
 //
@@ -16,7 +16,7 @@
 // limitations under the License.
 //
 
-#include "Objects.hh"
+#include "Collections.hh"
 #include <iostream>
 
 
@@ -100,4 +100,25 @@ std::ostream& operator<<(std::ostream& out, Array const* arr) {
         }
     }
     return out << "]";
+}
+
+
+std::ostream& operator<<(std::ostream& out, Dict const* dict) {
+    out << "Dict{" << dict->count();
+    int n = 0;
+    for (auto &entry : *dict) {
+        if (n++) out << ", ";
+        out << entry.key << ": " << entry.value;
+    }
+    return out << "}";
+}
+
+
+std::ostream& operator<< (std::ostream& out, Object const* obj) {
+    switch (auto type = obj->type()) {
+        case Type::String:  return out << obj->as<String>();
+        case Type::Array:   return out << obj->as<Array>();
+        case Type::Dict:    return out << obj->as<Dict>();
+        default:            return out << TypeName(type) << "[]";
+    }
 }
