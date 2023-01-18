@@ -24,8 +24,8 @@ public:
     using iterator = Item*;
     using const_iterator = const Item*;
 
-    const_iterator begin() const    {return data();}
-    const_iterator end() const      {return data() + capacity();}
+    const_iterator begin() const    {return items().begin();}
+    const_iterator end() const      {return items().end();}
 
 protected:
     static T* createUninitialized(heapsize capacity, IN_MUT_HEAP) {
@@ -41,16 +41,16 @@ protected:
         assert(count <= MaxCount);
         size_t size = count * sizeof(Item);
         if (items)
-            ::memcpy(data(), items, size);
+            ::memcpy(this->dataPtr(), items, size);
         else
-            ::memset(data(), 0, size);
+            ::memset(this->dataPtr(), 0, size);
     }
 
-    Item* data()                    {return (Item*)Object::data();}
-    const Item* data() const        {return (const Item*)Object::data();}
+    slice<Item> items()             {return this->template data<Item>();}
+    slice<Item> items() const       {return const_cast<Collection*>(this)->items();}
 
-    iterator begin()                {return data();}
-    iterator end()                  {return data() + capacity();}
+    iterator begin()                {return items().begin();}
+    iterator end()                  {return items().end();}
 };
 
 
@@ -66,8 +66,8 @@ public:
         return create(str.data(), str.size(), heap);
     }
 
-    const char* data() const        {return Collection::data();}
-    string_view get() const         {return string_view(data(), count());}
+    const char* data() const        {return begin();}
+    string_view get() const         {auto i = items(); return {i.data, i.count};}
 
 private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
@@ -94,17 +94,13 @@ public:
         return new (heap, vals.size() * sizeof(Val)) Array(vals.begin(), vals.size());
     }
 
-    /// Direct access to array of Val
-    Val* data()                     {return Collection::data();}
-    const Val* data() const         {return Collection::data();}
-
     iterator begin()                {return Collection::begin();}
     iterator end()                  {return Collection::end();}
     const_iterator begin() const    {return Collection::begin();}
     const_iterator end() const      {return Collection::end();}
 
-    Val& operator[] (heapsize i)        {assert(i < count()); return data()[i];}
-    Val  operator[] (heapsize i) const  {assert(i < count()); return data()[i];}
+    Val& operator[] (heapsize i)        {return items()[i];}
+    Val  operator[] (heapsize i) const  {return items()[i];}
 
 private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
@@ -113,12 +109,12 @@ private:
     explicit Array(heapsize capacity)    :Collection(capacity) { }
     Array(const Val *vals, size_t count) :Collection(count, vals) { }
 
-    template <typename LAMBDA>      // (used only by the GC)
-    void populate(const Val *ents, const Val *endEnts, LAMBDA remap) {
-        auto dst = begin();
-        for (auto src = ents; src < endEnts; ++src)
-            *dst++ = remap(*src);
-    }
+//    template <typename LAMBDA>      // (used only by the GC)
+//    void populate(const Val *ents, const Val *endEnts, LAMBDA remap) {
+//        auto dst = begin();
+//        for (auto src = ents; src < endEnts; ++src)
+//            *dst++ = remap(*src);
+//    }
 };
 
 
@@ -165,9 +161,11 @@ public:
 
     Val operator[] (Val key) const      {return get(key);}
 
-    iterator begin()                    {return data();}
-    iterator end()                      {return _findEntry(nullval);}
-    const_iterator begin() const        {return data();}
+    slice<DictEntry> items();
+
+    iterator begin()                    {return items().begin();}
+    iterator end()                      {return items().end();}
+    const_iterator begin() const        {return const_cast<Dict*>(this)->begin();}
     const_iterator end() const          {return const_cast<Dict*>(this)->end();}
 
     static bool keyCmp(DictEntry const& a, DictEntry const& b) {return Val::keyCmp(a.key, b.key);}
@@ -198,7 +196,7 @@ private:
         sort(endEnts - ents);
     }
 
-    DictEntry* _findEntry(Val key);
+    slice<DictEntry> allItems() const               {return Collection::items();}
     void sort(size_t count);
     iterator endAll()                               {return begin() + capacity();}
 };

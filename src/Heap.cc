@@ -76,8 +76,7 @@ Object* Heap::firstObject() {
 }
 
 Object* Heap::nextObject(Object *obj) {
-    uintptr_t addr = (uintptr_t)obj + sizeof(Object) + obj->dataSize();
-    obj = (Object*)addr;
+    obj = obj->nextObject();
     return (byte*)obj < _cur ? obj : nullptr;
 }
 
@@ -167,24 +166,40 @@ Val GarbageCollector::scan(Val val) {
 }
 
 
-Object* GarbageCollector::scan(Object *obj) {
-    if (obj->isForwarded()) {
-        return (Object*)_toHeap.at(obj->getForwardingAddress());
+Object* GarbageCollector::scan(Object *srcObj) {
+    if (srcObj->isForwarded()) {
+        return (Object*)_toHeap.at(srcObj->getForwardingAddress());
     } else {
-        Type type = obj->type();
-        auto src = (const Val*)obj->data();
-        auto dataSize = obj->dataSize();
+        Type type = srcObj->type();
+        auto dataSize = srcObj->dataSize();
 
-        Object *dstObj = new (_toHeap, obj->dataSize()) Object(sizeof(Object) + dataSize, type);
-        auto dst = (Val*)dstObj->data();
-        obj->setForwardingAddress(_toHeap.pos(dstObj));
+        // Allocate an object of the same type & size in the destination heap:
+        Object *dstObj = new (_toHeap, srcObj->dataSize()) Object(sizeof(Object) + dataSize, type);
+        assert(dstObj->dataSize() == srcObj->dataSize());
+        auto fwdPos = _toHeap.pos(dstObj);
 
+        // Copy the object's data into it:
+        auto src = (const Val*)srcObj->dataPtr();
+        auto dst = (Val*)dstObj->dataPtr();
         if (Object::typeContainsPointers(type)) {
-            heapsize count = dataSize / sizeof(Val);
-            for (heapsize i = 0; i < count; ++i)
-                *dst++ = scan(*src++);
+            // `obj`s data is a sequence of `Val`s.
+            // Recursively scan each one, storing the results in `dstObj`.
+            assert(dataSize % sizeof(Val) == 0);
+            if (int count = dataSize / sizeof(Val); count > 0) {
+                // During the recursive scan, pointers to `obj` need to be forwarded to `dstObj`.
+                // But setting `obj`s forwarding address overwrites 4 bytes, which will overwrite
+                // the first 2 bytes of data if `obj` is small.
+                // To work around this, read the first `Val` from `obj` before forwarding.
+                auto firstItem = *src;
+                srcObj->setForwardingAddress(fwdPos);
+                *dst = scan(firstItem);
+                while (--count > 0)
+                    *++dst = scan(*++src);
+            }
         } else {
+            // If `obj` does not contain pointers, just do a memcpy:
             ::memcpy(dst, src, dataSize);
+            srcObj->setForwardingAddress(fwdPos);
         }
         return dstObj;
     }

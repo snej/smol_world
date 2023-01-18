@@ -45,6 +45,8 @@ int main(int argc, const char * argv[]) {
         cout << "Contents:\n";
         heap.visit([&](Object const* obj) {
             n++;
+            if (n == 1) assert(obj == &arr);
+            if (n == 2) assert(obj == str);
             cout << "\t" << uintpos(heap.pos(obj)) << ": " << obj << std::endl;
             return true;
         });
@@ -65,25 +67,33 @@ int main(int argc, const char * argv[]) {
     cout << "Saved as " << persisted.size() << " bytes.\n";
 
     {
+        cout << "\nReloading...\n";
         Heap heap = Heap::existing(persisted.data(), persisted.size(), 100000);
         UsingHeap u(heap);
         cout << "Root is " << heap.rootVal() << endl;
         assert(heap.rootObject()->is<Array>());
-        Array *root = heap.root<Array>();
-        assert(root);
+        Array *arr = heap.root<Array>();
+        assert(arr);
         assert(heap.root<Dict>() == nullptr);
-        cout << root << "... at " << (void*)root << endl;
+        cout << arr << "... at " << (void*)arr << endl;
 
-        String *str = (*root)[2].as<String>(heap);
+        String *str = (*arr)[2].as<String>(heap);
         cout << "String: " << str << "... at " << (void*)str << endl;
 
         cout << "before GC: " << heap.used() << " bytes\n";
         {
             GarbageCollector gc(heap);
             gc.update(&str);
+            gc.update(&arr);
         }
         cout << "after GC: " << heap.used() << " bytes\n";
+        cout << "Now array is " << arr << "... at " << (void*)arr << endl;
+        assert(arr->is<Array>());
+        assert(arr->count() == 4);
         cout << "Now string is " << str << "... at " << (void*)str << endl;
+        assert(str->is<String>());
+        assert(str->count() == 10);
+        assert(str->get() == "Cowabunga!");
     }
 
     return 0;

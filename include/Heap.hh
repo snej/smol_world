@@ -137,9 +137,6 @@ public:
     /// allocated memory.
     bool validPos(heappos pos) const;
 
-    Object* firstObject();
-    Object* nextObject(Object *obj);
-
     using Visitor = std::function<bool(const Object*)>;
     void visit(Visitor const&);
 
@@ -147,6 +144,9 @@ public:
     void unregisterExternalRoots(Val rootArray[]);
 
 private:
+    Object* firstObject();
+    Object* nextObject(Object *obj);
+
     friend class GarbageCollector;
     friend class UsingHeap;
     
@@ -247,6 +247,6 @@ private:
     void scanRoot();
     template <class T> Val scanValueAs(Val val);
 
-    std::unique_ptr<Heap> _tempHeap;
-    Heap &_fromHeap, &_toHeap;
+    std::unique_ptr<Heap> _tempHeap;    // Owns temporary heap, if there is one
+    Heap &_fromHeap, &_toHeap;          // The source and destination heaps
 };

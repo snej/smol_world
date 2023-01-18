@@ -37,6 +37,7 @@ const char* TypeName(Type t) {
         "array", "dict", "?spare1?", "?spare2?",
         "null", "int"
     };
+    if (uint8_t(t) >= 10) return "!BAD_TYPE!";
     return kTypeNames[uint8_t(t)];
 }
 

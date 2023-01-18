@@ -27,20 +27,28 @@ struct MutEntry {
     operator DictEntry&() {return *(DictEntry*)this;}    // so that Dict::keyCmp will work
 };
 
+
+// Returns the DictEntry with this key, or else the pos where it should go (DictEntry with next higher key),
+// or else the end.
+static DictEntry* _findEntry(slice<DictEntry> entries, Val key) {
+    return std::lower_bound(entries.begin(), entries.end(), DictEntry{key, nullval}, Dict::keyCmp);
+}
+
+
 void Dict::sort(size_t count) {
     std::sort((MutEntry*)begin(), (MutEntry*)begin() + count, Dict::keyCmp);
 }
 
 
-// Returns the DictEntry with this key, or else the pos where it should go (DictEntry with next higher key),
-// or else the end.
-DictEntry* Dict::_findEntry(Val key) {
-    return std::lower_bound(begin(), endAll(), DictEntry{key, nullval}, Dict::keyCmp);
+slice<DictEntry> Dict::items() {
+    slice<DictEntry> all = allItems();
+    return {all.data, uint32_t(_findEntry(all, nullval) - all.data)};
 }
 
 
 Val* Dict::find(Val key) {
-    if (DictEntry *ep = _findEntry(key); ep != endAll() && ep->key == key)
+    slice<DictEntry> all = allItems();
+    if (DictEntry *ep = _findEntry(all, key); ep != all.end() && ep->key == key)
         return &ep->value;
     else
         return nullptr;
@@ -48,14 +56,15 @@ Val* Dict::find(Val key) {
 
 
 bool Dict::set(Val key, Val value) {
-    if (DictEntry *ep = _findEntry(key); ep == endAll()) {
+    slice<DictEntry> all = allItems();
+    if (DictEntry *ep = _findEntry(all, key); ep == all.end()) {
         return false; // not found and full!
     } else if (ep->key == key) {
         ep->value = value;
         return true;
     } else {
         assert(!full());
-        ::memmove(ep + 1, ep, (endAll() - ep - 1) * sizeof(DictEntry));
+        ::memmove(ep + 1, ep, (all.end() - ep - 1) * sizeof(DictEntry));
         new (ep) DictEntry {key, value};
         return true;
     }
@@ -73,8 +82,9 @@ bool Dict::replace(Val key, Val newValue) {
 
 
 bool Dict::remove(Val key) {
-    if (DictEntry *ep = _findEntry(key)) {
-        ::memmove(ep, ep + 1, (endAll() - ep) * sizeof(DictEntry));
+    slice<DictEntry> all = allItems();
+    if (DictEntry *ep = _findEntry(all, key); ep != all.end()) {
+        ::memmove(ep, ep + 1, (all.end() - ep) * sizeof(DictEntry));
         new (ep) DictEntry {nullval, nullval};
         return true;
     } else {
