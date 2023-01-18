@@ -75,24 +75,21 @@ public:
     constexpr bool isInt() const                        {return (_val & IntTag) != 0;}
     constexpr int asInt() const                         {assert(isInt()); return int32_t(_val) >> TagSize;}
 
-    constexpr bool isObject() const                     {return (_val & IntTag) == 0;}
-    Object* asObject(IN_HEAP) const                     {return (Object*)heap->at(asPos());}
+    constexpr bool isObject() const {
+        return (_val & IntTag) == 0 && _val != NullVal;
+    }
 
-    bool isString(IN_HEAP) const                        {return type(heap) == Type::String;}
-    String* asString(IN_HEAP) const                     {return as<String>(heap);}
+    Object* asObject(IN_HEAP) const {
+        return isObject() ? (Object*)heap->at(asPos()) : nullptr;
+    }
 
-    bool isArray(IN_HEAP) const                         {return type(heap) == Type::Array;}
-    Array* asArray(IN_HEAP) const                       {return as<Array>(heap);}
-
-    bool isDict(IN_HEAP) const                          {return type(heap) == Type::Dict;}
-    Dict* asDict(IN_HEAP) const                         {return as<Dict>(heap);}
+    template <class T> bool is(IN_HEAP) const           {return type(heap) == T::InstanceType;}
+    template <class T> T* as(IN_HEAP) const;
 
     heappos asPos() const {
         assert(isObject());
         return heappos(_val >> TagSize);
     }
-
-    template <class T> T* as(IN_HEAP) const;
 
     friend bool operator== (Val a, Val b)               {return a._val == b._val;}
     friend bool operator!= (Val a, Val b)               {return a._val != b._val;}
@@ -100,15 +97,14 @@ public:
     // key comparator for Dicts
     static bool keyCmp(Val a, Val b)                    {return a._val > b._val;} // descending order
 
+private:
     enum TagBits : uint32_t {
         IntTag      = 0b001,
     };
 
     static constexpr int      TagSize = 1;
-
     static constexpr uint32_t NullVal = 0;
 
-private:
     heapsize _val;
 };
 

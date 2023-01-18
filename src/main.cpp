@@ -74,7 +74,7 @@ int main(int argc, const char * argv[]) {
         assert(heap.root<Dict>() == nullptr);
         cout << root << "... at " << (void*)root << endl;
 
-        String *str = (*root)[2].asString(heap);
+        String *str = (*root)[2].as<String>(heap);
         cout << "String: " << str << "... at " << (void*)str << endl;
 
         cout << "before GC: " << heap.used() << " bytes\n";

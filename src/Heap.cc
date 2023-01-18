@@ -25,13 +25,23 @@ Heap::Heap(void *base, size_t capacity, bool malloced)
 ,_cur(_base)
 ,_malloced(malloced)
 {
-    assert(isAligned(_base));
     assert(capacity >= sizeof(Header));
+}
+
+
+bool Heap::resize(size_t newSize) {
+    if (newSize < used())
+        return false;
+    if (_malloced && newSize > capacity())
+        return false;
+    _end = _base + newSize;
+    return true;
 }
 
 void Heap::reset() {
     _cur = _base;
-    *alloc<Header>() = {kMagic, 0};
+    auto header = (Header*)alloc(sizeof(Header));
+    *header = {kMagic, 0};
 }
 
 
@@ -54,7 +64,7 @@ bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos <
 
 Val Heap::rootVal() const           {return ((Header*)_base)->root;}
 void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
-Object* Heap::rootObject() const          {return rootVal().asObject(this);}
+Object* Heap::rootObject() const    {return rootVal().asObject(this);}
 void Heap::setRoot(Object* obj)     {setRoot(obj->asVal(this));}
 
 Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
@@ -67,7 +77,7 @@ Object* Heap::firstObject() {
 
 Object* Heap::nextObject(Object *obj) {
     uintptr_t addr = (uintptr_t)obj + sizeof(Object) + obj->dataSize();
-    obj = alignUp((Object*)addr);
+    obj = (Object*)addr;
     return (byte*)obj < _cur ? obj : nullptr;
 }
 

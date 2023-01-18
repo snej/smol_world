@@ -111,3 +111,11 @@ public:
 protected:
     explicit TypedObject(heapsize totalSize) :Object(totalSize, InstanceType) { }
 };
+
+
+template <class T>
+T* Val::as(IN_HEAP) const {
+    if (auto obj = asObject(heap); obj && obj->type() == T::InstanceType)
+        return (T*)obj;
+    return nullptr;
+}

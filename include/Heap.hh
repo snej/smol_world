@@ -38,13 +38,9 @@ static inline std::strong_ordering operator<=> (heappos p, intpos i) {return int
 
 /// A simple container for dynamic allocation.
 /// Pointers within a Heap are 32-bit values, offsets from the heap's base address.
-/// Allocation uses a simple bump (arena) allocator. Allocations are 4-byte aligned.
+/// Allocation uses a simple bump (arena) allocator.
 class Heap {
 public:
-    static constexpr int AlignmentBits  = 2;
-    static constexpr int Alignment  = 1 << AlignmentBits;
-    static constexpr uintptr_t AlignmentMask  = (1 << AlignmentBits) - 1;
-
     static constexpr size_t  MaxSize = 1 << 31;
 
     // Constructs a new empty Heap starting at address `base` and capacity `size`.
@@ -88,34 +84,42 @@ public:
 
     //---- Allocation:
 
-    /// Allocates space for `size` bytes. The address will be 4-byte aligned.
-    /// If there's not enough space, calls the AllocFailureHandler and retries.
-    /// If there's no AllocFailureHandler, or it returns false, throws an exception.
+    /// Allocates space for `size` bytes.
+    /// If there's not enough space, calls the `AllocFailureHandler` and retries.
+    /// If there's no `AllocFailureHandler`, or the handler returns false,
+    /// `alloc` returns nullptr.
+    ///
+    /// Note that if there is a failure handler that runs the garbage collector,
+    /// then `alloc` may move objects, invalidating `Object` pointers and `Val`s!
     void* alloc(heapsize size) {
-        byte *result, *newCur;
         do {
-            result = alignUp(_cur);
-            newCur = result + size;
-            if (newCur > _end) {
-                if (!_allocFailureHandler || !_allocFailureHandler(this, size))
-                    throw std::runtime_error("Heap overflow");
+            byte *result = _cur;
+            byte *newCur = result + size;
+            if (newCur <= _end) {
+                _cur = newCur;
+                return result;
             }
-        } while (newCur > _end);
-        _cur = newCur;
-        return result;
+        } while (_allocFailureHandler && _allocFailureHandler(this, size));
+        return nullptr;
     }
-
-    /// Convenience wrapper to allocate an instance of `T`.
-    template <typename T>
-    T* alloc()                      {return (T*)alloc(sizeof(T));}
 
     /// A callback that's invoked when the Heap doesn't have enough space for an allocation.
     /// It should attempt to increase the free space, then return true.
-    /// If it can't, it must return false.
+    /// If it can't do anything, it must return false.
+    /// The typical things for the callback to do are garbage-collect or grow the heap.
     using AllocFailureHandler = bool(*)(Heap*,heapsize sizeNeeded);
 
-    /// Sets the allocation-failure handler.
+    /// Sets the allocation-failure handler. See @ref AllocFailureHandler for details.
     void setAllocFailureHandler(AllocFailureHandler h)  {_allocFailureHandler = h;}
+
+    /// Changes the size of the heap. All this does is move the end-of-heap pointer;
+    /// it doesn't reallocate or move the heap or invalidate any Object pointers.
+    /// Returns true on success, false if the new size is illegal.
+    /// - It is illegal to grow a malloced heap.
+    /// - It is illegal to shrink a Heap smaller than its current `used()` size.
+    /// If you grow a non-malloced heap, the new address space at the end must be available
+    /// and writeable, otherwise Bad Things will happen when the Heap writes into it.
+    bool resize(size_t newSize);
 
     //---- Address Translation:
 
@@ -125,20 +129,13 @@ public:
 
     /// Translates a real address to a `heappos` offset.
     heappos pos(const void *ptr) const {
-        assert(ptr >= _base && ptr < _end && isAligned(ptr));
+        assert(ptr >= _base && ptr < _end);
         return heappos((byte*)ptr - _base);
     }
 
     /// Returns true if a `heappos` is valid in this Heap, i.e. doesn't point past the end of
     /// allocated memory.
     bool validPos(heappos pos) const;
-
-    static inline bool isAligned(const void *ptr)   {return (uintptr_t(ptr) & AlignmentMask) == 0;}
-    static inline bool isAligned(heappos pos)       {return (uintpos(pos) & AlignmentMask) == 0;}
-
-    template <typename T> static T* alignUp(T *addr) {
-        return (T*)((uintptr_t(addr) + AlignmentMask) & ~AlignmentMask);
-    }
 
     Object* firstObject();
     Object* nextObject(Object *obj);

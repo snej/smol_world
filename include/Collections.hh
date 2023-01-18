@@ -14,7 +14,7 @@ class Collection : public TypedObject<TYPE> {
 public:
     using Item = ITEM;
 
-    static constexpr heapsize MaxCount = ((1<<28) / sizeof(ITEM)) - 1;
+    static constexpr heapsize MaxCount = (Object::MaxSize / sizeof(Item)) - 1;
 
     heapsize capacity() const   {return Object::dataSize() / sizeof(Item);}
     heapsize count() const      {return capacity();}        // Dict "overrides" this
@@ -202,12 +202,6 @@ private:
     void sort(size_t count);
     iterator endAll()                               {return begin() + capacity();}
 };
-
-
-template <class T> T* Val::as(ConstHeapRef heap) const {
-    return this->asObject(heap)->as<T>();
-}
-
 
 
 
