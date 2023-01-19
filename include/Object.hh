@@ -13,6 +13,7 @@
 using string_view = std::string_view;
 
 
+/// Generic pointer+length pair, a range of values.
 template <typename T>
 struct slice {
     slice(T* b, T* e)       :_begin(b), _end(e) {assert(e >= b);}
@@ -44,6 +45,14 @@ public:
     template <class T> bool is() const          {return type() == T::InstanceType;}
     template <class T> T* as()                  {return (type() == T::InstanceType) ? (T*)this : nullptr;}
     template <class T> T const* as() const      {return const_cast<Object*>(this)->as<T>();}
+
+    heapsize dataSize() const {
+        assert(!isForwarded());
+        uint32_t meta = bigMeta();
+        if (!(meta & Large))
+            meta &= 0xFFFF;
+        return meta >> TagBits;
+    }
 
 private:
     static constexpr heapsize TagBits = 6;
@@ -77,7 +86,11 @@ protected:
     static constexpr heapsize MaxSize = 1 << (32 - TagBits);
     static constexpr heapsize LargeSize = 1 << (16 - TagBits);
 
-    static void* operator new(size_t size, IN_MUT_HEAP, size_t dataSize) {
+    static void* operator new(size_t size, void *addr) {return addr;} // "placement" operator new
+
+    // Note: This used to be an operator new overload, but Clang doesn't seem to support returning
+    // nullptr from operator new: it goes ahead and calls the constructor anyway, causing a crash.
+    static void* alloc(size_t size, IN_MUT_HEAP, size_t dataSize) {
         assert(size == sizeof(Object)); // subclasses must not add extra data members!
         if (dataSize == 0) {
             size = 4;  // Object must allocate at least enough space to store forwarding pos
@@ -87,29 +100,22 @@ protected:
                 size += 2;      // Add room for 32-bit dataSize
             assert(size < MaxSize);
         }
-        return heap->alloc(heapsize(size));
+        return heap->rawAlloc(heapsize(size));
     }
 
     explicit Object(heapsize dataSize, Type type) {
         uint32_t meta = (dataSize << TagBits) | typeTag(type);
-        if (meta > 0xFFFF)
+        if (meta <= 0xFFFF) {
+            _meta = meta;
+        } else {
             meta |= Large;
-        _meta = meta;
+            bigMeta() = meta;
+        }
     }
 
     Tags tags() const                           {return Tags(_tags & TagsMask);}
 
     uint32_t& bigMeta() const                   {return *(uint32_t*)this;}
-
-    /// The integer stored in the object header (minus the tags.)
-    /// Collections use this as an item count; other classes can use it for other purposes.
-    heapsize dataSize() const {
-        assert(!isForwarded());
-        uint32_t meta = bigMeta();
-        if (!(meta & Large))
-            meta &= 0xFFFF;
-        return meta >> TagBits;
-    }
 
     /// A pointer to just after the object header (the `_meta` field.) Used by collections.
     void* dataPtr() {
@@ -157,7 +163,6 @@ private:
     union {  // Note: This layout assumes little-endian byte order
         uint8_t  _tags;
         uint16_t _meta;
-        //uint32_t _bigMeta;
     };
 } __attribute__((aligned (1))) __attribute__((packed));
 

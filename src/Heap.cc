@@ -39,10 +39,11 @@ bool Heap::resize(size_t newSize) {
     return true;
 }
 
+
 void Heap::reset() {
     _cur = _base;
-    auto header = (Header*)alloc(sizeof(Header));
-    *header = {kMagic, 0};
+    auto header = (Header*)rawAlloc(sizeof(Header));
+    *header = {kMagic, nullptr};
 }
 
 
@@ -76,6 +77,12 @@ Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; retu
 void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
 Heap* Heap::current()               {return (Heap*)sCurHeap;}
 
+void* Heap::alloc(heapsize size) {
+    // As a general-purpose allocator we just allocate a Blob and return its data.
+    auto blob = Blob::create(nullptr, size, this);
+    return blob ? blob->begin() : nullptr;
+}
+
 Object* Heap::firstObject() {
     return (Object*)(_base + sizeof(Header));
 }
@@ -85,6 +92,12 @@ Object* Heap::nextObject(Object *obj) {
     return (byte*)obj < _cur ? obj : nullptr;
 }
 
+
+void Heap::visitAll(Visitor const& visitor) {
+    for (auto obj = firstObject(); obj; obj = nextObject(obj))
+        if (!visitor(obj))
+            break;
+}
 
 void Heap::visit(Visitor const& visitor) {
     for (auto obj = firstObject(); obj; obj = nextObject(obj))
@@ -179,7 +192,9 @@ Object* GarbageCollector::scan(Object *srcObj) {
         auto dataSize = srcObj->dataSize();
 
         // Allocate an object of the same type & size in the destination heap:
-        Object *dstObj = new (_toHeap, srcObj->dataSize()) Object(dataSize, type);
+        void* addr = Object::alloc(sizeof(Object), _toHeap, srcObj->dataSize());
+        assert(addr);
+        Object *dstObj = new (addr) Object(dataSize, type);
         assert(dstObj->dataSize() == srcObj->dataSize());
         auto fwdPos = _toHeap.pos(dstObj);
 

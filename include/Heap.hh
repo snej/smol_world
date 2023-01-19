@@ -93,17 +93,7 @@ public:
     ///
     /// Note that if there is a failure handler that runs the garbage collector,
     /// then `alloc` may move objects, invalidating `Object` pointers and `Val`s!
-    void* alloc(heapsize size) {
-        do {
-            byte *result = _cur;
-            byte *newCur = result + size;
-            if (newCur <= _end) {
-                _cur = newCur;
-                return result;
-            }
-        } while (_allocFailureHandler && _allocFailureHandler(this, size));
-        return nullptr;
-    }
+    void* alloc(heapsize size);
 
     /// A callback that's invoked when the Heap doesn't have enough space for an allocation.
     /// It should attempt to increase the free space, then return true.
@@ -135,17 +125,26 @@ public:
         return heappos((byte*)ptr - _base);
     }
 
+    bool contains(const void *ptr) const     {return ptr >= _base && ptr < _cur;}
+
     /// Returns true if a `heappos` is valid in this Heap, i.e. doesn't point past the end of
     /// allocated memory.
     bool validPos(heappos pos) const;
 
     using Visitor = std::function<bool(const Object*)>;
+
+    /// Calls the Visitor callback once for each live (reachable) object.
     void visit(Visitor const&);
+
+    /// Calls the Visitor callback once for each object, even if it's unreachable garbage.
+    void visitAll(Visitor const&);
 
     void registerExternalRoots(Val rootArray[], size_t count);
     void unregisterExternalRoots(Val rootArray[]);
 
 private:
+    friend class Object;
+    
     Object* firstObject();
     Object* nextObject(Object *obj);
 
@@ -159,6 +158,19 @@ private:
     Heap const* enter() const;
     void exit() const;
     void exit(Heap const* newCurrent) const;
+
+    // Allocates space without initializing it. Caller MUST initialize (see Object constructor)
+    void* rawAlloc(heapsize size) {
+        do {
+            byte *result = _cur;
+            byte *newCur = result + size;
+            if (newCur <= _end) {
+                _cur = newCur;
+                return result;
+            }
+        } while (_allocFailureHandler && _allocFailureHandler(this, size));
+        return nullptr;
+    }
 
     byte*   _base;
     byte*   _end;

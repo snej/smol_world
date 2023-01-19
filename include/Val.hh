@@ -91,6 +91,8 @@ public:
         return heappos(_val >> TagSize);
     }
 
+    uint32_t rawBits() const                            {return _val;}
+
     friend bool operator== (Val a, Val b)               {return a._val == b._val;}
     friend bool operator!= (Val a, Val b)               {return a._val != b._val;}
 
@@ -105,7 +107,7 @@ private:
     static constexpr int      TagSize = 1;
     static constexpr uint32_t NullVal = 0;
 
-    heapsize _val;
+    uintpos _val;
 };
 
 static constexpr Val nullval;

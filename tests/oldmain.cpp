@@ -69,6 +69,7 @@ int main(int argc, const char * argv[]) {
     {
         cout << "\nReloading...\n";
         Heap heap = Heap::existing(persisted.data(), persisted.size(), 100000);
+        assert(heap.valid());
         UsingHeap u(heap);
         cout << "Root is " << heap.rootVal() << endl;
         assert(heap.rootObject()->is<Array>());

@@ -17,6 +17,7 @@
 //
 
 #include "Collections.hh"
+#include <iomanip>
 #include <iostream>
 
 
@@ -95,7 +96,16 @@ bool Dict::remove(Val key) {
 
 
 std::ostream& operator<<(std::ostream& out, String const* str) {
-    out << "String[“" << str->get() << "”]";
+    out << "“" << str->get() << "”";
+    return out;
+}
+
+std::ostream& operator<<(std::ostream& out, Blob const* blob) {
+    out << "Blob<" << std::hex;
+    for (byte b : *blob) {
+        out << std::setw(2) << unsigned(b);
+    }
+    out << std::dec << ">";
     return out;
 }
 

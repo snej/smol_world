@@ -29,10 +29,12 @@ public:
 
 protected:
     static T* createUninitialized(heapsize capacity, IN_MUT_HEAP) {
-        return new (heap, capacity * sizeof(Item)) T(capacity);
+        void* addr = Object::alloc(sizeof(T), heap, capacity * sizeof(Item));
+        return addr ? new (addr) T(capacity) : nullptr;
     }
-    static T* create(const Item* data, size_t size, IN_MUT_HEAP) {
-        return new (heap, size * sizeof(Item)) T(data, size);
+    static T* create(const Item* data, size_t count, IN_MUT_HEAP) {
+        void* addr = Object::alloc(sizeof(T), heap, count * sizeof(Item));
+        return addr ? new (addr) T(data, count) : nullptr;
     }
 
     explicit Collection(heapsize capacity)
@@ -74,10 +76,31 @@ public:
 
 private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
-    friend class GarbageCollector;
 
     explicit String(heapsize capacity)   :Collection(capacity) { }
     String(const char *str, size_t size) :Collection(str, size) { }
+};
+
+
+
+/// A blob object ... just like a String but with `byte` instead of `char`.
+class Blob : public Collection<Blob, byte, Type::Blob> {
+public:
+    static Blob* create(const void *data, size_t size, IN_MUT_HEAP) {
+        return Collection::create((const byte*)data, size, heap);
+    }
+
+    slice<byte> bytes()             {return Collection::items();}
+    const_iterator begin() const    {return Collection::begin();}
+    const_iterator end() const      {return Collection::end();}
+    iterator begin()                {return Collection::begin();}
+    iterator end()                  {return Collection::end();}
+
+private:
+    template <class T, typename ITEM, Type TYPE> friend class Collection;
+
+    explicit Blob(heapsize capacity)   :Collection(capacity) { }
+    Blob(const byte *str, size_t size) :Collection(str, size) { }
 };
 
 
@@ -102,7 +125,6 @@ public:
 
 private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
-    friend class GarbageCollector;
 
     explicit Array(heapsize capacity)    :Collection(capacity) { }
     Array(const Val *vals, size_t count) :Collection(vals, count) { }
@@ -132,7 +154,8 @@ public:
     /// Creates a dictionary from a list of key-value pairs.
     /// The capacity must be at least the number of pairs but can be larger.
     static Dict* create(std::initializer_list<DictEntry> vals, heapsize capacity, IN_MUT_HEAP) {
-        return new (heap, capacity * sizeof(Val)) Dict(vals.begin(), vals.size(), capacity);
+        void* addr = Object::alloc(sizeof(Dict), heap, capacity * sizeof(Val));
+        return addr ? new (addr) Dict(vals.begin(), vals.size(), capacity) : nullptr;
     }
 
     heapsize capacity() const           {return Collection::capacity();}
@@ -163,7 +186,6 @@ public:
 
 private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
-    friend class GarbageCollector;
 
     explicit Dict(heapsize capacity)   :Collection(capacity) { }
 

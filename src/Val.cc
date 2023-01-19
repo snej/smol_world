@@ -43,24 +43,14 @@ const char* TypeName(Type t) {
 
 
 std::ostream& operator<<(std::ostream& out, Val val) {
-    if (auto heap = Heap::current()) {
-        switch(auto type = val.type(CUR_HEAP)) {
-            case Type::Null:
-                out << "null";
-                break;
-            case Type::Int:
-                out << val.asInt();
-                break;
-            default:
-                out << TypeName(type) << "@" << uintpos(val.asPos());
-                break;
-        }
+    if (val.isNull()) {
+        out << "null";
+    } else if (val.isInt()) {
+        out << val.asInt();
+    } else if (auto heap = Heap::current()) {
+        out << TypeName(val.type(heap)) << "@" << uintpos(val.asPos());
     } else {
-        // No current heap...
-        if (val.isInt())
-            out << val.asInt();
-        else
-            out << "???@" << uintpos(val.asPos());
+        out << "???@" << std::hex << val.rawBits() << std::dec;
     }
     return out;
 }
