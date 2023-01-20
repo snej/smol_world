@@ -100,7 +100,62 @@ TEST_CASE("Alloc", "[heap]") {
 }
 
 
-TEST_CASE("Alloc Objects", "[heap]") {
-    Heap heap(10000);
+static void testAllocRangeOfSizes(heapsize BaseSize, int NumBlocks) {
+    Heap heap(8 + NumBlocks * (4 + BaseSize) + (NumBlocks * (NumBlocks - 1)) / 2);
+    cerr << "Heap size is " << heap.capacity() << endl;
 
+    vector<Blob*> blocks(NumBlocks);
+    size_t dataSize = 0;
+    for (int i = 0; i < NumBlocks; ++i) {
+        size_t size = BaseSize + i;
+        INFO("Block size " << size);
+        Blob* blob = blocks[i] = Blob::create(size, heap);
+        //cerr << "Block " << size << " = " << (void*)blob << endl;
+        REQUIRE(blob != nullptr);
+        CHECK(heap.contains(blob));
+        CHECK(blob->type() == Type::Blob);
+        CHECK(blob->capacity() == size);
+        memset(blob->begin(), uint8_t(i), size);
+        CHECK(blob->type() == Type::Blob);
+        CHECK(blob->capacity() == size);
+        if (i > 0) {
+            auto prev = blocks[i - 1];
+            CHECK(prev->type() == Type::Blob);
+            CHECK(prev->capacity() == size - 1);
+        }
+        dataSize += size;
+    }
+    cerr << "Allocated " << heap.used() << " bytes; overhead of "
+    << (double(heap.used() - dataSize) / NumBlocks) << " bytes/block\n";
+
+    for (int i = 0; i < NumBlocks; ++i) {
+        size_t size = BaseSize + i;
+        INFO("Block #" << i);
+        Blob *blob = blocks[i];
+        CHECK(blob->type() == Type::Blob);
+        auto data = (uint8_t*)blob->begin();
+        REQUIRE(heap.contains(data));
+        for (int j = 0; j < size; j++) {
+            if (data[j] != uint8_t(i)) {
+                FAIL(" byte " << j << " is " << data[j] << ", expected " << uint8_t(i));
+            }
+        }
+    }
+
+    int i = 0;
+    heap.visitAll([&](const Object *obj) {
+        INFO("Block #" << i);
+        REQUIRE(i < NumBlocks);
+        CHECK(obj == blocks[i]);
+        ++i;
+        return true;
+    });
+    CHECK(i == NumBlocks);
 }
+
+
+TEST_CASE("Alloc Small Objects", "[heap]")      {testAllocRangeOfSizes(0,     500);}
+TEST_CASE("Alloc Bigger Objects", "[heap]")     {testAllocRangeOfSizes(900,   500);}
+TEST_CASE("Alloc Big Objects", "[heap]")        {testAllocRangeOfSizes(Object::LargeSize - 50, 100);}
+TEST_CASE("Alloc Real Big Objects", "[heap]")   {testAllocRangeOfSizes(99990,  20);}
+TEST_CASE("Alloc Huge Objects", "[heap]")       {testAllocRangeOfSizes(Object::MaxSize - 2,  2);}

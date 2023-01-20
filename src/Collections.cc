@@ -17,6 +17,7 @@
 //
 
 #include "Collections.hh"
+#include "Symbol.hh"
 #include <iomanip>
 #include <iostream>
 
@@ -41,7 +42,7 @@ void Dict::sort(size_t count) {
 }
 
 
-slice<DictEntry> Dict::items() {
+slice<DictEntry> Dict::items() const {
     slice<DictEntry> all = allItems();
     return {all.begin(), _findEntry(all, nullval)};
 }
@@ -56,18 +57,20 @@ Val* Dict::find(Val key) {
 }
 
 
-bool Dict::set(Val key, Val value) {
+bool Dict::set(Val key, Val value, bool insertOnly) {
     slice<DictEntry> all = allItems();
     if (DictEntry *ep = _findEntry(all, key); ep == all.end()) {
-        return false; // not found and full!
+        return false;   // not found, and would go after last item (so dict must be full)
     } else if (ep->key == key) {
+        if (insertOnly) return false;
         ep->value = value;
         return true;
-    } else {
-        assert(!full());
+    } else if (all.back().key == nullval) {
         ::memmove(ep + 1, ep, (all.end() - ep - 1) * sizeof(DictEntry));
         new (ep) DictEntry {key, value};
         return true;
+    } else {
+        return false; // not found, but no room to insert
     }
 }
 
@@ -84,9 +87,9 @@ bool Dict::replace(Val key, Val newValue) {
 
 bool Dict::remove(Val key) {
     slice<DictEntry> all = allItems();
-    if (DictEntry *ep = _findEntry(all, key); ep != all.end()) {
-        ::memmove(ep, ep + 1, (all.end() - ep) * sizeof(DictEntry));
-        new (ep) DictEntry {nullval, nullval};
+    if (DictEntry *ep = _findEntry(all, key); ep != all.end() && ep->key == key) {
+        ::memmove(ep, ep + 1, (all.end() - (ep + 1)) * sizeof(DictEntry));
+        new (&all.back()) DictEntry {nullval, nullval};
         return true;
     } else {
         return false;
@@ -96,6 +99,11 @@ bool Dict::remove(Val key) {
 
 
 std::ostream& operator<<(std::ostream& out, String const* str) {
+    out << "“" << str->get() << "”";
+    return out;
+}
+
+std::ostream& operator<<(std::ostream& out, Symbol const* str) {
     out << "“" << str->get() << "”";
     return out;
 }
@@ -135,10 +143,7 @@ std::ostream& operator<<(std::ostream& out, Dict const* dict) {
 
 
 std::ostream& operator<< (std::ostream& out, Object const* obj) {
-    switch (auto type = obj->type()) {
-        case Type::String:  return out << obj->as<String>();
-        case Type::Array:   return out << obj->as<Array>();
-        case Type::Dict:    return out << obj->as<Dict>();
-        default:            return out << TypeName(type) << "[]";
-    }
+    if (!obj->visit([&](auto t) {out << t;}))
+        out << TypeName(obj->type()) << "[]";
+    return out;
 }

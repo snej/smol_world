@@ -11,20 +11,26 @@
 
 
 using string_view = std::string_view;
+class String; class Symbol; class Blob; class Array; class Dict;
 
 
 /// Generic pointer+length pair, a range of values.
 template <typename T>
 struct slice {
-    slice(T* b, T* e)       :_begin(b), _end(e) {assert(e >= b);}
-    slice(T* b, uint32_t s) :_begin(b), _end(b + s) { }
+    slice()                 :_begin(nullptr), _end(nullptr) { }
+    slice(T* b, T* e)       :_begin(b), _end(e) {assert(e >= b && (b != nullptr || b == e));}
+    slice(T* b, uint32_t s) :slice(b, b + s) { }
 
     using iterator = T*;
     T* begin() const    {return _begin;}
     T* end() const      {return _end;}
 
+    T& front() const    {assert(!empty()); return _begin[0];}
+    T& back() const     {assert(!empty()); return _end[-1];}
+
     size_t size() const {return _end - _begin;}
     bool empty() const  {return _end == _begin;}
+    bool null() const   {return _begin == nullptr;}
 
     T& operator[] (uint32_t i)  {auto ptr = &_begin[i]; assert(ptr < _end); return *ptr;}
 private:
@@ -52,6 +58,21 @@ public:
         if (!(meta & Large))
             meta &= 0xFFFF;
         return meta >> TagBits;
+    }
+
+    /// Calls `fn`, which must be a generic lambda taking an `auto` parameter,
+    /// with this object cast to its runtime type.
+    template <typename FN>
+    bool visit(FN fn) const {
+        switch (type()) {
+            case Type::String: fn(as<String>()); break;
+            case Type::Symbol: fn(as<Symbol>()); break;
+            case Type::Blob:   fn(as<Blob>()); break;
+            case Type::Array:  fn(as<Array>()); break;
+            case Type::Dict:   fn(as<Dict>()); break;
+            default:           return false;
+        }
+        return true;
     }
 
 private:
@@ -82,28 +103,29 @@ private:
     /// Static function that maps a Type to its Tags value
     static constexpr Tags typeTag(Type t)       {return Tags(uint8_t(t) << 1);}
 
-protected:
-    static constexpr heapsize MaxSize = 1 << (32 - TagBits);
+public:
+    static constexpr heapsize MaxSize = (1 << (32 - TagBits)) - 1;
     static constexpr heapsize LargeSize = 1 << (16 - TagBits);
 
+protected:
     static void* operator new(size_t size, void *addr) {return addr;} // "placement" operator new
 
     // Note: This used to be an operator new overload, but Clang doesn't seem to support returning
     // nullptr from operator new: it goes ahead and calls the constructor anyway, causing a crash.
     static void* alloc(size_t size, IN_MUT_HEAP, size_t dataSize) {
         assert(size == sizeof(Object)); // subclasses must not add extra data members!
-        if (dataSize == 0) {
+        size += dataSize;
+        if (size < 4) {
             size = 4;  // Object must allocate at least enough space to store forwarding pos
         } else {
-            size += dataSize;
             if (dataSize >= LargeSize)
                 size += 2;      // Add room for 32-bit dataSize
-            assert(size < MaxSize);
         }
         return heap->rawAlloc(heapsize(size));
     }
 
     explicit Object(heapsize dataSize, Type type) {
+        assert(dataSize <= MaxSize);
         uint32_t meta = (dataSize << TagBits) | typeTag(type);
         if (meta <= 0xFFFF) {
             _meta = meta;
@@ -136,7 +158,7 @@ protected:
 
     Object* nextObject() {
         auto dat = data();
-        return (Object*)( dat.begin() + std::max(dat.size(), sizeof(uint32_t)) );
+        return (Object*)( dat.begin() + std::max(dat.size(), size_t(2)) );
     }
 
 private:
@@ -178,8 +200,6 @@ template <Type TYPE>
 class TypedObject : public Object {
 public:
     static constexpr Type InstanceType = TYPE;
-
-    Val asVal(IN_HEAP) const    {return Val(this, heap);}
 
 protected:
     explicit TypedObject(heapsize totalSize) :Object(totalSize, InstanceType) { }

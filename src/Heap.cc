@@ -215,6 +215,8 @@ Object* GarbageCollector::scan(Object *srcObj) {
                 *dst = scan(firstItem);
                 while (--count > 0)
                     *++dst = scan(*++src);
+                if (type == Type::Dict)
+                    ((Dict*)dstObj)->sort();
             }
         } else {
             // If `obj` does not contain pointers, just do a memcpy:

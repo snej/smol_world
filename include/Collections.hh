@@ -26,11 +26,13 @@ public:
 
     const_iterator begin() const    {return items().begin();}
     const_iterator end() const      {return items().end();}
+    iterator begin()                {return items().begin();}
+    iterator end()                  {return items().end();}
 
 protected:
-    static T* createUninitialized(heapsize capacity, IN_MUT_HEAP) {
+    static T* createUninitialized(size_t capacity, IN_MUT_HEAP) {
         void* addr = Object::alloc(sizeof(T), heap, capacity * sizeof(Item));
-        return addr ? new (addr) T(capacity) : nullptr;
+        return addr ? new (addr) T(heapsize(capacity)) : nullptr;
     }
     static T* create(const Item* data, size_t count, IN_MUT_HEAP) {
         void* addr = Object::alloc(sizeof(T), heap, count * sizeof(Item));
@@ -53,9 +55,6 @@ protected:
 
     slice<Item> items()             {return this->template data<Item>();}
     slice<Item> items() const       {return const_cast<Collection*>(this)->items();}
-
-    iterator begin()                {return items().begin();}
-    iterator end()                  {return items().end();}
 };
 
 
@@ -86,15 +85,14 @@ private:
 /// A blob object ... just like a String but with `byte` instead of `char`.
 class Blob : public Collection<Blob, byte, Type::Blob> {
 public:
+    static Blob* create(size_t capacity, IN_MUT_HEAP) {
+        return Collection::createUninitialized(capacity, heap);
+    }
     static Blob* create(const void *data, size_t size, IN_MUT_HEAP) {
         return Collection::create((const byte*)data, size, heap);
     }
 
     slice<byte> bytes()             {return Collection::items();}
-    const_iterator begin() const    {return Collection::begin();}
-    const_iterator end() const      {return Collection::end();}
-    iterator begin()                {return Collection::begin();}
-    iterator end()                  {return Collection::end();}
 
 private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
@@ -114,11 +112,6 @@ public:
     static Array* create(std::initializer_list<Val> vals, IN_MUT_HEAP) {
         return Collection::create(vals.begin(), vals.size(), heap);
     }
-
-    iterator begin()                {return Collection::begin();}
-    iterator end()                  {return Collection::end();}
-    const_iterator begin() const    {return Collection::begin();}
-    const_iterator end() const      {return Collection::end();}
 
     Val& operator[] (heapsize i)        {return items()[i];}
     Val  operator[] (heapsize i) const  {return items()[i];}
@@ -159,9 +152,9 @@ public:
     }
 
     heapsize capacity() const           {return Collection::capacity();}
-    bool full() const                   {return (end() - 1)->key != nullval;}
-    bool empty() const                  {return begin()->key == nullval;}
-    heapsize count() const              {return heapsize(end() - begin());}
+    bool full() const                   {return capacity() == 0 || (endAll() - 1)->key != nullval;}
+    bool empty() const                  {return capacity() == 0 || begin()->key == nullval;}
+    heapsize count() const              {return heapsize(items().size());}
     size_t size() const                 {return count();}
 
     Val* find(Val key);
@@ -169,22 +162,24 @@ public:
     Val get(Val key) const              {auto v = find(key); return v ? *v : nullval;}
     bool contains(Val key) const        {return find(key) != nullptr;}
 
-    bool set(Val key, Val value);
+    bool set(Val key, Val newValue)     {return set(key, newValue, false);}
+    bool insert(Val key, Val newValue)  {return set(key, newValue, true);}
     bool replace(Val key, Val newValue);
     bool remove(Val key);
 
     Val operator[] (Val key) const      {return get(key);}
 
-    slice<DictEntry> items();
+    slice<DictEntry> items() const;
 
     iterator begin()                    {return items().begin();}
-    iterator end()                      {return items().end();}
+    iterator end()                      {return items().end();} // redefined items()
     const_iterator begin() const        {return const_cast<Dict*>(this)->begin();}
     const_iterator end() const          {return const_cast<Dict*>(this)->end();}
 
     static bool keyCmp(DictEntry const& a, DictEntry const& b) {return Val::keyCmp(a.key, b.key);}
 
 private:
+    friend GarbageCollector;
     template <class T, typename ITEM, Type TYPE> friend class Collection;
 
     explicit Dict(heapsize capacity)   :Collection(capacity) { }
@@ -193,7 +188,7 @@ private:
     :Collection(nullptr, capacity)
     {
         assert(capacity >= count);
-        if (count > 0) {
+        if (ents && count > 0) {
             ::memcpy(begin(), ents, count * sizeof(DictEntry));
             sort(count);
         }
@@ -203,7 +198,9 @@ private:
 
     slice<DictEntry> allItems() const               {return Collection::items();}
     void sort(size_t count);
-    iterator endAll()                               {return begin() + capacity();}
+    void sort()                                     {sort(capacity());}
+    const_iterator endAll() const                   {return begin() + capacity();}
+    bool set(Val key, Val value, bool insertOnly);
 };
 
 

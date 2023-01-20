@@ -12,7 +12,7 @@
 using namespace std;
 
 
-int main(int argc, const char * argv[]) {
+int xmain(int argc, const char * argv[]) {
     string persisted;
     {
         Heap heap(100000);
