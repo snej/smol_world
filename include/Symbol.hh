@@ -18,7 +18,7 @@ public:
     static Symbol* find(string_view, IN_HEAP);
 
     using Visitor = std::function<bool(Symbol*, uint32_t bucket)>;
-    static void visitSymbols(IN_HEAP, Visitor);
+    static bool visitSymbols(IN_HEAP, Visitor);
 
     const char* data() const        {return begin();}
     string_view get() const         {auto i = items(); return {i.begin(), i.size()};}
@@ -29,4 +29,6 @@ private:
     explicit Symbol(heapsize capacity)   :Collection(capacity) { }
     Symbol(size_t cap, const char *str, size_t size) :Collection(cap, str, size) { }
     static Array* getTable(IN_HEAP);
+    static Symbol* create(string_view s, Symbol *symbol, Array *inTable, IN_MUT_HEAP);
+    static bool growTable(IN_MUT_HEAP);
 };

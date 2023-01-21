@@ -220,6 +220,8 @@ Object* GarbageCollector::scan(Object *srcObj) {
                 *dst = scan(firstItem);
                 while (--count > 0)
                     *++dst = scan(*++src);
+                // A Dict needs to re-sort its keys after a GC because the keys are sorted by
+                // Val (address), and those addresses will be differently ordered in the new heap.
                 if (type == Type::Dict)
                     ((Dict*)dstObj)->sort();
             }

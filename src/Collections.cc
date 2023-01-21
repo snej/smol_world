@@ -104,7 +104,7 @@ std::ostream& operator<<(std::ostream& out, String const* str) {
 }
 
 std::ostream& operator<<(std::ostream& out, Symbol const* str) {
-    out << "“" << str->get() << "”";
+    out << "«" << str->get() << "»";
     return out;
 }
 
