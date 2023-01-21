@@ -10,3 +10,4 @@
 #include "Val.hh"
 #include "Object.hh"
 #include "Collections.hh"
+#include "Symbol.hh"

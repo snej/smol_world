@@ -170,3 +170,50 @@ TEST_CASE("Dicts", "[object]") {
         }
     }
 }
+
+
+TEST_CASE("Symbols", "[object]") {
+    Heap heap(10000);
+
+    CHECK(Symbol::find("foo", heap) == nullptr);
+
+    auto foo = Symbol::create("foo", heap);
+    REQUIRE(foo);
+    CHECK(foo->get() == "foo");
+    CHECK(Symbol::find("foo", heap) == foo);
+
+    auto bar = Symbol::create("bar", heap);
+    REQUIRE(bar);
+    CHECK(bar->get() == "bar");
+    CHECK(Symbol::find("bar", heap) == bar);
+
+    constexpr size_t NumSymbols = 100;
+    Symbol* syms[NumSymbols];
+    for (size_t i = 0; i < NumSymbols; ++i) {
+        string name = "Symbol #" + std::to_string(i * i);
+        CHECK(Symbol::find(name, heap) == nullptr);
+        auto sym = Symbol::create(name, heap);
+        syms[i] = sym;
+        REQUIRE(sym);
+        CHECK(sym->get() == name);
+        CHECK(Symbol::find(name, heap) == sym);
+    }
+    for (size_t i = 0; i < NumSymbols; ++i) {
+        string name = "Symbol #" + std::to_string(i * i);
+        CHECK(Symbol::find(name, heap) == syms[i]);
+    }
+
+    unsigned bucketCounts[100] = {0};
+    size_t i = 0;
+    Symbol::visitSymbols(heap, [&](Symbol *sym, uint32_t bucketNo) {
+        cerr << "Symbol " << sym << " in bucket " << bucketNo << endl;
+        REQUIRE(bucketNo < 100);
+        bucketCounts[bucketNo]++;
+        ++i;
+        return true;
+    });
+    CHECK(i == 2 + NumSymbols);
+    for (i = 0; i < 100; ++i)
+        if (bucketCounts[i] > 0)
+            cerr << "Bucket " << i << " has " << bucketCounts[i] << " symbols.\n";
+}

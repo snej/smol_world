@@ -29,8 +29,8 @@ TEST_CASE("Empty Heap", "[heap]") {
     CHECK(heap.valid());
     CHECK(heap.base() != nullptr);
     CHECK(heap.capacity() == 10000);
-    CHECK(heap.used() == 8);
-    CHECK(heap.remaining() == 10000 - 8);
+    CHECK(heap.used() == Heap::Overhead);
+    CHECK(heap.remaining() == 10000 - Heap::Overhead);
 
     CHECK(!heap.contains(nullptr));
 
@@ -60,8 +60,8 @@ TEST_CASE("Alloc", "[heap]") {
     CHECK(heap.contains(ptr + 122));
     CHECK(!heap.contains(ptr + 123));
 
-    CHECK(heap.used() == 8 + 2 + 123);
-    CHECK(heap.remaining() == 10000 - 8 - 2 - 123);
+    CHECK(heap.used() == Heap::Overhead + 2 + 123);
+    CHECK(heap.remaining() == 10000 - Heap::Overhead - 2 - 123);
 
     int i = 0;
     heap.visitAll([&](const Object *obj) {
@@ -74,12 +74,12 @@ TEST_CASE("Alloc", "[heap]") {
     });
     CHECK(i == 1);
 
-    auto ptr2 = (byte*)heap.alloc(9863); // exactly fills the heap
+    auto ptr2 = (byte*)heap.alloc(9859); // exactly fills the heap
     cout << "ptr2= " << (void*)ptr2 << endl;
     REQUIRE(ptr2 != nullptr);
     CHECK(heap.contains(ptr2));
-    CHECK(heap.contains(ptr2 + 9862));
-    CHECK(!heap.contains(ptr2 + 9863));
+    CHECK(heap.contains(ptr2 + 9858));
+    CHECK(!heap.contains(ptr2 + 9859));
 
     CHECK(heap.used() == 10000);
     CHECK(heap.remaining() == 0);
@@ -90,7 +90,7 @@ TEST_CASE("Alloc", "[heap]") {
         CHECK(obj->type() == Type::Blob);
         switch (i++) {
             case 0: CHECK(obj->dataSize() == 123); return true;
-            case 1: CHECK(obj->dataSize() == 9863); return true;
+            case 1: CHECK(obj->dataSize() == 9859); return true;
             default: FAIL("Invalid object visited"); return false;
         }
     });
@@ -101,7 +101,7 @@ TEST_CASE("Alloc", "[heap]") {
 
 
 static void testAllocRangeOfSizes(heapsize BaseSize, int NumBlocks) {
-    Heap heap(8 + NumBlocks * (4 + BaseSize) + (NumBlocks * (NumBlocks - 1)) / 2);
+    Heap heap(Heap::Overhead + NumBlocks * (4 + BaseSize) + (NumBlocks * (NumBlocks - 1)) / 2);
     cerr << "Heap size is " << heap.capacity() << endl;
 
     vector<Blob*> blocks(NumBlocks);

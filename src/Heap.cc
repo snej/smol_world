@@ -10,12 +10,15 @@
 #include <deque>
 #include <iostream>
 
-static constexpr uint32_t kMagic = 0xD217904A;
+static constexpr uint32_t kMagic = 0xA189933A;
 
 struct Header {
-    uint32_t magic; // Must equal kMagic
-    Val      root;  // Pointer to root object
+    uint32_t magic;   // Must equal kMagic
+    Val      root;    // Pointer to root object
+    Val      symbols; // Pointer to symbol table
 };
+
+const size_t Heap::Overhead = sizeof(Header);
 
 static thread_local Heap const* sCurHeap;
 
@@ -69,6 +72,7 @@ bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos <
 
 
 Val Heap::rootVal() const           {return ((Header*)_base)->root;}
+Val& Heap::symbolTable() const      {return ((Header*)_base)->symbols;}
 void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
 Object* Heap::rootObject() const    {return rootVal().asObject(this);}
 void Heap::setRoot(Object* obj)     {setRoot(obj->asVal(this));}
@@ -171,6 +175,7 @@ void GarbageCollector::scanRoot() {
         assert(!obj->isForwarded());
 #endif
     _toHeap.setRoot(scan(_fromHeap.rootVal()));
+    _toHeap.setRoot(scan(_fromHeap.symbolTable())); // TODO: Scan buckets as weak references to Symbols
 }
 
 

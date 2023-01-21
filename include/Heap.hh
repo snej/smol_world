@@ -42,6 +42,7 @@ static inline std::strong_ordering operator<=> (heappos p, intpos i) {return int
 class Heap {
 public:
     static constexpr size_t  MaxSize = 1 << 31;
+    static const size_t Overhead;
 
     // Constructs a new empty Heap starting at address `base` and capacity `size`.
     Heap(void *base, size_t capacity)   :Heap(base, capacity, false) {reset();}
@@ -63,6 +64,7 @@ public:
     const size_t capacity() const       {return _end - _base;}  ///< Maximum size it can grow to
     const size_t used() const           {return _cur - _base;}  ///< Maximum byte-offset used
     const size_t remaining() const      {return _end - _cur;}   ///< Bytes of capacity left
+    const size_t available() const      {return remaining();}
 
     /// The heap's root value. Starts as Null, but usually an Array or Dict.
     Val rootVal() const;
@@ -144,6 +146,7 @@ public:
 
 private:
     friend class Object;
+    friend class Symbol;
     
     Object* firstObject();
     Object* nextObject(Object *obj);
@@ -171,6 +174,8 @@ private:
         } while (_allocFailureHandler && _allocFailureHandler(this, size));
         return nullptr;
     }
+
+    Val& symbolTable() const;
 
     byte*   _base;
     byte*   _end;
@@ -210,7 +215,7 @@ protected:
 };
 
 
-class HeapRef : ConstHeapRef {
+class HeapRef : public ConstHeapRef {
 public:
     HeapRef()           :ConstHeapRef() { }
     HeapRef(nullptr_t)  :ConstHeapRef() { }

@@ -29,32 +29,37 @@ public:
     iterator begin()                {return items().begin();}
     iterator end()                  {return items().end();}
 
+    slice<Item> items()             {return this->template data<Item>();}
+    slice<Item> items() const       {return const_cast<Collection*>(this)->items();}
+
 protected:
     static T* createUninitialized(size_t capacity, IN_MUT_HEAP) {
         void* addr = Object::alloc(sizeof(T), heap, capacity * sizeof(Item));
         return addr ? new (addr) T(heapsize(capacity)) : nullptr;
     }
+    static T* create(size_t capacity, const Item* data, size_t count, IN_MUT_HEAP) {
+        void* addr = Object::alloc(sizeof(T), heap, capacity * sizeof(Item));
+        return addr ? new (addr) T(capacity, data, count) : nullptr;
+    }
     static T* create(const Item* data, size_t count, IN_MUT_HEAP) {
-        void* addr = Object::alloc(sizeof(T), heap, count * sizeof(Item));
-        return addr ? new (addr) T(data, count) : nullptr;
+        return create(count, data, count, heap);
     }
 
     explicit Collection(heapsize capacity)
     :TypedObject<TYPE>(capacity * sizeof(Item)) { }
 
-    Collection(const Item *items, size_t count)
-    :Collection(heapsize(count))
+    Collection(size_t capacity, const Item *items, size_t count)
+    :Collection(heapsize(capacity))
     {
-        assert(count <= MaxCount);
-        size_t size = count * sizeof(Item);
+        assert(count <= capacity);
+        assert(capacity <= MaxCount);
+        auto dst = begin();
         if (items)
-            ::memcpy(this->dataPtr(), items, size);
+            ::memcpy(dst, items, count * sizeof(Item));
         else
-            ::memset(this->dataPtr(), 0, size);
+            count = 0;
+        ::memset(dst + count, 0, (capacity - count) * sizeof(Item));
     }
-
-    slice<Item> items()             {return this->template data<Item>();}
-    slice<Item> items() const       {return const_cast<Collection*>(this)->items();}
 };
 
 
@@ -62,12 +67,8 @@ protected:
 /// A string object. Stores UTF-8 characters. Not zero-terminated.
 class String : public Collection<String, char, Type::String> {
 public:
-    static String* create(const char *str, size_t size, IN_MUT_HEAP) {
-        return Collection::create(str, size, heap);
-    }
-
     static String* create(string_view str, IN_MUT_HEAP) {
-        return create(str.data(), str.size(), heap);
+        return Collection::create(str.data(), str.size(), heap);
     }
 
     const char* data() const        {return begin();}
@@ -77,7 +78,7 @@ private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
 
     explicit String(heapsize capacity)   :Collection(capacity) { }
-    String(const char *str, size_t size) :Collection(str, size) { }
+    String(size_t cap, const char *str, size_t size) :Collection(cap, str, size) { }
 };
 
 
@@ -98,7 +99,7 @@ private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
 
     explicit Blob(heapsize capacity)   :Collection(capacity) { }
-    Blob(const byte *str, size_t size) :Collection(str, size) { }
+    Blob(size_t cap, const byte *str, size_t size) :Collection(cap, str, size) { }
 };
 
 
@@ -112,6 +113,9 @@ public:
     static Array* create(std::initializer_list<Val> vals, IN_MUT_HEAP) {
         return Collection::create(vals.begin(), vals.size(), heap);
     }
+    static Array* create(slice<Val> vals, size_t capacity, IN_MUT_HEAP) {
+        return Collection::create(capacity, vals.begin(), vals.size(), heap);
+    }
 
     Val& operator[] (heapsize i)        {return items()[i];}
     Val  operator[] (heapsize i) const  {return items()[i];}
@@ -120,7 +124,7 @@ private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
 
     explicit Array(heapsize capacity)    :Collection(capacity) { }
-    Array(const Val *vals, size_t count) :Collection(vals, count) { }
+    Array(size_t cap, const Val *vals, size_t count) :Collection(cap, vals, count) { }
 };
 
 
@@ -148,7 +152,7 @@ public:
     /// The capacity must be at least the number of pairs but can be larger.
     static Dict* create(std::initializer_list<DictEntry> vals, heapsize capacity, IN_MUT_HEAP) {
         void* addr = Object::alloc(sizeof(Dict), heap, capacity * sizeof(Val));
-        return addr ? new (addr) Dict(vals.begin(), vals.size(), capacity) : nullptr;
+        return addr ? new (addr) Dict(capacity, vals.begin(), vals.size()) : nullptr;
     }
 
     heapsize capacity() const           {return Collection::capacity();}
@@ -184,17 +188,14 @@ private:
 
     explicit Dict(heapsize capacity)   :Collection(capacity) { }
 
-    Dict(const DictEntry *ents, size_t count, heapsize capacity)
-    :Collection(nullptr, capacity)
+    Dict(size_t capacity, const DictEntry *ents, size_t count)
+    :Collection(capacity, ents, count)
     {
-        assert(capacity >= count);
-        if (ents && count > 0) {
-            ::memcpy(begin(), ents, count * sizeof(DictEntry));
+        if (count > 0)
             sort(count);
-        }
     }
 
-    Dict(const DictEntry *ents, size_t count)       :Dict(ents, count, heapsize(count)) { }
+    Dict(const DictEntry *ents, size_t count)       :Dict(count, ents, count) { }
 
     slice<DictEntry> allItems() const               {return Collection::items();}
     void sort(size_t count);
