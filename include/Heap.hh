@@ -14,8 +14,8 @@
 #include <stdexcept>
 #include <utility>
 
-
 class Object;
+class SymbolTable;
 class Val;
 
 
@@ -45,18 +45,17 @@ public:
     static const size_t Overhead;
 
     // Constructs a new empty Heap starting at address `base` and capacity `size`.
-    Heap(void *base, size_t capacity)   :Heap(base, capacity, false) {reset();}
+    Heap(void *base, size_t capacity) noexcept;
 
     // Constructs a new empty Heap with space allocated by malloc.
-    explicit Heap(size_t capacity)      :Heap(::malloc(capacity), capacity, true) {reset();}
+    explicit Heap(size_t capacity);
+
+    Heap(Heap&&) noexcept;
+    Heap& operator=(Heap&&) noexcept;
+    ~Heap();
 
     // Constructs a Heap from already-existing heap data. Throws if the data is not valid.
     static Heap existing(void *base, size_t used, size_t capacity);
-
-    ~Heap() {
-        assert(this != current());
-        if (_malloced) free(_base);
-    }
 
     bool valid() const                  {return _base != nullptr;}
 
@@ -133,6 +132,9 @@ public:
     /// allocated memory.
     bool validPos(heappos pos) const;
 
+    SymbolTable const& symbolTable() const {return *_symbolTable;}
+    SymbolTable& symbolTable()             {return *_symbolTable;}
+
     using Visitor = std::function<bool(const Object*)>;
 
     /// Calls the Visitor callback once for each live (reachable) object.
@@ -146,15 +148,11 @@ public:
 
 private:
     friend class Object;
-    friend class Symbol;
-    
-    Object* firstObject();
-    Object* nextObject(Object *obj);
-
+    friend class SymbolTable;
     friend class GarbageCollector;
     friend class UsingHeap;
 
-    Heap()  :_base(nullptr), _end(nullptr), _cur(nullptr) { }
+    Heap();
     Heap(void *base, size_t capacity, bool malloced);
     void clearForwarding();
 
@@ -175,12 +173,17 @@ private:
         return nullptr;
     }
 
-    Val& symbolTable() const;
+    Object* firstObject();
+    Object* nextObject(Object *obj);
+
+    Val symbolTableVal() const;
+    void setSymbolTableVal(Val);
 
     byte*   _base;
     byte*   _end;
     byte*   _cur;
     AllocFailureHandler _allocFailureHandler = nullptr;
+    std::unique_ptr<SymbolTable> _symbolTable;
     bool    _malloced = false;
 };
 
@@ -207,6 +210,7 @@ public:
     ConstHeapRef(Heap const* h)     :_heap(h) { }
     ConstHeapRef(Heap const& h)     :_heap(&h) { }
 
+    Heap const* get()           {return _heap;}
     Heap const* operator* ()    {return _heap;}
     Heap const* operator->()    {return _heap;}
 

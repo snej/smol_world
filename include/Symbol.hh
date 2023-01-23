@@ -10,25 +10,15 @@
 
 class Symbol : public Collection<Symbol, char, Type::Symbol> {
 public:
-    /// Returns a Symbol object containing the given string.
-    /// If one already exists in this heap, returns it; else creates a new one.
-    static Symbol* create(string_view s, IN_MUT_HEAP);
-
-    /// Looks up an existing Symbol. Returns nullptr if it's not registered in this heap.
-    static Symbol* find(string_view, IN_HEAP);
-
-    using Visitor = std::function<bool(Symbol*, uint32_t bucket)>;
-    static bool visitSymbols(IN_HEAP, Visitor);
-
     const char* data() const        {return begin();}
     string_view get() const         {auto i = items(); return {i.begin(), i.size()};}
 
 private:
     template <class T, typename ITEM, Type TYPE> friend class Collection;
+    friend class SymbolTable;
 
-    explicit Symbol(heapsize capacity)   :Collection(capacity) { }
+    static Symbol* actuallyCreate(string_view str, IN_MUT_HEAP) {
+        return Collection::create(str.data(), str.size(), heap);
+    }
     Symbol(size_t cap, const char *str, size_t size) :Collection(cap, str, size) { }
-    static Array* getTable(IN_HEAP);
-    static Symbol* create(string_view s, Symbol *symbol, Array *inTable, IN_MUT_HEAP);
-    static bool growTable(IN_MUT_HEAP);
 };

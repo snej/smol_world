@@ -174,57 +174,60 @@ TEST_CASE("Dicts", "[object]") {
 
 TEST_CASE("Symbols", "[object]") {
     Heap heap(10000);
+    SymbolTable& table = heap.symbolTable();
+    CHECK(table.count() == 0);
 
-    CHECK(Symbol::find("foo", heap) == nullptr);
+    CHECK(table.find("foo") == nullptr);
 
-    auto foo = Symbol::create("foo", heap);
+    auto foo = table.create("foo");
     REQUIRE(foo);
     CHECK(foo->get() == "foo");
-    CHECK(Symbol::find("foo", heap) == foo);
+    CHECK(table.find("foo") == foo);
 
-    auto bar = Symbol::create("bar", heap);
+    auto bar = table.create("bar");
     REQUIRE(bar);
     CHECK(bar->get() == "bar");
-    CHECK(Symbol::find("bar", heap) == bar);
+    CHECK(table.find("bar") == bar);
+    CHECK(table.count() == 2);
 
-    constexpr size_t NumSymbols = 50;
+    constexpr size_t NumSymbols = 100;
     Symbol* syms[NumSymbols];
     for (size_t i = 0; i < NumSymbols; ++i) {
         string name = "Symbol #" + std::to_string(i * i);
         cerr << "Creating #" << i << ": " << name << endl;
-        CHECK(Symbol::find(name, heap) == nullptr);
-        auto sym = Symbol::create(name, heap);
+        CHECK(table.find(name) == nullptr);
+        auto sym = table.create(name);
         syms[i] = sym;
         REQUIRE(sym);
         CHECK(sym->get() == name);
-        CHECK(Symbol::find(name, heap) == sym);
+        CHECK(table.find(name) == sym);
+        CHECK(table.count() == 3 + i);
     }
     for (size_t i = 0; i < NumSymbols; ++i) {
         string name = "Symbol #" + std::to_string(i * i);
-        CHECK(Symbol::find(name, heap) == syms[i]);
+        CHECK(table.find(name) == syms[i]);
     }
 
-    auto dumpSymbols = [&]() {
-        int lastBucket = -1;
-        unsigned count = 0;
-        size_t i = 0;
-        Symbol::visitSymbols(heap, [&](Symbol *sym, uint32_t bucketNo) {
-            if (bucketNo != lastBucket) {
-                CHECK(int(bucketNo) > lastBucket);
-                if (lastBucket != -1)
-                    cerr << "  (" << count << ")\n";
-                cerr << "Bucket #" << bucketNo << ":";
-                lastBucket = bucketNo;
-                count = 0;
-            }
-            ++count;
-            cerr << "  " << sym;
-            ++i;
-            return true;
-        });
-        cerr << "  (" << count << ")\n";
-        CHECK(i == 2 + NumSymbols);
-    };
+    size_t i = 0;
+    table.visit([&](Symbol *sym, uint32_t) {
+        ++i;
+        return true;
+    });
+    cerr << endl;
+    CHECK(i == 2 + NumSymbols);
 
-    dumpSymbols();
+    // Open a heap from the current heap and check it has everything:
+    Heap heap2 = Heap::existing((void*)heap.base(), heap.used(), heap.capacity());
+    SymbolTable& table2 = heap2.symbolTable();
+    auto bar2 = table2.find("bar");
+    CHECK(bar2);
+    CHECK(bar2->get() == "bar");
+    i = 0;
+    table2.visit([&](Symbol *sym, uint32_t) {
+        ++i;
+        return true;
+    });
+    CHECK(i == 2 + NumSymbols);
+
+    cout << table2 << endl;
 }

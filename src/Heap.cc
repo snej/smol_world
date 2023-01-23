@@ -7,6 +7,7 @@
 #include "Heap.hh"
 #include "Val.hh"
 #include "Collections.hh"
+#include "SymbolTable.hh"
 #include <deque>
 #include <iostream>
 
@@ -32,6 +33,24 @@ Heap::Heap(void *base, size_t capacity, bool malloced)
     assert(capacity >= sizeof(Header));
 }
 
+Heap::Heap()                                    :_base(nullptr), _end(nullptr), _cur(nullptr) { }
+Heap::Heap(void *base, size_t cap) noexcept     :Heap(base, cap, false) {reset();}
+Heap::Heap(size_t cap)                          :Heap(::malloc(cap), cap, true) {reset();}
+Heap::Heap(Heap&& h) noexcept                   {*this = std::move(h);}
+Heap::~Heap()                               {assert(this != current()); if (_malloced) free(_base);}
+
+Heap& Heap::operator=(Heap&& h) noexcept {
+    _base = h._base;
+    _end = h._end;
+    _cur = h._cur;
+    _malloced = h._malloced;
+    _allocFailureHandler = h._allocFailureHandler;
+    _symbolTable = std::move(h._symbolTable);
+    _symbolTable->setHeap(this);    // <- this is the only non-default bit
+    return *this;
+}
+
+
 
 bool Heap::resize(size_t newSize) {
     if (newSize < used())
@@ -46,7 +65,11 @@ bool Heap::resize(size_t newSize) {
 void Heap::reset() {
     _cur = _base;
     auto header = (Header*)rawAlloc(sizeof(Header));
-    *header = {kMagic, nullptr};
+    *header = {kMagic, nullval, nullval};
+    if (_symbolTable)
+        _symbolTable->setTable(nullval);
+    else
+        _symbolTable = std::make_unique<SymbolTable>(this, nullval);
 }
 
 
@@ -65,6 +88,7 @@ Heap Heap::existing(void *base, size_t used, size_t capacity) {
             return Heap();
         }
     }
+    heap._symbolTable = std::make_unique<SymbolTable>(&heap, header->symbols);
     return heap;
 }
 
@@ -72,7 +96,6 @@ bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos <
 
 
 Val Heap::rootVal() const           {return ((Header*)_base)->root;}
-Val& Heap::symbolTable() const      {return ((Header*)_base)->symbols;}
 void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
 Object* Heap::rootObject() const    {return rootVal().asObject(this);}
 void Heap::setRoot(Object* obj)     {setRoot(obj->asVal(this));}
@@ -86,6 +109,14 @@ void* Heap::alloc(heapsize size) {
     auto blob = Blob::create(nullptr, size, this);
     return blob ? blob->begin() : nullptr;
 }
+
+Val Heap::symbolTableVal() const        {return ((Header*)_base)->symbols;}
+
+void Heap::setSymbolTableVal(Val v)     {
+    ((Header*)_base)->symbols = v;
+    _symbolTable->setTable(v);
+}
+
 
 Object* Heap::firstObject() {
     return (Object*)(_base + sizeof(Header));
@@ -175,7 +206,7 @@ void GarbageCollector::scanRoot() {
         assert(!obj->isForwarded());
 #endif
     _toHeap.setRoot(scan(_fromHeap.rootVal()));
-    _toHeap.setRoot(scan(_fromHeap.symbolTable())); // TODO: Scan buckets as weak references to Symbols
+    _toHeap.setSymbolTableVal(scan(_fromHeap.symbolTableVal())); // TODO: Scan buckets as weak references to Symbols
 }
 
 

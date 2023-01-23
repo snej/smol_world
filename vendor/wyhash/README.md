@@ -1,10 +1,7 @@
 # wyhash
 
-`wyhash.h` and `wyhash32.h` were copied from [the wyhash GitHub repo][1], commit  091ad2a from 2020-04-25.
-
-The only local changes are
-* a cast to `unsigned` in line 21 of `wyhash32.h`, to avoid a compiler warning.
-* adding `>0` in line 89 of `whyash.h`, to avoid a warning in 32-bit builds.
+`wyhash.h` and `wyhash32.h` were copied from [the wyhash GitHub repo][1], 
+commit ea3b25e from 2022-11-02.
 
 ## What is it?
 
@@ -20,9 +17,11 @@ From the wyhash [README][2]:
 
 >simplest: In the sense of code size.
 
->wyhash is the default hasher for a hash table of the great Zig, V and Nim language.
+>salted: We use dynamic secret to avoid intended attack.
 
-... also used by [Abseil][3]'s [hashmap][4].
+>wyhash is the default hashing algorithm of the great Zig, V, Nim and Go (since 1.17) language.
+
+... it's also used by [Abseil][3]'s [hashmap][4].
 
 [1]: https://github.com/wangyi-fudan/wyhash/blob/master/wyhash32.h
 [2]: https://github.com/wangyi-fudan/wyhash
