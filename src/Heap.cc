@@ -5,6 +5,7 @@
 //
 
 #include "Heap.hh"
+#include "Block.hh"
 #include "Val.hh"
 #include "Collections.hh"
 #include "SymbolTable.hh"
@@ -47,6 +48,7 @@ Heap& Heap::operator=(Heap&& h) noexcept {
     _allocFailureHandler = h._allocFailureHandler;
     _symbolTable = std::move(h._symbolTable);
     _symbolTable->setHeap(this);    // <- this is the only non-default bit
+    _externalRoots = std::move(h._externalRoots);
     return *this;
 }
 
@@ -97,18 +99,10 @@ bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos <
 
 Val Heap::rootVal() const           {return ((Header*)_base)->root;}
 void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
-Object* Heap::rootObject() const    {return rootVal().asObject(this);}
-void Heap::setRoot(Object* obj)     {setRoot(obj->asVal(this));}
 
 Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
 void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
 Heap* Heap::current()               {return (Heap*)sCurHeap;}
-
-void* Heap::alloc(heapsize size) {
-    // As a general-purpose allocator we just allocate a Blob and return its data.
-    auto blob = Blob::create(nullptr, size, this);
-    return blob ? blob->begin() : nullptr;
-}
 
 Val Heap::symbolTableVal() const        {return ((Header*)_base)->symbols;}
 
@@ -118,37 +112,44 @@ void Heap::setSymbolTableVal(Val v)     {
 }
 
 
-Object* Heap::firstObject() {
-    return (Object*)(_base + sizeof(Header));
+void* Heap::alloc(heapsize size) {
+    // As a general-purpose allocator we just allocate a raw Block and return its data.
+    auto blob = Block::alloc(size, Type::Blob, this);
+    return blob ? blob->dataPtr() : nullptr;
 }
 
-Object* Heap::nextObject(Object *obj) {
-    obj = obj->nextObject();
-    return (byte*)obj < _cur ? obj : nullptr;
+
+Block* Heap::firstBlock() {
+    return (Block*)(_base + sizeof(Header));
+}
+
+Block* Heap::nextBlock(Block *b) {
+    b = b->nextBlock();
+    return (byte*)b < _cur ? b : nullptr;
 }
 
 
 void Heap::visitAll(Visitor const& visitor) {
-    for (auto obj = firstObject(); obj; obj = nextObject(obj))
-        if (!visitor(obj))
+    for (auto b = firstBlock(); b; b = nextBlock(b))
+        if (!visitor(*b))
             break;
 }
 
 void Heap::visit(Visitor const& visitor) {
-    for (auto obj = firstObject(); obj; obj = nextObject(obj))
+    for (auto obj = firstBlock(); obj; obj = nextBlock(obj))
         obj->clearVisited();
 
-    std::deque<Object*> stack;
+    std::deque<Block*> stack;
 
     auto process = [&](Val val) -> bool {
         if (val.isObject()) {
-            Object *obj = val.asObject(this);
-            if (!obj->isVisited()) {
-                obj->setVisited();
-                if (!visitor(obj))
+            Block *b = val.asBlock(this);
+            if (!b->isVisited()) {
+                b->setVisited();
+                if (!visitor(*b))
                     return false;
-                if (Object::typeContainsPointers(obj->type()) && obj->dataSize() > 0)
-                    stack.push_back(obj);
+                if (Block::typeContainsPointers(b->type()) && b->dataSize() > 0)
+                    stack.push_back(b);
             }
         }
         return true;
@@ -157,17 +158,17 @@ void Heap::visit(Visitor const& visitor) {
     if (!process(rootVal()))
         return;
     while (!stack.empty()) {
-        Object *obj = stack.front();
+        Block *b = stack.front();
         stack.pop_front();
-        switch (obj->type()) {
+        switch (b->type()) {
             case Type::Array:
-                for (Val v : *obj->as<Array>()) {
+                for (Val v : *b->as<Array>()) {
                     if (!process(v))
                         return;
                 }
                 break;
             case Type::Dict:
-                for (DictEntry const& e : *obj->as<Dict>()) {
+                for (DictEntry const& e : *b->as<Dict>()) {
                     if (!process(e.key) || !process(e.value))
                         return;
                 }
@@ -177,6 +178,18 @@ void Heap::visit(Visitor const& visitor) {
         }
     }
 }
+
+
+void Heap::registerExternalRoot(ObjectRef *ref) const {
+    _externalRoots.push_back(ref);
+}
+
+void Heap::unregisterExternalRoot(ObjectRef* ref) const {
+    auto i = std::find(_externalRoots.rbegin(), _externalRoots.rend(), ref);
+    assert(i != _externalRoots.rend());
+    _externalRoots.erase(i.base());
+}
+
 
 
 
@@ -202,17 +215,21 @@ GarbageCollector::GarbageCollector(Heap &fromHeap, Heap &toHeap)
 
 void GarbageCollector::scanRoot() {
 #ifndef NDEBUG
-    for (auto obj = _fromHeap.firstObject(); obj; obj = _fromHeap.nextObject(obj))
+    for (auto obj = _fromHeap.firstBlock(); obj; obj = _fromHeap.nextBlock(obj))
         assert(!obj->isForwarded());
 #endif
     _toHeap.setRoot(scan(_fromHeap.rootVal()));
     _toHeap.setSymbolTableVal(scan(_fromHeap.symbolTableVal())); // TODO: Scan buckets as weak references to Symbols
+    for (ObjectRef *refp : _fromHeap._externalRoots) {
+        Block* dstBlock = scan(refp->block());
+        refp->relocate(dstBlock);
+    }
 }
 
 
 Val GarbageCollector::scan(Val val) {
     if (val.isObject()) {
-        Object *obj = val.asObject(_fromHeap);
+        Block *obj = val.asBlock(_fromHeap);
         return Val(scan(obj), _toHeap);
     } else {
         return val;
@@ -220,9 +237,9 @@ Val GarbageCollector::scan(Val val) {
 }
 
 
-Object* GarbageCollector::scan(Object *srcObj) {
+Block* GarbageCollector::scan(Block *srcObj) {
     if (srcObj->isForwarded()) {
-        return (Object*)_toHeap.at(srcObj->getForwardingAddress());
+        return (Block*)_toHeap.at(srcObj->getForwardingAddress());
     } else {
         Type type = srcObj->type();
         auto dataSize = srcObj->dataSize();

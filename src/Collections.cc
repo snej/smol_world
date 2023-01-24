@@ -98,31 +98,31 @@ bool Dict::remove(Val key) {
 
 
 
-std::ostream& operator<<(std::ostream& out, String const* str) {
-    out << "“" << str->get() << "”";
+std::ostream& operator<<(std::ostream& out, String const& str) {
+    out << "“" << str.get() << "”";
     return out;
 }
 
-std::ostream& operator<<(std::ostream& out, Symbol const* str) {
-    out << "«" << str->get() << "»";
+std::ostream& operator<<(std::ostream& out, Symbol const& str) {
+    out << "«" << str.get() << "»";
     return out;
 }
 
-std::ostream& operator<<(std::ostream& out, Blob const* blob) {
+std::ostream& operator<<(std::ostream& out, Blob const& blob) {
     out << "Blob<" << std::hex;
-    for (byte b : *blob) {
+    for (byte b : blob) {
         out << std::setw(2) << unsigned(b);
     }
     out << std::dec << ">";
     return out;
 }
 
-std::ostream& operator<<(std::ostream& out, Array const* arr) {
-    out << "Array[" << arr->count();
-    if (!arr->empty()) {
+std::ostream& operator<<(std::ostream& out, Array const& arr) {
+    out << "Array[" << arr.count();
+    if (!arr.empty()) {
         out << ": ";
         int n = 0;
-        for (Val val : *arr) {
+        for (Val val : arr) {
             if (n++) out << ", ";
             out << val;
         }
@@ -131,10 +131,10 @@ std::ostream& operator<<(std::ostream& out, Array const* arr) {
 }
 
 
-std::ostream& operator<<(std::ostream& out, Dict const* dict) {
-    out << "Dict{" << dict->count();
+std::ostream& operator<<(std::ostream& out, Dict const& dict) {
+    out << "Dict{" << dict.count();
     int n = 0;
-    for (auto &entry : *dict) {
+    for (auto &entry : dict) {
         if (n++) out << ", ";
         out << entry.key << ": " << entry.value;
     }
@@ -142,8 +142,8 @@ std::ostream& operator<<(std::ostream& out, Dict const* dict) {
 }
 
 
-std::ostream& operator<< (std::ostream& out, Object const* obj) {
-    if (!obj->visit([&](auto t) {out << t;}))
-        out << TypeName(obj->type()) << "[]";
+std::ostream& operator<< (std::ostream& out, ObjectRef const& obj) {
+    if (!obj.visit([&](auto t) {out << t;}))
+        out << TypeName(obj.type()) << "[]";
     return out;
 }

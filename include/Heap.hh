@@ -13,8 +13,10 @@
 #include <memory>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
-class Object;
+class Block;
+class ObjectRef;
 class SymbolTable;
 class Val;
 
@@ -70,10 +72,6 @@ public:
 
     /// Sets the heap's root value.
     void setRoot(Val);
-
-    Object* rootObject() const;
-    void setRoot(Object* obj);
-    template <class T> T* root() const;
 
     /// Resets the Heap to an empty state.
     void reset();
@@ -135,7 +133,7 @@ public:
     SymbolTable const& symbolTable() const {return *_symbolTable;}
     SymbolTable& symbolTable()             {return *_symbolTable;}
 
-    using Visitor = std::function<bool(const Object*)>;
+    using Visitor = std::function<bool(const Block&)>;
 
     /// Calls the Visitor callback once for each live (reachable) object.
     void visit(Visitor const&);
@@ -147,9 +145,10 @@ public:
     void unregisterExternalRoots(Val rootArray[]);
 
 private:
-    friend class Object;
+    friend class Block;
     friend class SymbolTable;
     friend class GarbageCollector;
+    friend class ObjectRef;
     friend class UsingHeap;
 
     Heap();
@@ -160,7 +159,7 @@ private:
     void exit() const;
     void exit(Heap const* newCurrent) const;
 
-    // Allocates space without initializing it. Caller MUST initialize (see Object constructor)
+    // Allocates space without initializing it. Caller MUST initialize (see Block constructor)
     void* rawAlloc(heapsize size) {
         do {
             byte *result = _cur;
@@ -173,17 +172,21 @@ private:
         return nullptr;
     }
 
-    Object* firstObject();
-    Object* nextObject(Object *obj);
+    Block* firstBlock();
+    Block* nextBlock(Block *obj);
 
     Val symbolTableVal() const;
     void setSymbolTableVal(Val);
+
+    void registerExternalRoot(ObjectRef*) const;
+    void unregisterExternalRoot(ObjectRef*) const;
 
     byte*   _base;
     byte*   _end;
     byte*   _cur;
     AllocFailureHandler _allocFailureHandler = nullptr;
     std::unique_ptr<SymbolTable> _symbolTable;
+    std::vector<ObjectRef*> mutable _externalRoots;
     bool    _malloced = false;
 };
 
@@ -258,9 +261,9 @@ public:
     /// Do not do anything else with the heap while the GarbageCollector is in scope!
     [[nodiscard]] Val scan(Val v);
 
-    [[nodiscard]] Object* scan(Object*);
+    [[nodiscard]] Block* scan(Block*);
 
-    // These are equivalent to scanValue but update the Val/Ptr/Object in place:
+    // These are equivalent to scanValue but update the Val/Ptr/Block in place:
     void update(Val* val);
     template <class T> void update(T** obj);
 

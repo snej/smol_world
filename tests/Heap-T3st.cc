@@ -47,7 +47,7 @@ TEST_CASE("Empty Heap", "[heap]") {
     CHECK(Heap::current() == nullptr);
 
     // visit:
-    heap.visit([&](const Object *obj) { FAIL("Visitor should not be called"); return false; });
+    heap.visit([&](const Block &obj) { FAIL("Visitor should not be called"); return false; });
 }
 
 
@@ -64,11 +64,11 @@ TEST_CASE("Alloc", "[heap]") {
     CHECK(heap.remaining() == 10000 - Heap::Overhead - 2 - 123);
 
     int i = 0;
-    heap.visitAll([&](const Object *obj) {
-        CHECK(heap.contains(obj));
-        CHECK(obj->type() == Type::Blob);
+    heap.visitAll([&](const Block &obj) {
+        CHECK(heap.contains(&obj));
+        CHECK(obj.type() == Type::Blob);
         switch (i++) {
-            case 0: CHECK(obj->dataSize() == 123); return true;
+            case 0: CHECK(obj.dataSize() == 123); return true;
             default: FAIL("Invalid object visited"); return false;
         }
     });
@@ -85,12 +85,12 @@ TEST_CASE("Alloc", "[heap]") {
     CHECK(heap.remaining() == 0);
 
     i = 0;
-    heap.visitAll([&](const Object *obj) {
-        CHECK(heap.contains(obj));
-        CHECK(obj->type() == Type::Blob);
+    heap.visitAll([&](const Block &obj) {
+        CHECK(heap.contains(&obj));
+        CHECK(obj.type() == Type::Blob);
         switch (i++) {
-            case 0: CHECK(obj->dataSize() == 123); return true;
-            case 1: CHECK(obj->dataSize() == 9859); return true;
+            case 0: CHECK(obj.dataSize() == 123); return true;
+            case 1: CHECK(obj.dataSize() == 9859); return true;
             default: FAIL("Invalid object visited"); return false;
         }
     });

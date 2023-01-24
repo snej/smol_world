@@ -19,6 +19,7 @@ enum class ValType : uint8_t {
     Dict,
 };
 
+class Block;
 class String;
 class Array;
 class Dict;
@@ -79,8 +80,8 @@ public:
         return (_val & IntTag) == 0 && _val != NullVal;
     }
 
-    Object* asObject(IN_HEAP) const {
-        return isObject() ? (Object*)heap->at(asPos()) : nullptr;
+    Block* asBlock(IN_HEAP) const {
+        return isObject() ? (Block*)heap->at(asPos()) : nullptr;
     }
 
     template <class T> bool is(IN_HEAP) const           {return type(heap) == T::InstanceType;}
@@ -116,9 +117,9 @@ static constexpr Val nullval;
 std::ostream& operator<<(std::ostream&, Val);
 
 
-template <class T> T* Heap:: root() const {
-    return rootVal().as<T>(this);
-}
+//template <class T> T* Heap:: root() const {
+//    return rootVal().as<T>(this);
+//}
 
 //template <class T>
 //void GarbageCollector::update(Ptr<T>& ptr) {

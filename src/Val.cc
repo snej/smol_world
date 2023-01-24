@@ -18,7 +18,7 @@
 
 #include "Val.hh"
 #include "Object.hh"
-#include <iostream>
+//#include <iostream>
 
 
 Type Val::type(IN_HEAP) const {
@@ -27,7 +27,7 @@ Type Val::type(IN_HEAP) const {
     else if (isNull())
         return Type::Null;
     else
-        return asObject(heap)->type();
+        return asBlock(heap)->type();
 }
 
 
