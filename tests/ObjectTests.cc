@@ -33,17 +33,17 @@ TEST_CASE("Strings", "[object]") {
         string_view str = kString.substr(0, len);
         auto obj = String::create(str, heap);
         REQUIRE(obj);
-        REQUIRE(obj->type() == Type::String);
-        REQUIRE(obj->is<String>());
-        Val val = obj->asVal(heap);
+        REQUIRE(obj.type() == Type::String);
+        REQUIRE(obj.is<String>());
+        Val val = obj.asVal(heap);
         CHECK(val.type(heap) == Type::String);
         CHECK(val.as<String>(heap) == obj);
 
-        CHECK(obj->capacity() == len);
-        CHECK(obj->count() == len);
-        CHECK(obj->empty() == (len == 0));
-        CHECK(obj->get() == str);
-        CHECK(string(obj->begin(), obj->end()) == str);
+        CHECK(obj.capacity() == len);
+        CHECK(obj.count() == len);
+        CHECK(obj.empty() == (len == 0));
+        CHECK(obj.get() == str);
+        CHECK(string(obj.begin(), obj.end()) == str);
 
     }
 }
@@ -58,15 +58,15 @@ TEST_CASE("Blobs", "[object]") {
         INFO("len is " << len);
         auto obj = Blob::create(kBlob.data(), len, heap);
         REQUIRE(obj);
-        REQUIRE(obj->type() == Type::Blob);
-        REQUIRE(obj->is<Blob>());
-        Val val = obj->asVal(heap);
+        REQUIRE(obj.type() == Type::Blob);
+        REQUIRE(obj.is<Blob>());
+        Val val = obj.asVal(heap);
         CHECK(val.as<Blob>(heap) == obj);
 
-        CHECK(obj->capacity() == len);
-        CHECK(obj->count() == len);
-        CHECK(obj->empty() == (len == 0));
-        CHECK(memcmp(kBlob.begin(), obj->begin(), len) == 0);
+        CHECK(obj.capacity() == len);
+        CHECK(obj.count() == len);
+        CHECK(obj.empty() == (len == 0));
+        CHECK(memcmp(kBlob.begin(), obj.begin(), len) == 0);
     }
 }
 
@@ -75,7 +75,7 @@ TEST_CASE("Arrays", "[object]") {
     Heap heap(1000);
     UsingHeap u(heap);
 
-    String* strs[10];
+    String strs[10];
     for (int i = 0; i < 10; ++i)
         strs[i] = String::create(std::to_string(i), heap);
 
@@ -83,19 +83,19 @@ TEST_CASE("Arrays", "[object]") {
         INFO("len is " << len);
         auto obj = Array::create(len, heap);
         REQUIRE(obj);
-        REQUIRE(obj->type() == Type::Array);
-        REQUIRE(obj->is<Array>());
-        Val val = obj->asVal(heap);
+        REQUIRE(obj.type() == Type::Array);
+        REQUIRE(obj.is<Array>());
+        Val val = obj.asVal(heap);
         CHECK(val.as<Array>(heap) == obj);
 
-        CHECK(obj->capacity() == len);
-        CHECK(obj->count() == len);
-        CHECK(obj->empty() == (len == 0));
+        CHECK(obj.capacity() == len);
+        CHECK(obj.count() == len);
+        CHECK(obj.empty() == (len == 0));
 
         for (int i = 0; i < len; ++i)
-            (*obj)[i] = strs[i]->asVal(heap);
+            obj[i] = strs[i].asVal(heap);
         for (int i = 0; i < len; ++i)
-            CHECK((*obj)[i].as<String>(heap) == strs[i]);
+            CHECK(obj[i].as<String>(heap) == strs[i]);
     }
 }
 
@@ -113,7 +113,7 @@ TEST_CASE("Dicts", "[object]") {
     UsingHeap u(heap);
     srandomdev();
 
-    String* strs[11];
+    String strs[11];
     for (int i = 0; i < 11; ++i)
         strs[i] = String::create(std::to_string(i), heap);
     shuffle(strs+0, strs+11);
@@ -123,50 +123,50 @@ TEST_CASE("Dicts", "[object]") {
         INFO("len is " << len);
         auto obj = Dict::create(len, heap);
         REQUIRE(obj);
-        REQUIRE(obj->type() == Type::Dict);
-        REQUIRE(obj->is<Dict>());
-        Val val = obj->asVal(heap);
+        REQUIRE(obj.type() == Type::Dict);
+        REQUIRE(obj.is<Dict>());
+        Val val = obj.asVal(heap);
         CHECK(val.as<Dict>(heap) == obj);
 
-        CHECK(obj->capacity() == len);
-        CHECK(obj->empty());
+        CHECK(obj.capacity() == len);
+        CHECK(obj.empty());
 
         for (int i = 0; i <= len; ++i) {
             INFO("i = " << i);
-            Val key = strs[i]->asVal(heap);
-            CHECK(obj->count() == i);
-            CHECK(obj->full() == (i == len));
-            CHECK(!obj->contains(key));
-            CHECK(!obj->replace(key, -1));
+            Val key = strs[i].asVal(heap);
+            CHECK(obj.count() == i);
+            CHECK(obj.full() == (i == len));
+            CHECK(!obj.contains(key));
+            CHECK(!obj.replace(key, -1));
             if (i < len) {
-                CHECK(obj->set(key, i));
-                CHECK(obj->get(key) == i);
-                CHECK(obj->contains(key));
-                CHECK(!obj->empty());
-                CHECK(!obj->insert(key, -1));
-                CHECK(obj->replace(key, -i));
+                CHECK(obj.set(key, i));
+                CHECK(obj.get(key) == i);
+                CHECK(obj.contains(key));
+                CHECK(!obj.empty());
+                CHECK(!obj.insert(key, -1));
+                CHECK(obj.replace(key, -i));
 
                 for (int j = 0; j < 10; ++j)
-                    CHECK(obj->get(strs[j]->asVal(heap)) == ((j <= i) ? Val(-j) : nullval));
+                    CHECK(obj.get(strs[j].asVal(heap)) == ((j <= i) ? Val(-j) : nullval));
 
             } else {
-                CHECK(!obj->set(key, i));
-                CHECK(!obj->insert(key, -1));
-                CHECK(!obj->contains(key));
+                CHECK(!obj.set(key, i));
+                CHECK(!obj.insert(key, -1));
+                CHECK(!obj.contains(key));
             }
         }
 
         shuffle(strs+0, strs+len);
         for (int i = 0; i < len; ++i) {
             INFO("i = " << i);
-            Val key = strs[i]->asVal(heap);
-            CHECK(obj->count() == len-i);
-            CHECK(obj->full() == (i == 0));
-            CHECK(obj->contains(key));
-            CHECK(obj->remove(key));
-            CHECK(!obj->contains(key));
-            CHECK(!obj->remove(key));
-            CHECK(obj->empty() == (i == len-1));
+            Val key = strs[i].asVal(heap);
+            CHECK(obj.count() == len-i);
+            CHECK(obj.full() == (i == 0));
+            CHECK(obj.contains(key));
+            CHECK(obj.remove(key));
+            CHECK(!obj.contains(key));
+            CHECK(!obj.remove(key));
+            CHECK(obj.empty() == (i == len-1));
         }
     }
 }
@@ -181,17 +181,17 @@ TEST_CASE("Symbols", "[object]") {
 
     auto foo = table.create("foo");
     REQUIRE(foo);
-    CHECK(foo->get() == "foo");
+    CHECK(foo.get() == "foo");
     CHECK(table.find("foo") == foo);
 
     auto bar = table.create("bar");
     REQUIRE(bar);
-    CHECK(bar->get() == "bar");
+    CHECK(bar.get() == "bar");
     CHECK(table.find("bar") == bar);
     CHECK(table.count() == 2);
 
     constexpr size_t NumSymbols = 100;
-    Symbol* syms[NumSymbols];
+    Symbol syms[NumSymbols];
     for (size_t i = 0; i < NumSymbols; ++i) {
         string name = "Symbol #" + std::to_string(i * i);
         cerr << "Creating #" << i << ": " << name << endl;
@@ -199,7 +199,7 @@ TEST_CASE("Symbols", "[object]") {
         auto sym = table.create(name);
         syms[i] = sym;
         REQUIRE(sym);
-        CHECK(sym->get() == name);
+        CHECK(sym.get() == name);
         CHECK(table.find(name) == sym);
         CHECK(table.count() == 3 + i);
     }
@@ -209,7 +209,7 @@ TEST_CASE("Symbols", "[object]") {
     }
 
     size_t i = 0;
-    table.visit([&](Symbol *sym, uint32_t) {
+    table.visit([&](Symbol sym, uint32_t) {
         ++i;
         return true;
     });
@@ -221,9 +221,9 @@ TEST_CASE("Symbols", "[object]") {
     SymbolTable& table2 = heap2.symbolTable();
     auto bar2 = table2.find("bar");
     CHECK(bar2);
-    CHECK(bar2->get() == "bar");
+    CHECK(bar2.get() == "bar");
     i = 0;
-    table2.visit([&](Symbol *sym, uint32_t) {
+    table2.visit([&](Symbol sym, uint32_t) {
         ++i;
         return true;
     });

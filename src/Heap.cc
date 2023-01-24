@@ -100,6 +100,8 @@ bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos <
 Val Heap::rootVal() const           {return ((Header*)_base)->root;}
 void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
 
+Object Heap::rootObject() const  {return rootVal().asObject(this);}
+
 Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
 void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
 Heap* Heap::current()               {return (Heap*)sCurHeap;}
@@ -160,31 +162,18 @@ void Heap::visit(Visitor const& visitor) {
     while (!stack.empty()) {
         Block *b = stack.front();
         stack.pop_front();
-        switch (b->type()) {
-            case Type::Array:
-                for (Val v : *b->as<Array>()) {
-                    if (!process(v))
-                        return;
-                }
-                break;
-            case Type::Dict:
-                for (DictEntry const& e : *b->as<Dict>()) {
-                    if (!process(e.key) || !process(e.value))
-                        return;
-                }
-                break;
-            default:
-                break;
-        }
+        for (Val v : b->vals())
+            if (!process(v))
+                return;
     }
 }
 
 
-void Heap::registerExternalRoot(ObjectRef *ref) const {
+void Heap::registerExternalRoot(Object *ref) const {
     _externalRoots.push_back(ref);
 }
 
-void Heap::unregisterExternalRoot(ObjectRef* ref) const {
+void Heap::unregisterExternalRoot(Object* ref) const {
     auto i = std::find(_externalRoots.rbegin(), _externalRoots.rend(), ref);
     assert(i != _externalRoots.rend());
     _externalRoots.erase(i.base());
@@ -208,7 +197,6 @@ GarbageCollector::GarbageCollector(Heap &heap)
 GarbageCollector::GarbageCollector(Heap &fromHeap, Heap &toHeap)
 :_fromHeap(fromHeap), _toHeap(toHeap)
 {
-    _toHeap.reset();
     scanRoot();
 }
 
@@ -218,9 +206,10 @@ void GarbageCollector::scanRoot() {
     for (auto obj = _fromHeap.firstBlock(); obj; obj = _fromHeap.nextBlock(obj))
         assert(!obj->isForwarded());
 #endif
+    _toHeap.reset();
     _toHeap.setRoot(scan(_fromHeap.rootVal()));
     _toHeap.setSymbolTableVal(scan(_fromHeap.symbolTableVal())); // TODO: Scan buckets as weak references to Symbols
-    for (ObjectRef *refp : _fromHeap._externalRoots) {
+    for (Object *refp : _fromHeap._externalRoots) {
         Block* dstBlock = scan(refp->block());
         refp->relocate(dstBlock);
     }
@@ -238,47 +227,33 @@ Val GarbageCollector::scan(Val val) {
 
 
 Block* GarbageCollector::scan(Block *srcObj) {
-    if (srcObj->isForwarded()) {
-        return (Block*)_toHeap.at(srcObj->getForwardingAddress());
-    } else {
-        Type type = srcObj->type();
-        auto dataSize = srcObj->dataSize();
-
-        // Allocate an object of the same type & size in the destination heap:
-        void* addr = Object::alloc(sizeof(Object), _toHeap, srcObj->dataSize());
-        assert(addr);
-        Object *dstObj = new (addr) Object(dataSize, type);
-        assert(dstObj->dataSize() == srcObj->dataSize());
-        auto fwdPos = _toHeap.pos(dstObj);
-
-        // Copy the object's data into it:
-        auto src = (const Val*)srcObj->dataPtr();
-        auto dst = (Val*)dstObj->dataPtr();
-        if (Object::typeContainsPointers(type)) {
-            // `obj`s data is a sequence of `Val`s.
-            // Recursively scan each one, storing the results in `dstObj`.
-            assert(dataSize % sizeof(Val) == 0);
-            if (int count = dataSize / sizeof(Val); count > 0) {
-                // During the recursive scan, pointers to `obj` need to be forwarded to `dstObj`.
-                // But setting `obj`s forwarding address overwrites 4 bytes, which will overwrite
-                // the first 2 bytes of data if `obj` is small.
-                // To work around this, read the first `Val` from `obj` before forwarding.
-                auto firstItem = *src;
-                srcObj->setForwardingAddress(fwdPos);
-                *dst = scan(firstItem);
-                while (--count > 0)
-                    *++dst = scan(*++src);
-                // A Dict needs to re-sort its keys after a GC because the keys are sorted by
-                // Val (address), and those addresses will be differently ordered in the new heap.
-                if (type == Type::Dict)
-                    ((Dict*)dstObj)->sort();
-            }
-        } else {
-            // If `obj` does not contain pointers, just do a memcpy:
-            ::memcpy(dst, src, dataSize);
-            srcObj->setForwardingAddress(fwdPos);
+    Block *toScan = (Block*)_toHeap._cur;
+    Block *dstObj = move(srcObj);
+    while (toScan < (Block*)_toHeap._cur) {
+        // Scan the contents of `toScan`:
+        for (Val &v : toScan->vals()) {
+            if (Block *b = v.asBlock(_fromHeap))
+                v = Val(move(b), _toHeap);
         }
-        return dstObj;
+        // And advance it to the next block in _toHeap:
+        toScan = toScan->nextBlock();
+    }
+    return dstObj;
+}
+
+
+// Moves a Block from _fromHeap to _toHeap, without altering its contents.
+// - If the Block has already been moved, returns the new location.
+// - Otherwise copies (appends) it to _toHeap, then overwrites it with the forwarding address.
+Block* GarbageCollector::move(Block* src) {
+    if (src->isForwarded()) {
+        return (Block*)_toHeap.at(src->getForwardingAddress());
+    } else {
+        auto size = src->blockSize();
+        auto dst = (Block*)_fromHeap.rawAlloc(size);
+        ::memcpy(dst, src, size);
+        src->setForwardingAddress(_toHeap.pos(dst));
+        return dst;
     }
 }
 

@@ -17,7 +17,6 @@
 //
 
 #include "Collections.hh"
-#include "Symbol.hh"
 #include <iomanip>
 #include <iostream>
 
@@ -142,7 +141,7 @@ std::ostream& operator<<(std::ostream& out, Dict const& dict) {
 }
 
 
-std::ostream& operator<< (std::ostream& out, ObjectRef const& obj) {
+std::ostream& operator<< (std::ostream& out, Object const& obj) {
     if (!obj.visit([&](auto t) {out << t;}))
         out << TypeName(obj.type()) << "[]";
     return out;

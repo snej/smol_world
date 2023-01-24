@@ -16,7 +16,7 @@
 #include <vector>
 
 class Block;
-class ObjectRef;
+class Object;
 class SymbolTable;
 class Val;
 
@@ -73,6 +73,8 @@ public:
     /// Sets the heap's root value.
     void setRoot(Val);
 
+    Object rootObject() const;
+
     /// Resets the Heap to an empty state.
     void reset();
 
@@ -125,6 +127,7 @@ public:
     }
 
     bool contains(const void *ptr) const     {return ptr >= _base && ptr < _cur;}
+    bool contains(Object) const;
 
     /// Returns true if a `heappos` is valid in this Heap, i.e. doesn't point past the end of
     /// allocated memory.
@@ -148,7 +151,7 @@ private:
     friend class Block;
     friend class SymbolTable;
     friend class GarbageCollector;
-    friend class ObjectRef;
+    friend class Object;
     friend class UsingHeap;
 
     Heap();
@@ -178,15 +181,15 @@ private:
     Val symbolTableVal() const;
     void setSymbolTableVal(Val);
 
-    void registerExternalRoot(ObjectRef*) const;
-    void unregisterExternalRoot(ObjectRef*) const;
+    void registerExternalRoot(Object*) const;
+    void unregisterExternalRoot(Object*) const;
 
     byte*   _base;
     byte*   _end;
     byte*   _cur;
     AllocFailureHandler _allocFailureHandler = nullptr;
     std::unique_ptr<SymbolTable> _symbolTable;
-    std::vector<ObjectRef*> mutable _externalRoots;
+    std::vector<Object*> mutable _externalRoots;
     bool    _malloced = false;
 };
 
@@ -273,6 +276,7 @@ public:
 private:
     void scanRoot();
     template <class T> Val scanValueAs(Val val);
+    Block* move(Block*);
 
     std::unique_ptr<Heap> _tempHeap;    // Owns temporary heap, if there is one
     Heap &_fromHeap, &_toHeap;          // The source and destination heaps

@@ -5,7 +5,7 @@
 //
 
 #pragma once
-#include "Symbol.hh"
+#include "Collections.hh"
 #include <functional>
 #include <iosfwd>
 
@@ -21,10 +21,10 @@ public:
 
     uint32_t count() const                              {return _count;}
     
-    Symbol* find(std::string_view s) const;
-    Symbol* create(std::string_view s);
+    Symbol find(std::string_view s) const;
+    Symbol create(std::string_view s);
 
-    using Visitor = std::function<bool(Symbol*, uint32_t hash)>;
+    using Visitor = std::function<bool(Symbol, uint32_t hash)>;
     bool visit(Visitor visitor) const;
 
     friend std::ostream& operator<<(std::ostream& out, SymbolTable const &st) {
@@ -40,18 +40,18 @@ private:
     struct HashTable {
         HashEntry *begin, *end;
         uint32_t sizeMask, capacity;
-        Array* array;
+        Array array;
 
-        explicit HashTable(Array *array);
+        explicit HashTable(Array array);
         uint32_t size() const  {return sizeMask + 1;}
         explicit operator bool() const  {return begin != nullptr;}
-        std::pair<HashEntry*,Symbol*> search(Heap*, string_view str, int32_t hashCode) const;
+        std::pair<HashEntry*,Symbol> search(Heap*, string_view str, int32_t hashCode) const;
         void dump(std::ostream&, Heap const*) const;
     };
 
     void setHeap(Heap* h)                               {_heap = h;}
     void setTable(Val newTable);
-    void setTable(Array *table);
+    void setTable(Array table);
     bool grow();
 
     HashTable   _table;

@@ -58,12 +58,26 @@ public:
         return meta >> TagBits;
     }
 
+    heapsize blockSize() const                  {return sizeof(Block) + dataSize();}
+
     /// Recovers the Block object given the data range it owns.
     static Block* fromData(slice<byte> data) {
         return (data.size()<LargeSize) ? fromSmallData(data.begin()) : fromLargeData(data.begin());
     }
     static Block* fromSmallData(void* data)     {return (Block*)( (byte*)data - 2);}
     static Block* fromLargeData(void* data)     {return (Block*)( (byte*)data - 4);}
+
+    static constexpr bool typeContainsPointers(Type type) {
+        return type >= Type::Array && type <= Type::Dict;
+    }
+
+    bool containsVals() const                   {return typeContainsPointers(type());}
+    
+    slice<Val> vals() const {
+        if (!containsVals())
+            return {};
+        return slice_cast<Val>(data());
+    }
 
     //---- Data type:
 
@@ -76,10 +90,6 @@ public:
     Block* nextBlock() {
         auto dat = data();
         return (Block*)( dat.begin() + std::max(dat.size(), heapsize(2)) );
-    }
-
-    static constexpr bool typeContainsPointers(Type type) {
-        return type >= Type::Array && type <= Type::Dict;
     }
 
     bool isVisited() const                      {return (_tags & Visited) != 0;}

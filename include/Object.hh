@@ -8,50 +8,37 @@
 #include "slice.hh"
 #include "Block.hh"
 #include "Val.hh"
-#include <initializer_list>
-#include <string_view>
-
-
-using string_view = std::string_view;
-class String; class Symbol; class Blob; class Array; class Dict;
 
 
 /// A reference to a heap object.
-class ObjectRef {
+class Object {
 public:
+    Object()                                    { }
+    Object(nullptr_t)                           { }
+
+    Object(Block const* block)                  {if (block) _bytes = block->data<byte>();}
+
+    Object(Val val, IN_HEAP)                    :Object(val.asBlock(heap)) { }
+
+    explicit operator bool() const              {return _bytes.begin() != nullptr;}
+
     Block* block() const                        {return Block::fromData(_bytes);}
     Val asVal(IN_HEAP) const                    {return Val(block(), heap);}
 
     Type type() const                           {return block()->type();}
 
     template <class T> bool is() const          {return type() == T::InstanceType;}
-    template <class T> T* as()                  {return (type() == T::InstanceType) ? (T*)this : nullptr;}
-    template <class T> T const* as() const      {return const_cast<ObjectRef*>(this)->as<T>();}
+    template <class T> T as() const             {return (type() == T::InstanceType) ? *(T*)this : T();}
 
     /// Calls `fn`, which must be a generic lambda taking an `auto` parameter,
     /// with this object cast to its runtime type.
-    template <typename FN>
-    bool visit(FN fn) const {
-        switch (type()) {
-            case Type::String: fn(as<String>()); break;
-            case Type::Symbol: fn(as<Symbol>()); break;
-            case Type::Blob:   fn(as<Blob>()); break;
-            case Type::Array:  fn(as<Array>()); break;
-            case Type::Dict:   fn(as<Dict>()); break;
-            default:           return false;
-        }
-        return true;
-    }
+    template <typename FN> bool visit(FN fn) const;
+
+    friend bool operator==(Object a, Object b)  {return a._bytes.begin() == b._bytes.begin();}
+    friend bool operator!=(Object a, Object b)  {return !(a == b);}
 
 protected:
     friend class GarbageCollector;
-
-    ObjectRef(Block const* block, IN_HEAP)
-    :_bytes(block->data<byte>()) {
-        heap->registerExternalRoot(this);
-    }
-    ObjectRef(Val val, IN_HEAP)
-    :ObjectRef(val.asBlock(heap), heap) { }
 
     template <typename T> slice<T> dataAs() const    {return slice_cast<T>(_bytes);}
 
@@ -65,28 +52,21 @@ protected:
 };
 
 
-std::ostream& operator<< (std::ostream&, ObjectRef const&);
+std::ostream& operator<< (std::ostream&, Object const&);
 
 
 /// An Object subclass that implements a particular Type code.
 template <Type TYPE>
-class TypedObjectRef : public ObjectRef {
+class TypedObject : public Object {
 public:
     static constexpr Type InstanceType = TYPE;
 
 protected:
-    TypedObjectRef(Block const* block, IN_HEAP)  :ObjectRef(block, heap) { }
-    TypedObjectRef(Val val, IN_HEAP)    :ObjectRef(val, heap) {assert(type() == TYPE);}
-    TypedObjectRef(size_t capacity, Type type, IN_MUT_HEAP)
-    :ObjectRef(Block::alloc(capacity, type, heap), heap) { }
+    TypedObject()  :Object() { }
+    TypedObject(Block const* block)          :Object(block) { }
+    TypedObject(Val val, IN_HEAP)            :Object(val, heap) {assert(type() == TYPE);}
+
+    /// Allocates a new Block with sufficient capacity and constructs a ref on its data.
+    TypedObject(size_t capacity, Type type, IN_MUT_HEAP)
+    :Object(Block::alloc(capacity, type, heap)) { }
 };
-
-
-/*
-template <class T>
-T* Val::as(IN_HEAP) const {
-    if (auto obj = asObject(heap); obj && obj->type() == T::InstanceType)
-        return (T*)obj;
-    return nullptr;
-}
-*/

@@ -104,24 +104,24 @@ static void testAllocRangeOfSizes(heapsize BaseSize, int NumBlocks) {
     Heap heap(Heap::Overhead + NumBlocks * (4 + BaseSize) + (NumBlocks * (NumBlocks - 1)) / 2);
     cerr << "Heap size is " << heap.capacity() << endl;
 
-    vector<Blob*> blocks(NumBlocks);
+    vector<Block*> blocks(NumBlocks);
     size_t dataSize = 0;
     for (int i = 0; i < NumBlocks; ++i) {
         size_t size = BaseSize + i;
         INFO("Block size " << size);
-        Blob* blob = blocks[i] = Blob::create(size, heap);
+        Block *b = blocks[i] = Block::alloc(size, Type::Blob, heap);
         //cerr << "Block " << size << " = " << (void*)blob << endl;
-        REQUIRE(blob != nullptr);
-        CHECK(heap.contains(blob));
-        CHECK(blob->type() == Type::Blob);
-        CHECK(blob->capacity() == size);
-        memset(blob->begin(), uint8_t(i), size);
-        CHECK(blob->type() == Type::Blob);
-        CHECK(blob->capacity() == size);
+        REQUIRE(b != nullptr);
+        CHECK(heap.contains(b));
+        CHECK(b->type() == Type::Blob);
+        CHECK(b->dataSize() == size);
+        memset(b->dataPtr(), uint8_t(i), size);
+        CHECK(b->type() == Type::Blob);
+        CHECK(b->dataSize() == size);
         if (i > 0) {
             auto prev = blocks[i - 1];
             CHECK(prev->type() == Type::Blob);
-            CHECK(prev->capacity() == size - 1);
+            CHECK(prev->dataSize() == size - 1);
         }
         dataSize += size;
     }
@@ -131,9 +131,9 @@ static void testAllocRangeOfSizes(heapsize BaseSize, int NumBlocks) {
     for (int i = 0; i < NumBlocks; ++i) {
         size_t size = BaseSize + i;
         INFO("Block #" << i);
-        Blob *blob = blocks[i];
-        CHECK(blob->type() == Type::Blob);
-        auto data = (uint8_t*)blob->begin();
+        Block* b = blocks[i];
+        CHECK(b->type() == Type::Blob);
+        auto data = (uint8_t*)b->dataPtr();
         REQUIRE(heap.contains(data));
         for (int j = 0; j < size; j++) {
             if (data[j] != uint8_t(i)) {
@@ -143,10 +143,10 @@ static void testAllocRangeOfSizes(heapsize BaseSize, int NumBlocks) {
     }
 
     int i = 0;
-    heap.visitAll([&](const Object *obj) {
+    heap.visitAll([&](Block const& b) {
         INFO("Block #" << i);
         REQUIRE(i < NumBlocks);
-        CHECK(obj == blocks[i]);
+        CHECK(&b == blocks[i]);
         ++i;
         return true;
     });
@@ -156,6 +156,6 @@ static void testAllocRangeOfSizes(heapsize BaseSize, int NumBlocks) {
 
 TEST_CASE("Alloc Small Objects", "[heap]")      {testAllocRangeOfSizes(0,     500);}
 TEST_CASE("Alloc Bigger Objects", "[heap]")     {testAllocRangeOfSizes(900,   500);}
-TEST_CASE("Alloc Big Objects", "[heap]")        {testAllocRangeOfSizes(Object::LargeSize - 50, 100);}
+TEST_CASE("Alloc Big Objects", "[heap]")        {testAllocRangeOfSizes(Block::LargeSize - 50, 100);}
 TEST_CASE("Alloc Real Big Objects", "[heap]")   {testAllocRangeOfSizes(99990,  20);}
-TEST_CASE("Alloc Huge Objects", "[heap]")       {testAllocRangeOfSizes(Object::MaxSize - 2,  2);}
+TEST_CASE("Alloc Huge Objects", "[heap]")       {testAllocRangeOfSizes(Block::MaxSize - 2,  2);}

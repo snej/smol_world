@@ -63,8 +63,8 @@ public:
     constexpr Val(heappos pos)
     :_val(uint32_t(pos) << TagSize)                     {assert(pos != nullpos);}
 
-    template <class T>
-    Val(T const* ptr, IN_HEAP)                          :_val(heapsize(heap->pos(ptr)) << TagSize) { }
+    Val(Object const&, IN_HEAP);
+    Val(Block const* b, IN_HEAP)                        :Val(heap->pos(b)) { }
 
     Type type(IN_HEAP) const;
 
@@ -80,12 +80,15 @@ public:
         return (_val & IntTag) == 0 && _val != NullVal;
     }
 
+    Object asObject(IN_HEAP) const;
+
     Block* asBlock(IN_HEAP) const {
         return isObject() ? (Block*)heap->at(asPos()) : nullptr;
     }
 
     template <class T> bool is(IN_HEAP) const           {return type(heap) == T::InstanceType;}
-    template <class T> T* as(IN_HEAP) const;
+
+    template <class T> T as(IN_HEAP) const;
 
     heappos asPos() const {
         assert(isObject());
@@ -119,10 +122,4 @@ std::ostream& operator<<(std::ostream&, Val);
 
 //template <class T> T* Heap:: root() const {
 //    return rootVal().as<T>(this);
-//}
-
-//template <class T>
-//void GarbageCollector::update(Ptr<T>& ptr) {
-//    Val dstVal = scanValue(ptr);
-//    ptr = dstVal.as<T>();
 //}

@@ -11,6 +11,7 @@
 
 using namespace std;
 
+#if 0
 
 int xmain(int argc, const char * argv[]) {
     string persisted;
@@ -18,32 +19,32 @@ int xmain(int argc, const char * argv[]) {
         Heap heap(100000);
         UsingHeap u(heap);
         
-        auto &arr = *Array::create(4, &heap);
+        Array arr = Array::create(4, &heap);
         assert(arr.count() == 4);
         cout << arr << endl;
-        heap.setRoot(&arr);
-        assert(heap.rootObject()->is<Array>());
-        assert(heap.rootObject()->as<Array>() == &arr);
+        heap.setRoot(arr);
+        assert(heap.rootObject().is<Array>());
+        assert(heap.rootObject().as<Array>() == arr);
 
         arr[0] = 1234;
         arr[1] = -4567;
 
         auto str = String::create("Cowabunga!", heap);
         cout << str << endl;
-        assert(str->count() == 10);
-        assert(str->get() == "Cowabunga!");
-        arr[2] = str->asVal(heap);
-        arr[3] = str->asVal(heap);
+        assert(str.count() == 10);
+        assert(str.get() == "Cowabunga!");
+        arr[2] = str.asVal(heap);
+        arr[3] = str.asVal(heap);
 
         String::create("Garbage!", heap);
 
-        assert(str->get() == "Cowabunga!");
+        assert(str.get() == "Cowabunga!");
 
         cout << arr << endl;
 
         int n = 0;
         cout << "Contents:\n";
-        heap.visit([&](Object const* obj) {
+        heap.visit([&](Object obj) {
             n++;
             if (n == 1) assert(obj == &arr);
             if (n == 2) assert(obj == str);
@@ -72,7 +73,7 @@ int xmain(int argc, const char * argv[]) {
         assert(heap.valid());
         UsingHeap u(heap);
         cout << "Root is " << heap.rootVal() << endl;
-        assert(heap.rootObject()->is<Array>());
+        assert(heap.rootObject().is<Array>());
         Array *arr = heap.root<Array>();
         assert(arr);
         assert(heap.root<Dict>() == nullptr);
@@ -89,13 +90,15 @@ int xmain(int argc, const char * argv[]) {
         }
         cout << "after GC: " << heap.used() << " bytes\n";
         cout << "Now array is " << arr << "... at " << (void*)arr << endl;
-        assert(arr->is<Array>());
-        assert(arr->count() == 4);
+        assert(arr.is<Array>());
+        assert(arr.count() == 4);
         cout << "Now string is " << str << "... at " << (void*)str << endl;
-        assert(str->is<String>());
-        assert(str->count() == 10);
-        assert(str->get() == "Cowabunga!");
+        assert(str.is<String>());
+        assert(str.count() == 10);
+        assert(str.get() == "Cowabunga!");
     }
 
     return 0;
 }
+
+#endif

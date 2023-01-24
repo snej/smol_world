@@ -18,7 +18,12 @@
 
 #include "Val.hh"
 #include "Object.hh"
-//#include <iostream>
+#include <iostream>
+
+
+Val::Val(Object const& obj, IN_HEAP)     :Val(obj.block(), heap) { }
+
+Object Val::asObject(IN_HEAP) const      {return Object(asBlock(heap));}
 
 
 Type Val::type(IN_HEAP) const {

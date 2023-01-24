@@ -59,13 +59,13 @@ static inline int32_t computeHash(string_view str) {
 }
 
 
-SymbolTable::HashTable::HashTable(Array *a)
+SymbolTable::HashTable::HashTable(Array a)
 :array(a)
 {
     if (array) {
-        begin = (SymbolTable::HashEntry*)array->begin();
-        end = (SymbolTable::HashEntry*)array->end();
-        sizeMask = uint32_t(array->size() / 2 - 1);
+        begin = (SymbolTable::HashEntry*)array.begin();
+        end = (SymbolTable::HashEntry*)array.end();
+        sizeMask = uint32_t(array.size() / 2 - 1);
         assert((sizeMask & (sizeMask + 1)) == 0); // must be power of 2 - 1
         capacity = uint32_t(round(size() * kMaxLoad));
     } else {
@@ -75,17 +75,17 @@ SymbolTable::HashTable::HashTable(Array *a)
 }
 
 
-std::pair<SymbolTable::HashEntry*,Symbol*>
+std::pair<SymbolTable::HashEntry*,Symbol>
 SymbolTable::HashTable::search(Heap *heap, string_view str, int32_t hashCode) const {
     Val hashVal(hashCode);
     HashEntry *entry = begin + (uint32_t(hashCode) & sizeMask);
     while (true) {
         if (entry->hash == hashVal) {
-            Symbol *sym = entry->symbol.as<Symbol>(heap);
-            if (sym->get() == str)
+            Symbol sym = entry->symbol.as<Symbol>(heap);
+            if (sym.get() == str)
                 return {entry, sym};
         } else if (entry->hash == nullval) {
-            return {entry, nullptr};
+            return {entry, {}};
         }
         if (++entry == end)
             entry = begin;
@@ -98,7 +98,7 @@ void SymbolTable::HashTable::dump(std::ostream &out, Heap const* heap) const {
     uint32_t i = 0;
     for (auto e = begin; e != end; ++e, ++i) {
         out << setw(3) << i << ": ";
-        if (Symbol *symbol = e->symbol.as<Symbol>(heap)) {
+        if (Symbol symbol = e->symbol.as<Symbol>(heap)) {
             ++count;
             uint32_t hashCode = uint32_t(e->hash.asInt());
             uint32_t delta = i - (hashCode & sizeMask);
@@ -118,8 +118,8 @@ void SymbolTable::HashTable::dump(std::ostream &out, Heap const* heap) const {
 
 
 void SymbolTable::setTable(Val tableVal) {
-    Array* array = tableVal.as<Array>(_heap);
-    if (array != _table.array) {  // if called from my own setTable(Array*) method, don't do this
+    Array array = tableVal.as<Array>(_heap);
+    if (array != _table.array) {  // if called from my own setTable(Array) method, don't do this
         uint32_t count = 0;
         _table = HashTable(array);
         if (array) {
@@ -133,12 +133,12 @@ void SymbolTable::setTable(Val tableVal) {
 }
 
 
-void SymbolTable::setTable(Array *table) {
-    _heap->setSymbolTableVal(table->asVal(_heap));  // this will call my setTable(Val), above
+void SymbolTable::setTable(Array table) {
+    _heap->setSymbolTableVal(table.asVal(_heap));  // this will call my setTable(Val), above
 }
 
 
-Symbol* SymbolTable::find(string_view str) const {
+Symbol SymbolTable::find(string_view str) const {
     if (!_table)
         return nullptr;
     auto [entry, symbol] = _table.search(_heap, str, computeHash(str));
@@ -146,7 +146,7 @@ Symbol* SymbolTable::find(string_view str) const {
 }
 
 
-Symbol* SymbolTable::create(string_view str) {
+Symbol SymbolTable::create(string_view str) {
     if (_table) {
         if (_count >= _table.capacity) {
             if (!grow()) return nullptr;
@@ -157,11 +157,11 @@ Symbol* SymbolTable::create(string_view str) {
     int32_t hashCode = computeHash(str);
     auto [entry, symbol] = _table.search(_heap, str, hashCode);
     if (!symbol) {
-        symbol = Symbol::actuallyCreate(str, _heap);
+        symbol = Symbol(str.data(), str.size(), _heap);
         if (!symbol)
             return nullptr;
         entry->hash = hashCode;
-        entry->symbol = symbol->asVal(_heap);
+        entry->symbol = symbol.asVal(_heap);
         ++_count;
     }
     return symbol;
@@ -171,14 +171,14 @@ Symbol* SymbolTable::create(string_view str) {
 bool SymbolTable::grow() {
 //    std::cout << "=== Growing symbol table from " << _table.size
 //              << " to " << 2*_table.size << " buckets ===\n";
-    Array *newArray = Array::create(4 * _table.size(), _heap);
+    Array newArray = Array::create(4 * _table.size(), _heap);
     if (!newArray)
         return false;
     HashTable newTable(newArray);
     // Scan the old table, inserting each Symbol into the new table:
     for (auto e = _table.begin; e != _table.end; ++e) {
-        if (Symbol *symbol = e->symbol.as<Symbol>(_heap)) {
-            auto [newEntry, foundSym] = newTable.search(_heap, symbol->get(), e->hash.asInt());
+        if (Symbol symbol = e->symbol.as<Symbol>(_heap)) {
+            auto [newEntry, foundSym] = newTable.search(_heap, symbol.get(), e->hash.asInt());
             assert(!foundSym);
             *newEntry = *e;
         }
@@ -194,7 +194,7 @@ bool SymbolTable::visit(Visitor visitor) const {
     if (!_table)
         return true;
     for (auto i = _table.begin; i != _table.end; ++i) {
-        Symbol *symbol = i->symbol.as<Symbol>(_heap);
+        Symbol symbol = i->symbol.as<Symbol>(_heap);
         if (symbol && !visitor(symbol, i->hash.asInt()))
             return false;
     }
