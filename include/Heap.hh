@@ -70,10 +70,11 @@ public:
     /// The heap's root value. Starts as Null, but usually an Array or Dict.
     Val rootVal() const;
 
+    Object rootObject() const;
+
     /// Sets the heap's root value.
     void setRoot(Val);
-
-    Object rootObject() const;
+    void setRoot(Object);
 
     /// Resets the Heap to an empty state.
     void reset();
@@ -151,8 +152,9 @@ private:
     friend class Block;
     friend class SymbolTable;
     friend class GarbageCollector;
-    friend class Object;
+//    friend class Object;
     friend class UsingHeap;
+    friend class HandleBase;
 
     Heap();
     Heap(void *base, size_t capacity, bool malloced);
@@ -241,43 +243,3 @@ public:
 #define IN_HEAP     ConstHeapRef heap //= nullptr
 
 #define CUR_HEAP    ConstHeapRef(nullptr)
-
-
-
-/// A typical copying garbage collector that copies all live objects into another Heap.
-/// At the end it swaps the memory of the two Heaps, so the original heap is now clean,
-/// and the other heap can be freed or reused for the next GC.
-class GarbageCollector {
-public:
-    /// Constructs the GC and copies all Values reachable from the root into a temporary Heap
-    /// with the same capacity as this one.
-    GarbageCollector(Heap &heap);
-
-    /// Constructs the GC and copies all Values reachable from the root into `otherHeap`.
-    GarbageCollector(Heap &heap, Heap &otherHeap);
-
-    /// Updates an existing Val that came from the "from" heap,
-    /// returning an equivalent Val that's been copied to the "to" heap.
-    /// You MUST call this, or any of the `update` methods below,
-    /// on any live references to values in `fromHeap`, or they'll be out of date.
-    ///
-    /// Do not do anything else with the heap while the GarbageCollector is in scope!
-    [[nodiscard]] Val scan(Val v);
-
-    [[nodiscard]] Block* scan(Block*);
-
-    // These are equivalent to scanValue but update the Val/Ptr/Block in place:
-    void update(Val* val);
-    template <class T> void update(T** obj);
-
-    // The destructor swaps the two heaps, so _fromHeap is now the live one.
-    ~GarbageCollector()     {_fromHeap.reset(); std::swap(_fromHeap, _toHeap);}
-
-private:
-    void scanRoot();
-    template <class T> Val scanValueAs(Val val);
-    Block* move(Block*);
-
-    std::unique_ptr<Heap> _tempHeap;    // Owns temporary heap, if there is one
-    Heap &_fromHeap, &_toHeap;          // The source and destination heaps
-};

@@ -27,8 +27,10 @@ public:
 
     Type type() const                           {return block()->type();}
 
-    template <class T> bool is() const          {return type() == T::InstanceType;}
-    template <class T> T as() const             {return (type() == T::InstanceType) ? *(T*)this : T();}
+    slice<byte> rawBytes() const                {return _bytes;}
+
+    template <ObjectType T> bool is() const     {return type() == T::InstanceType;}
+    template <ObjectType T> T as() const        {return (type() == T::InstanceType) ? *(T*)this : T();}
 
     /// Calls `fn`, which must be a generic lambda taking an `auto` parameter,
     /// with this object cast to its runtime type.
@@ -43,8 +45,6 @@ protected:
     template <typename T> slice<T> dataAs() const    {return slice_cast<T>(_bytes);}
 
     void relocate(Block* newBlock) {
-        assert(newBlock->type() == type());
-        assert(newBlock->dataSize() == _bytes.size());
         _bytes.moveTo((byte*)newBlock->dataPtr());
     }
 

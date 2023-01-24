@@ -101,7 +101,7 @@ public:
     heappos getForwardingAddress() const        {return heappos(isForwarded() ? (bigMeta() >> 1) : 0);}
 
     void setForwardingAddress(heappos addr) {
-        assert(addr > 0 && !(uintpos(addr) & Fwd));
+        assert(addr > 0 && !(uintpos(addr) & 0x80000000));
         bigMeta() = (uintpos(addr) << 1) | Fwd;
     }
 

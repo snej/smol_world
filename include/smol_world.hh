@@ -11,3 +11,4 @@
 #include "Object.hh"
 #include "Collections.hh"
 #include "SymbolTable.hh"
+#include "GarbageCollector.hh"

@@ -45,10 +45,11 @@ Heap& Heap::operator=(Heap&& h) noexcept {
     _end = h._end;
     _cur = h._cur;
     _malloced = h._malloced;
+    h._malloced = false;
     _allocFailureHandler = h._allocFailureHandler;
     _symbolTable = std::move(h._symbolTable);
     _symbolTable->setHeap(this);    // <- this is the only non-default bit
-    _externalRoots = std::move(h._externalRoots);
+//    _externalRoots = std::move(h._externalRoots);
     return *this;
 }
 
@@ -99,6 +100,7 @@ bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos <
 
 Val Heap::rootVal() const           {return ((Header*)_base)->root;}
 void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
+void Heap::setRoot(Object obj)      {((Header*)_base)->root = Val(obj, this);}
 
 Object Heap::rootObject() const  {return rootVal().asObject(this);}
 
@@ -170,100 +172,12 @@ void Heap::visit(Visitor const& visitor) {
 
 
 void Heap::registerExternalRoot(Object *ref) const {
+    assert(ref->rawBytes().null() || contains(ref->rawBytes().begin()));
     _externalRoots.push_back(ref);
 }
 
 void Heap::unregisterExternalRoot(Object* ref) const {
     auto i = std::find(_externalRoots.rbegin(), _externalRoots.rend(), ref);
     assert(i != _externalRoots.rend());
-    _externalRoots.erase(i.base());
-}
-
-
-
-
-#pragma mark - GARBAGE COLLECTION:
-
-
-GarbageCollector::GarbageCollector(Heap &heap)
-:_tempHeap(std::make_unique<Heap>(heap.capacity()))
-,_fromHeap(heap)
-,_toHeap(*_tempHeap)
-{
-    scanRoot();
-}
-
-
-GarbageCollector::GarbageCollector(Heap &fromHeap, Heap &toHeap)
-:_fromHeap(fromHeap), _toHeap(toHeap)
-{
-    scanRoot();
-}
-
-
-void GarbageCollector::scanRoot() {
-#ifndef NDEBUG
-    for (auto obj = _fromHeap.firstBlock(); obj; obj = _fromHeap.nextBlock(obj))
-        assert(!obj->isForwarded());
-#endif
-    _toHeap.reset();
-    _toHeap.setRoot(scan(_fromHeap.rootVal()));
-    _toHeap.setSymbolTableVal(scan(_fromHeap.symbolTableVal())); // TODO: Scan buckets as weak references to Symbols
-    for (Object *refp : _fromHeap._externalRoots) {
-        Block* dstBlock = scan(refp->block());
-        refp->relocate(dstBlock);
-    }
-}
-
-
-Val GarbageCollector::scan(Val val) {
-    if (val.isObject()) {
-        Block *obj = val.asBlock(_fromHeap);
-        return Val(scan(obj), _toHeap);
-    } else {
-        return val;
-    }
-}
-
-
-Block* GarbageCollector::scan(Block *srcObj) {
-    Block *toScan = (Block*)_toHeap._cur;
-    Block *dstObj = move(srcObj);
-    while (toScan < (Block*)_toHeap._cur) {
-        // Scan the contents of `toScan`:
-        for (Val &v : toScan->vals()) {
-            if (Block *b = v.asBlock(_fromHeap))
-                v = Val(move(b), _toHeap);
-        }
-        // And advance it to the next block in _toHeap:
-        toScan = toScan->nextBlock();
-    }
-    return dstObj;
-}
-
-
-// Moves a Block from _fromHeap to _toHeap, without altering its contents.
-// - If the Block has already been moved, returns the new location.
-// - Otherwise copies (appends) it to _toHeap, then overwrites it with the forwarding address.
-Block* GarbageCollector::move(Block* src) {
-    if (src->isForwarded()) {
-        return (Block*)_toHeap.at(src->getForwardingAddress());
-    } else {
-        auto size = src->blockSize();
-        auto dst = (Block*)_fromHeap.rawAlloc(size);
-        ::memcpy(dst, src, size);
-        src->setForwardingAddress(_toHeap.pos(dst));
-        return dst;
-    }
-}
-
-
-void GarbageCollector::update(Val* val) {
-    *val = scan(*val);
-}
-
-
-
-void Heap::garbageCollectTo(Heap &dstHeap) {
-    GarbageCollector gc(*this, dstHeap);
+    _externalRoots.erase(std::prev(i.base()));
 }

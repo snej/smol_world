@@ -59,6 +59,10 @@
             argument = "-r list --break"
             isEnabled = "YES">
          </CommandLineArgument>
+         <CommandLineArgument
+            argument = "[gc]"
+            isEnabled = "YES">
+         </CommandLineArgument>
       </CommandLineArguments>
       <AdditionalOptions>
          <AdditionalOption

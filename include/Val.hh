@@ -45,6 +45,11 @@ enum class Type : uint8_t {
 const char* TypeName(Type t);
 
 
+template <typename T>
+    concept ObjectType = std::is_base_of<Object, T>::value;
+
+
+
 /// A 32-bit polymorphic data value associated with a Heap.
 /// Can be null, an integer, or a reference to a String, Array, or Dict object in the heap.
 class Val {
@@ -86,9 +91,9 @@ public:
         return isObject() ? (Block*)heap->at(asPos()) : nullptr;
     }
 
-    template <class T> bool is(IN_HEAP) const           {return type(heap) == T::InstanceType;}
+    template <ObjectType T> bool is(IN_HEAP) const      {return type(heap) == T::InstanceType;}
 
-    template <class T> T as(IN_HEAP) const;
+    template <ObjectType T> T as(IN_HEAP) const;
 
     heappos asPos() const {
         assert(isObject());

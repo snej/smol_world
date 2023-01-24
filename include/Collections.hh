@@ -231,7 +231,7 @@ bool Object::visit(FN fn) const {
 }
 
 
-template <class T> T Val::as(IN_HEAP) const {
+template <ObjectType T> T Val::as(IN_HEAP) const {
     if (Block *block = this->asBlock(heap))
         return Object(block).as<T>();
     return T(nullptr);

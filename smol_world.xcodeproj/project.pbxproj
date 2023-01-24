@@ -9,8 +9,10 @@
 /* Begin PBXBuildFile section */
 		2705301E2978B4FB003D4C93 /* Test_Heap.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2705301D2978B4FB003D4C93 /* Test_Heap.cc */; };
 		270530202978B556003D4C93 /* TestsMain.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2705301F2978B556003D4C93 /* TestsMain.cc */; };
+		2770B1B02980776400E2C126 /* GarbageCollector.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2770B1AF2980776400E2C126 /* GarbageCollector.cc */; };
+		2770B1B229807E5C00E2C126 /* Test_GC.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2770B1B129807E5C00E2C126 /* Test_GC.cc */; };
 		27733D02297B38CB00EDA2E9 /* oldmain.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27F22970833900BF17A5 /* oldmain.cpp */; };
-		27733D04297B39D300EDA2E9 /* ObjectTests.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27733D03297B39D300EDA2E9 /* ObjectTests.cc */; };
+		27733D04297B39D300EDA2E9 /* Test_Objects.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27733D03297B39D300EDA2E9 /* Test_Objects.cc */; };
 		27733D0D297C6E1100EDA2E9 /* SymbolTable.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27733D0C297C6E1100EDA2E9 /* SymbolTable.cc */; };
 		27AA27FB2970835E00BF17A5 /* Heap.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27FA2970835E00BF17A5 /* Heap.cc */; };
 		27AA27FE2970BFF300BF17A5 /* Val.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27FD2970BFF300BF17A5 /* Val.cc */; };
@@ -36,7 +38,10 @@
 		2705301F2978B556003D4C93 /* TestsMain.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = TestsMain.cc; path = ../../tendril/test/TestsMain.cc; sourceTree = "<group>"; };
 		2770B1AB297F1E7A00E2C126 /* Block.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Block.hh; sourceTree = "<group>"; };
 		2770B1AC297F1EDD00E2C126 /* slice.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = slice.hh; sourceTree = "<group>"; };
-		27733D03297B39D300EDA2E9 /* ObjectTests.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = ObjectTests.cc; sourceTree = "<group>"; };
+		2770B1AE2980776400E2C126 /* GarbageCollector.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = GarbageCollector.hh; sourceTree = "<group>"; };
+		2770B1AF2980776400E2C126 /* GarbageCollector.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = GarbageCollector.cc; sourceTree = "<group>"; };
+		2770B1B129807E5C00E2C126 /* Test_GC.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_GC.cc; sourceTree = "<group>"; };
+		27733D03297B39D300EDA2E9 /* Test_Objects.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_Objects.cc; sourceTree = "<group>"; };
 		27733D06297B51E200EDA2E9 /* wyhash32.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = wyhash32.h; sourceTree = "<group>"; };
 		27733D07297B51E200EDA2E9 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 		27733D08297B51E200EDA2E9 /* wyhash.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = wyhash.h; sourceTree = "<group>"; };
@@ -52,7 +57,6 @@
 		27AA27FD2970BFF300BF17A5 /* Val.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Val.cc; sourceTree = "<group>"; };
 		27AA27FF2970C04900BF17A5 /* Object.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Object.hh; sourceTree = "<group>"; };
 		27AA28002970C04900BF17A5 /* Collections.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Collections.cc; sourceTree = "<group>"; };
-		27AA28052971D73700BF17A5 /* Ptr.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Ptr.hh; sourceTree = "<group>"; };
 		27AA28082973859D00BF17A5 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -75,6 +79,7 @@
 				27AA28002970C04900BF17A5 /* Collections.cc */,
 				27733D0B297C6E1100EDA2E9 /* SymbolTable.hh */,
 				27733D0C297C6E1100EDA2E9 /* SymbolTable.cc */,
+				2770B1AF2980776400E2C126 /* GarbageCollector.cc */,
 			);
 			path = src;
 			sourceTree = "<group>";
@@ -101,7 +106,8 @@
 			isa = PBXGroup;
 			children = (
 				2705301D2978B4FB003D4C93 /* Test_Heap.cc */,
-				27733D03297B39D300EDA2E9 /* ObjectTests.cc */,
+				27733D03297B39D300EDA2E9 /* Test_Objects.cc */,
+				2770B1B129807E5C00E2C126 /* Test_GC.cc */,
 				2705301F2978B556003D4C93 /* TestsMain.cc */,
 				27AA27F22970833900BF17A5 /* oldmain.cpp */,
 			);
@@ -146,9 +152,9 @@
 				27AA27F92970835E00BF17A5 /* Heap.hh */,
 				2770B1AB297F1E7A00E2C126 /* Block.hh */,
 				27AA27FF2970C04900BF17A5 /* Object.hh */,
-				2705301129776C46003D4C93 /* Collections.hh */,
 				27AA27FC2970BFF300BF17A5 /* Val.hh */,
-				27AA28052971D73700BF17A5 /* Ptr.hh */,
+				2705301129776C46003D4C93 /* Collections.hh */,
+				2770B1AE2980776400E2C126 /* GarbageCollector.hh */,
 			);
 			path = include;
 			sourceTree = "<group>";
@@ -217,7 +223,9 @@
 				27733D0D297C6E1100EDA2E9 /* SymbolTable.cc in Sources */,
 				27733D02297B38CB00EDA2E9 /* oldmain.cpp in Sources */,
 				2705301E2978B4FB003D4C93 /* Test_Heap.cc in Sources */,
-				27733D04297B39D300EDA2E9 /* ObjectTests.cc in Sources */,
+				2770B1B02980776400E2C126 /* GarbageCollector.cc in Sources */,
+				2770B1B229807E5C00E2C126 /* Test_GC.cc in Sources */,
+				27733D04297B39D300EDA2E9 /* Test_Objects.cc in Sources */,
 				270530202978B556003D4C93 /* TestsMain.cc in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
