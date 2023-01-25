@@ -134,7 +134,7 @@ void SymbolTable::setTable(Val tableVal) {
 
 
 void SymbolTable::setTable(Array table) {
-    _heap->setSymbolTableVal(table.asVal(_heap));  // this will call my setTable(Val), above
+    _heap->setSymbolTableVal(table);  // this will call my setTable(Val), above
 }
 
 
@@ -161,7 +161,7 @@ Symbol SymbolTable::create(string_view str) {
         if (!symbol)
             return nullptr;
         entry->hash = hashCode;
-        entry->symbol = symbol.asVal(_heap);
+        entry->symbol = symbol;
         ++_count;
     }
     return symbol;

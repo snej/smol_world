@@ -97,6 +97,14 @@ bool Dict::remove(Val key) {
 
 
 
+std::ostream& operator<<(std::ostream& out, NullValue const&) {
+    return out << "null";
+}
+
+std::ostream& operator<<(std::ostream& out, IntValue const& val) {
+    return out << val.asInt();
+}
+
 std::ostream& operator<<(std::ostream& out, String const& str) {
     out << "“" << str.get() << "”";
     return out;
@@ -129,7 +137,6 @@ std::ostream& operator<<(std::ostream& out, Array const& arr) {
     return out << "]";
 }
 
-
 std::ostream& operator<<(std::ostream& out, Dict const& dict) {
     out << "Dict{" << dict.count();
     int n = 0;
@@ -139,7 +146,6 @@ std::ostream& operator<<(std::ostream& out, Dict const& dict) {
     }
     return out << "}";
 }
-
 
 std::ostream& operator<< (std::ostream& out, Object const& obj) {
     if (!obj.visit([&](auto t) {out << t;})) {

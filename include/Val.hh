@@ -23,6 +23,7 @@ class Block;
 class String;
 class Array;
 class Dict;
+class Value;
 
 
 /** Value types. */
@@ -46,7 +47,7 @@ const char* TypeName(Type t);
 
 
 template <typename T>
-    concept ObjectType = std::is_base_of<Object, T>::value;
+    concept ValueClass = std::is_base_of<Value, T>::value;
 
 
 
@@ -72,6 +73,7 @@ public:
     Val(Block const* b, IN_HEAP)                        :Val(heap->pos(b)) { }
 
     Type type(IN_HEAP) const;
+    Type _type() const;
 
     constexpr bool isNull() const                       {return _val == NullVal;}
 
@@ -91,9 +93,9 @@ public:
         return isObject() ? (Block*)heap->at(asPos()) : nullptr;
     }
 
-    template <ObjectType T> bool is(IN_HEAP) const      {return type(heap) == T::InstanceType;}
+    template <ValueClass T> bool is(IN_HEAP) const      {return type(heap) == T::InstanceType;}
 
-    template <ObjectType T> T as(IN_HEAP) const;
+    template <ValueClass T> T as(IN_HEAP) const;
 
     heappos asPos() const {
         assert(isObject());

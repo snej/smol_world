@@ -19,6 +19,7 @@ class Block;
 class Object;
 class SymbolTable;
 class Val;
+class Value;
 
 
 using byte = std::byte;
@@ -69,12 +70,10 @@ public:
 
     /// The heap's root value. Starts as Null, but usually an Array or Dict.
     Val rootVal() const;
-
-    Object rootObject() const;
+    Value rootValue() const;
 
     /// Sets the heap's root value.
     void setRoot(Val);
-    void setRoot(Object);
 
     /// Resets the Heap to an empty state.
     void reset();
@@ -145,8 +144,8 @@ public:
     /// Calls the Visitor callback once for each object, even if it's unreachable garbage.
     void visitAll(Visitor const&);
 
-    void registerExternalRoot(Object*) const;
-    void unregisterExternalRoot(Object*) const;
+    void registerExternalRoot(Value*) const;
+    void unregisterExternalRoot(Value*) const;
 
     void registerExternalRoots(Val rootArray[], size_t count);
     void unregisterExternalRoots(Val rootArray[]);
@@ -155,7 +154,6 @@ private:
     friend class Block;
     friend class SymbolTable;
     friend class GarbageCollector;
-//    friend class Object;
     friend class UsingHeap;
     friend class HandleBase;
 
@@ -194,7 +192,7 @@ private:
     byte*   _cur;
     AllocFailureHandler _allocFailureHandler = nullptr;
     std::unique_ptr<SymbolTable> _symbolTable;
-    std::vector<Object*> mutable _externalRoots;
+    std::vector<Value*> mutable _externalRoots;
     bool    _malloced = false;
 };
 

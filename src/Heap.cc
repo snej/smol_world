@@ -111,9 +111,8 @@ bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos <
 
 Val Heap::rootVal() const           {return ((Header*)_base)->root;}
 void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
-void Heap::setRoot(Object obj)      {((Header*)_base)->root = Val(obj, this);}
 
-Object Heap::rootObject() const  {return rootVal().asObject(this);}
+Value Heap::rootValue() const       {return Value(rootVal(), this);}
 
 Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
 void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
@@ -213,12 +212,12 @@ void Heap::visit(Visitor const& visitor) {
 }
 
 
-void Heap::registerExternalRoot(Object *ref) const {
-    assert(ref->rawBytes().null() || contains(ref->rawBytes().begin()));
+void Heap::registerExternalRoot(Value *ref) const {
+    assert(!ref->isObject() || contains(ref->asObject().rawBytes().begin()));
     _externalRoots.push_back(ref);
 }
 
-void Heap::unregisterExternalRoot(Object* ref) const {
+void Heap::unregisterExternalRoot(Value* ref) const {
     auto i = std::find(_externalRoots.rbegin(), _externalRoots.rend(), ref);
     assert(i != _externalRoots.rend());
     _externalRoots.erase(std::prev(i.base()));

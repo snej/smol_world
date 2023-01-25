@@ -218,23 +218,25 @@ std::ostream& operator<<(std::ostream&, Array const&);
 
 
 template <typename FN>
-bool Object::visit(FN fn) const {
+bool Value::visit(FN fn) const {
     if (!*this)
         return false;
     switch (type()) {
-        case Type::String: fn(as<String>()); break;
-        case Type::Symbol: fn(as<Symbol>()); break;
-        case Type::Blob:   fn(as<Blob>()); break;
-        case Type::Array:  fn(as<Array>()); break;
-        case Type::Dict:   fn(as<Dict>()); break;
-        default:           return false;
+        case Type::Null:    fn(as<NullValue>()); break;
+        case Type::Int:     fn(as<IntValue>()); break;
+        case Type::String:  fn(as<String>()); break;
+        case Type::Symbol:  fn(as<Symbol>()); break;
+        case Type::Blob:    fn(as<Blob>()); break;
+        case Type::Array:   fn(as<Array>()); break;
+        case Type::Dict:    fn(as<Dict>()); break;
+        default:            return false;
     }
     return true;
 }
 
 
-template <ObjectType T> T Val::as(IN_HEAP) const {
+template <ValueClass T> T Val::as(IN_HEAP) const {
     if (Block *block = this->asBlock(heap))
-        return Object(block).as<T>();
+        return Object(block, heap).as<T>();
     return T(nullptr);
 }

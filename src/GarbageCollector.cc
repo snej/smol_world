@@ -56,7 +56,7 @@ void GarbageCollector::scanRoot() {
     _toHeap.reset();
     _toHeap.setRoot(scan(_fromHeap.rootVal()));
     _toHeap.setSymbolTableVal(scan(_fromHeap.symbolTableVal())); // TODO: Scan buckets as weak references to Symbols
-    for (Object *refp : _fromHeap._externalRoots)
+    for (Value *refp : _fromHeap._externalRoots)
         update(*refp);
 }
 
@@ -71,11 +71,9 @@ Val GarbageCollector::scan(Val val) {
 }
 
 
-void GarbageCollector::update(Object& obj) {
-    if (obj) {
-        Block* dstBlock = scan(obj.block());
-        obj.relocate(dstBlock);
-    }
+void GarbageCollector::update(Value& obj) {
+    if (obj.isObject())
+        obj.relocate(scan(obj.block()));
 }
 
 

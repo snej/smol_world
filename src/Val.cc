@@ -23,7 +23,19 @@
 
 Val::Val(Object const& obj, IN_HEAP)     :Val(obj.block(), heap) { }
 
-Object Val::asObject(IN_HEAP) const      {return Object(asBlock(heap));}
+Object Val::asObject(IN_HEAP) const      {return Object(*this, heap);}
+
+
+Type Val::_type() const {
+    if (isInt())
+        return Type::Int;
+    else if (isNull())
+        return Type::Null;
+    else {
+        assert(!isObject());    // will fail
+        return Type::String;
+    }
+}
 
 
 Type Val::type(IN_HEAP) const {

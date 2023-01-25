@@ -35,7 +35,7 @@ TEST_CASE("Strings", "[object]") {
         REQUIRE(obj);
         REQUIRE(obj.type() == Type::String);
         REQUIRE(obj.is<String>());
-        Val val = obj.asVal(heap);
+        Val val = obj;
         CHECK(val.type(heap) == Type::String);
         CHECK(val.as<String>(heap) == obj);
 
@@ -60,7 +60,7 @@ TEST_CASE("Blobs", "[object]") {
         REQUIRE(obj);
         REQUIRE(obj.type() == Type::Blob);
         REQUIRE(obj.is<Blob>());
-        Val val = obj.asVal(heap);
+        Val val = obj;
         CHECK(val.as<Blob>(heap) == obj);
 
         CHECK(obj.capacity() == len);
@@ -85,7 +85,7 @@ TEST_CASE("Arrays", "[object]") {
         REQUIRE(obj);
         REQUIRE(obj.type() == Type::Array);
         REQUIRE(obj.is<Array>());
-        Val val = obj.asVal(heap);
+        Val val = obj;
         CHECK(val.as<Array>(heap) == obj);
 
         CHECK(obj.capacity() == len);
@@ -93,7 +93,7 @@ TEST_CASE("Arrays", "[object]") {
         CHECK(obj.empty() == (len == 0));
 
         for (int i = 0; i < len; ++i)
-            obj[i] = strs[i].asVal(heap);
+            obj[i] = strs[i];
         for (int i = 0; i < len; ++i)
             CHECK(obj[i].as<String>(heap) == strs[i]);
     }
@@ -125,7 +125,7 @@ TEST_CASE("Dicts", "[object]") {
         REQUIRE(obj);
         REQUIRE(obj.type() == Type::Dict);
         REQUIRE(obj.is<Dict>());
-        Val val = obj.asVal(heap);
+        Val val = obj;
         CHECK(val.as<Dict>(heap) == obj);
 
         CHECK(obj.capacity() == len);
@@ -133,7 +133,7 @@ TEST_CASE("Dicts", "[object]") {
 
         for (int i = 0; i <= len; ++i) {
             INFO("i = " << i);
-            Val key = strs[i].asVal(heap);
+            Val key = strs[i];
             CHECK(obj.count() == i);
             CHECK(obj.full() == (i == len));
             CHECK(!obj.contains(key));
@@ -147,7 +147,7 @@ TEST_CASE("Dicts", "[object]") {
                 CHECK(obj.replace(key, -i));
 
                 for (int j = 0; j < 10; ++j)
-                    CHECK(obj.get(strs[j].asVal(heap)) == ((j <= i) ? Val(-j) : nullval));
+                    CHECK(obj.get(strs[j]) == ((j <= i) ? Val(-j) : nullval));
 
             } else {
                 CHECK(!obj.set(key, i));
@@ -159,7 +159,7 @@ TEST_CASE("Dicts", "[object]") {
         shuffle(strs+0, strs+len);
         for (int i = 0; i < len; ++i) {
             INFO("i = " << i);
-            Val key = strs[i].asVal(heap);
+            Val key = strs[i];
             CHECK(obj.count() == len-i);
             CHECK(obj.full() == (i == 0));
             CHECK(obj.contains(key));
