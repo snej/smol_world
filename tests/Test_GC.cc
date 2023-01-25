@@ -39,9 +39,9 @@ TEST_CASE("GC", "[gc]") {
     CHECK(heap.used() == originalUsed);
 
     Handle<Array> a = Array::create(100, heap);
-    heap.setRoot(*a);
+    heap.setRoot(a);
     for (int i = 0; i < 100; ++i)
-        (*a)[i] = Val(String::create("Hello smol world!", heap), heap);
+        (a)[i] = Val(String::create("Hello smol world!", heap), heap);
     auto laterUsed = heap.used();
     cout << "After allocating: " << laterUsed << endl;
 
@@ -49,7 +49,7 @@ TEST_CASE("GC", "[gc]") {
     cout << "After GC: " << heap.used() << endl;
     CHECK(heap.used() == laterUsed);
 
-    (*a)[10] = nullval;
+    (a)[10] = nullval;
     GarbageCollector::run(heap);
     cout << "After GC: " << heap.used() << endl;
     CHECK(heap.used() < laterUsed);
@@ -57,10 +57,25 @@ TEST_CASE("GC", "[gc]") {
 
 
 TEST_CASE("GC On Demand", "[gc]") {
-    Heap heap(10000);
+    Heap heap(100000);
     UsingHeap u(heap);
     heap.setAllocFailureHandler([](Heap* heap, heapsize sizeNeeded) {
+        cout << "** GC **\n";
         GarbageCollector::run(*heap);
         return heap->available() >= sizeNeeded;
     });
+
+    Handle<Array> a = Array::create(500, heap);
+    for (int i = 0; i < 500; ++i)
+        CHECK(a[i] == nullval);
+    heap.setRoot(a);
+    for (int i = 0; i < 500; ++i) {
+        cout << "Blob #" << i << " -- used " << heap.used() << " free " << heap.available() << endl;
+        auto blob = Blob::create(1000, heap);
+        REQUIRE(blob);
+        (a)[i] = Val(blob, heap);
+        if (i >= 50)
+            a[i-50] = nullptr;
+    }
+    cout << "End -- used " << heap.used() << " free " << heap.available() << endl;
 }

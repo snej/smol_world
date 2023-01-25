@@ -40,6 +40,14 @@ GarbageCollector::GarbageCollector(Heap &fromHeap, Heap &toHeap)
 }
 
 
+// The destructor swaps the two heaps, so _fromHeap is now the live one.
+GarbageCollector::~GarbageCollector() {
+    _fromHeap.reset();
+    _fromHeap.swapMemoryWith(_toHeap);
+}
+
+
+
 void GarbageCollector::scanRoot() {
 #ifndef NDEBUG
     for (auto obj = _fromHeap.firstBlock(); obj; obj = _fromHeap.nextBlock(obj))
@@ -55,8 +63,8 @@ void GarbageCollector::scanRoot() {
 
 Val GarbageCollector::scan(Val val) {
     if (val.isObject()) {
-        Block *obj = val.asBlock(_fromHeap);
-        return Val(scan(obj), _toHeap);
+        Block *block = val.asBlock(_fromHeap);
+        return Val(scan(block), _toHeap);
     } else {
         return val;
     }
@@ -71,12 +79,19 @@ void GarbageCollector::update(Object& obj) {
 }
 
 
+// First moves a live block `src` from fromHeap to toHeap (leaving a forwarding address behind.)
+// Then it scans through its interior Vals (if any):
+// any object pointed to by a Val is moved to toHeap and its pointer Val updated.
+// This scan proceeds through any subsequent Blocks in toHeap that are appended to it by the moves.
+// On completion, the `src` block and any blocks it transitively references are fully moved.
 Block* GarbageCollector::scan(Block *src) {
     Block *toScan = (Block*)_toHeap._cur;
     Block *dst = move(src);
     while (toScan < (Block*)_toHeap._cur) {
         // Scan the contents of `toScan`:
         for (Val &v : toScan->vals()) {
+            // Note: v is in toHeap, but was memcpy'd from fromHeap,
+            // so any address in it is still relative to fromHeap.
             if (Block *b = v.asBlock(_fromHeap))
                 v = Val(move(b), _toHeap);
         }
@@ -88,7 +103,7 @@ Block* GarbageCollector::scan(Block *src) {
 
 
 // Moves a Block from _fromHeap to _toHeap, without altering its contents.
-// - If the Block has already been moved, returns the new location.
+// - If the Block has already been moved, just returns the new location.
 // - Otherwise copies (appends) it to _toHeap, then overwrites it with the forwarding address.
 Block* GarbageCollector::move(Block* src) {
     if (src->isForwarded()) {

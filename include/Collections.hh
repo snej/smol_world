@@ -219,6 +219,8 @@ std::ostream& operator<<(std::ostream&, Array const&);
 
 template <typename FN>
 bool Object::visit(FN fn) const {
+    if (!*this)
+        return false;
     switch (type()) {
         case Type::String: fn(as<String>()); break;
         case Type::Symbol: fn(as<Symbol>()); break;

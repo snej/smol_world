@@ -221,11 +221,11 @@
 				27AA27FE2970BFF300BF17A5 /* Val.cc in Sources */,
 				27AA28012970C04900BF17A5 /* Collections.cc in Sources */,
 				27733D0D297C6E1100EDA2E9 /* SymbolTable.cc in Sources */,
-				27733D02297B38CB00EDA2E9 /* oldmain.cpp in Sources */,
-				2705301E2978B4FB003D4C93 /* Test_Heap.cc in Sources */,
 				2770B1B02980776400E2C126 /* GarbageCollector.cc in Sources */,
-				2770B1B229807E5C00E2C126 /* Test_GC.cc in Sources */,
+				2705301E2978B4FB003D4C93 /* Test_Heap.cc in Sources */,
 				27733D04297B39D300EDA2E9 /* Test_Objects.cc in Sources */,
+				2770B1B229807E5C00E2C126 /* Test_GC.cc in Sources */,
+				27733D02297B38CB00EDA2E9 /* oldmain.cpp in Sources */,
 				270530202978B556003D4C93 /* TestsMain.cc in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -145,6 +145,9 @@ public:
     /// Calls the Visitor callback once for each object, even if it's unreachable garbage.
     void visitAll(Visitor const&);
 
+    void registerExternalRoot(Object*) const;
+    void unregisterExternalRoot(Object*) const;
+
     void registerExternalRoots(Val rootArray[], size_t count);
     void unregisterExternalRoots(Val rootArray[]);
 
@@ -166,16 +169,17 @@ private:
 
     // Allocates space without initializing it. Caller MUST initialize (see Block constructor)
     void* rawAlloc(heapsize size) {
-        do {
-            byte *result = _cur;
-            byte *newCur = result + size;
-            if (newCur <= _end) {
-                _cur = newCur;
-                return result;
-            }
-        } while (_allocFailureHandler && _allocFailureHandler(this, size));
-        return nullptr;
+        byte *result = _cur;
+        byte *newCur = result + size;
+        if (newCur <= _end) {
+            _cur = newCur;
+            return result;
+        } else {
+            return rawAllocFailed(size); // handle heap-full
+        }
     }
+
+    void* rawAllocFailed(heapsize size);
 
     Block* firstBlock();
     Block* nextBlock(Block *obj);
@@ -183,8 +187,7 @@ private:
     Val symbolTableVal() const;
     void setSymbolTableVal(Val);
 
-    void registerExternalRoot(Object*) const;
-    void unregisterExternalRoot(Object*) const;
+    void swapMemoryWith(Heap&);
 
     byte*   _base;
     byte*   _end;

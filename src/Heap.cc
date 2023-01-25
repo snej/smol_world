@@ -49,8 +49,19 @@ Heap& Heap::operator=(Heap&& h) noexcept {
     _allocFailureHandler = h._allocFailureHandler;
     _symbolTable = std::move(h._symbolTable);
     _symbolTable->setHeap(this);    // <- this is the only non-default bit
-//    _externalRoots = std::move(h._externalRoots);
+    _externalRoots = std::move(h._externalRoots);
     return *this;
+}
+
+void Heap::swapMemoryWith(Heap &h) {
+    std::swap(_base, h._base);
+    std::swap(_end, h._end);
+    std::swap(_cur, h._cur);
+    std::swap(_malloced, h._malloced);
+    std::swap(_symbolTable, h._symbolTable);
+    _symbolTable->setHeap(this);
+    h._symbolTable->setHeap(&h);
+    // _allocFailureHandle and _externalRoots are not swapped, they belong to the Heap itself.
 }
 
 
@@ -113,6 +124,37 @@ Val Heap::symbolTableVal() const        {return ((Header*)_base)->symbols;}
 void Heap::setSymbolTableVal(Val v)     {
     ((Header*)_base)->symbols = v;
     _symbolTable->setTable(v);
+}
+
+
+void* Heap::rawAllocFailed(heapsize size) {
+    auto avail = available();
+    if (_allocFailureHandler) {
+        while(true) {
+            std::cerr << "** Heap full: " << size << " bytes requested, only "
+                      << avail << " available -- invoking failure handler **\n";
+            if (!_allocFailureHandler(this, size))
+                break;
+            auto oldAvail = avail;
+            avail = available();
+            if (avail <= oldAvail) {
+                std::cerr << "** Failure handler was unable to increase free space!\n";
+                break;
+            }
+            std::cerr << "** Heap failure handler freed up " << (avail-oldAvail) << " bytes.\n";
+
+            // retry the alloc:
+            byte *result = _cur;
+            byte *newCur = result + size;
+            if (newCur <= _end) {
+                _cur = newCur;
+                return result;
+            }
+        }
+    }
+    std::cerr << "** Heap allocation failed: " << size << " bytes requested, only "
+              << avail << " available **\n";
+    return nullptr;
 }
 
 

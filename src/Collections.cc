@@ -142,7 +142,11 @@ std::ostream& operator<<(std::ostream& out, Dict const& dict) {
 
 
 std::ostream& operator<< (std::ostream& out, Object const& obj) {
-    if (!obj.visit([&](auto t) {out << t;}))
-        out << TypeName(obj.type()) << "[]";
+    if (!obj.visit([&](auto t) {out << t;})) {
+        if (obj)
+            out << TypeName(obj.type()) << "[]";
+        else
+            out << "[NULL Object]";
+    }
     return out;
 }

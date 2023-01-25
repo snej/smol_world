@@ -44,8 +44,7 @@ public:
     void update(Val* val);
     void update(Object& obj);
 
-    // The destructor swaps the two heaps, so _fromHeap is now the live one.
-    ~GarbageCollector()     {_fromHeap.reset(); std::swap(_fromHeap, _toHeap);}
+    ~GarbageCollector();
 
 private:
     void scanRoot();
@@ -57,22 +56,12 @@ private:
 };
 
 
-class HandleBase {
-public:
-    HandleBase(Object o) :_obj(o)   {Heap::current()->registerExternalRoot(&_obj);}
-    ~HandleBase()                   {Heap::current()->unregisterExternalRoot(&_obj);}
-
-    explicit operator bool() const  {return bool(_obj);}
-protected:
-    Object _obj;
-};
-
-
+/// A Handle is an object reference that is known to the Heap; during a garbage collection it
+/// will be updated to point to the new location of the object.
 template <ObjectType OBJ>
-class Handle : public HandleBase {
+class Handle : public OBJ {
 public:
-    Handle(OBJ o)                   :HandleBase(o) { }
-
-    OBJ& operator* ()               {return (OBJ&)_obj;}
-    OBJ* operator-> ()              {return (OBJ*)&_obj;}
+    Handle()                        :OBJ()  {Heap::current()->registerExternalRoot(this);}
+    Handle(OBJ const& o)            :OBJ(o) {Heap::current()->registerExternalRoot(this);}
+    ~Handle()                       {Heap::current()->unregisterExternalRoot(this);}
 };

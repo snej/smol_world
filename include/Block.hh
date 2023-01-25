@@ -58,14 +58,14 @@ public:
         return meta >> TagBits;
     }
 
-    heapsize blockSize() const                  {return sizeof(Block) + dataSize();}
+    heapsize blockSize() const                  {return ((_tags & Large) ? 4 : 2) + dataSize();}
 
     /// Recovers the Block object given the data range it owns.
     static Block* fromData(slice<byte> data) {
         return (data.size()<LargeSize) ? fromSmallData(data.begin()) : fromLargeData(data.begin());
     }
-    static Block* fromSmallData(void* data)     {return (Block*)( (byte*)data - 2);}
-    static Block* fromLargeData(void* data)     {return (Block*)( (byte*)data - 4);}
+    static Block* fromSmallData(void* data)     {assert(data); return (Block*)( (byte*)data - 2);}
+    static Block* fromLargeData(void* data)     {assert(data); return (Block*)( (byte*)data - 4);}
 
     static constexpr bool typeContainsPointers(Type type) {
         return type >= Type::Array && type <= Type::Dict;
