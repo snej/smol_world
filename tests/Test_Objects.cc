@@ -31,8 +31,7 @@ TEST_CASE("Strings", "[object]") {
     for (int len = 0; len <= kString.size(); ++len) {
         INFO("len is " << len);
         string_view str = kString.substr(0, len);
-        auto obj = String::create(str, heap);
-        REQUIRE(obj);
+        unless(obj, String::create(str, heap)) {FAIL("Failed to alloc String");}
         REQUIRE(obj.type() == Type::String);
         REQUIRE(obj.is<String>());
         Val val = obj;
@@ -44,7 +43,20 @@ TEST_CASE("Strings", "[object]") {
         CHECK(obj.empty() == (len == 0));
         CHECK(obj.get() == str);
         CHECK(string(obj.begin(), obj.end()) == str);
+    }
+}
 
+
+TEST_CASE("Maybe", "[object]") {
+    Heap heap(1000);
+    if_let (str2, String::create("maybe?", heap)) {
+        CHECK(str2.get() == "maybe?");
+
+        if_let (arr, str2.maybeAs<Array>()) {
+            FAIL("MAYBE false positive");
+        }
+    } else {
+        FAIL("MAYBE false negative");
     }
 }
 
@@ -56,8 +68,7 @@ TEST_CASE("Blobs", "[object]") {
 
     for (int len = 0; len <= kBlob.size(); ++len) {
         INFO("len is " << len);
-        auto obj = Blob::create(kBlob.data(), len, heap);
-        REQUIRE(obj);
+        unless(obj, Blob::create(kBlob.data(), len, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(obj.type() == Type::Blob);
         REQUIRE(obj.is<Blob>());
         Val val = obj;
@@ -75,14 +86,13 @@ TEST_CASE("Arrays", "[object]") {
     Heap heap(1000);
     UsingHeap u(heap);
 
-    String strs[10];
+    Maybe<String> strs[10];
     for (int i = 0; i < 10; ++i)
         strs[i] = String::create(std::to_string(i), heap);
 
     for (int len = 0; len <= 10; ++len) {
         INFO("len is " << len);
-        auto obj = Array::create(len, heap);
-        REQUIRE(obj);
+        unless(obj, Array::create(len, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(obj.type() == Type::Array);
         REQUIRE(obj.is<Array>());
         Val val = obj;
@@ -113,7 +123,7 @@ TEST_CASE("Dicts", "[object]") {
     UsingHeap u(heap);
     srandomdev();
 
-    String strs[11];
+    Maybe<String> strs[11];
     for (int i = 0; i < 11; ++i)
         strs[i] = String::create(std::to_string(i), heap);
     shuffle(strs+0, strs+11);
@@ -121,8 +131,7 @@ TEST_CASE("Dicts", "[object]") {
     for (int len = 0; len <= 10; ++len) {
         //cerr << "len is " << len << endl;
         INFO("len is " << len);
-        auto obj = Dict::create(len, heap);
-        REQUIRE(obj);
+        unless(obj, Dict::create(len, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(obj.type() == Type::Dict);
         REQUIRE(obj.is<Dict>());
         Val val = obj;
@@ -175,30 +184,32 @@ TEST_CASE("Dicts", "[object]") {
 TEST_CASE("Symbols", "[object]") {
     Heap heap(10000);
     SymbolTable& table = heap.symbolTable();
+    SymbolTable& tableAgain = heap.symbolTable();
+    CHECK(&table == &tableAgain);
     CHECK(table.count() == 0);
 
     CHECK(table.find("foo") == nullptr);
 
-    auto foo = table.create("foo");
-    REQUIRE(foo);
-    CHECK(foo.get() == "foo");
-    CHECK(table.find("foo") == foo);
+    if_let (foo, table.create("foo")) {
+        CHECK(foo.get() == "foo");
+        CHECK(table.find("foo") == foo);
+    } else {
+        FAIL("Couldn't create 'foo'");
+    }
 
-    auto bar = table.create("bar");
-    REQUIRE(bar);
+    unless(bar, table.create("bar")) {FAIL("Failed to create 'bar'");}
     CHECK(bar.get() == "bar");
     CHECK(table.find("bar") == bar);
     CHECK(table.count() == 2);
 
     constexpr size_t NumSymbols = 100;
-    Symbol syms[NumSymbols];
+    Maybe<Symbol> syms[NumSymbols];
     for (size_t i = 0; i < NumSymbols; ++i) {
         string name = "Symbol #" + std::to_string(i * i);
         cerr << "Creating #" << i << ": " << name << endl;
         CHECK(table.find(name) == nullptr);
-        auto sym = table.create(name);
+        unless(sym, table.create(name)) {FAIL("Failed to alloc sym");}
         syms[i] = sym;
-        REQUIRE(sym);
         CHECK(sym.get() == name);
         CHECK(table.find(name) == sym);
         CHECK(table.count() == 3 + i);
@@ -219,8 +230,8 @@ TEST_CASE("Symbols", "[object]") {
     // Open a heap from the current heap and check it has everything:
     Heap heap2 = Heap::existing((void*)heap.base(), heap.used(), heap.capacity());
     SymbolTable& table2 = heap2.symbolTable();
-    auto bar2 = table2.find("bar");
-    CHECK(bar2);
+    CHECK(table2.count() == 2 + NumSymbols);
+    unless(bar2, table2.find("bar"))  {FAIL("Failed to find 'bar'");}
     CHECK(bar2.get() == "bar");
     i = 0;
     table2.visit([&](Symbol sym, uint32_t) {

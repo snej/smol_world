@@ -73,7 +73,7 @@ Val GarbageCollector::scan(Val val) {
 
 void GarbageCollector::update(Value& obj) {
     if (obj.isObject())
-        obj.relocate(scan(obj.block()));
+        obj.relocate(scan(obj.block()), _toHeap);
 }
 
 

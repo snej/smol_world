@@ -8,21 +8,23 @@
 #include "Collections.hh"
 #include <functional>
 #include <iosfwd>
+#include <memory>
 
 
 class SymbolTable {
 public:
-    explicit SymbolTable(Heap *heap, Val table)
+    static std::unique_ptr<SymbolTable> create(IN_MUT_HEAP);
+
+    SymbolTable(Heap *heap, Array array)
     :_heap(heap)
-    ,_table(nullptr)
-    {
-        setTable(table);
-    }
+    ,_table(array)
+    ,_count(_table.count())
+    { }
 
     uint32_t count() const                              {return _count;}
     
-    Symbol find(std::string_view s) const;
-    Symbol create(std::string_view s);
+    Maybe<Symbol> find(std::string_view s) const;
+    Maybe<Symbol> create(std::string_view s);
 
     using Visitor = std::function<bool(Symbol, uint32_t hash)>;
     bool visit(Visitor visitor) const;
@@ -45,17 +47,17 @@ private:
         explicit HashTable(Array array);
         uint32_t size() const  {return sizeMask + 1;}
         explicit operator bool() const  {return begin != nullptr;}
-        std::pair<HashEntry*,Symbol> search(Heap*, string_view str, int32_t hashCode) const;
+        uint32_t count() const;
+        std::pair<HashEntry*,Maybe<Symbol>> search(Heap*, string_view str, int32_t hashCode) const;
         void dump(std::ostream&, Heap const*) const;
     };
 
     void setHeap(Heap* h)                               {_heap = h;}
     void setTable(Val newTable);
-    void setTable(Array table);
     bool grow();
 
-    HashTable   _table;
     Heap*       _heap = nullptr;
+    HashTable   _table;
     uint32_t    _count = 0;
 };
 

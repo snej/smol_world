@@ -10,16 +10,18 @@
 #include "Val.hh"
 
 
+template <class T> class Maybe;
+
+
 /// Value is like Val, but with a full pointer to the object (if it's an object.)
 /// Used in memory, never stored in the heap.
 class Value {
 public:
     constexpr Value()                                   :_val(nullval) { }
-    Value(nullptr_t)                                    :Value() { }
+    constexpr Value(nullptr_t)                          :Value() { }
+    constexpr Value(int i)                              :_val(i) { }
 
     //    constexpr explicit Value(bool b)                      :_val(b ? TrueVal : FalseVal) { }
-
-    constexpr Value(int i)                              :_val(i) { }
 
     Value(Val val, IN_HEAP)
     :_val(val) {
@@ -52,11 +54,12 @@ public:
     bool isObject() const                           {return _ptr != nullptr;}
     Object const& asObject() const                  {assert(isObject()); return *(Object*)this;}
 
-    template <ValueClass T> bool is() const     {return type() == T::InstanceType;}
-    template <ValueClass T> T as() const        {return (type() == T::InstanceType) ? *(T*)this : T();}
+    template <ValueClass T> bool is() const         {return type() == T::InstanceType;}
+    template <ValueClass T> T as() const            {assert(type() == T::InstanceType); return *(T*)this;}
+    template <ValueClass T> Maybe<T> maybeAs() const {return Maybe<T>(*this);}
 
     /// Calls `fn`, which must be a generic lambda taking an `auto` parameter,
-    /// with this object cast to its runtime type.
+    /// with this value cast to its runtime type.
     template <typename FN> bool visit(FN fn) const;
 
     friend bool operator==(Value const& a, Value const& b)  {return a._val == b._val && a._ptr == b._ptr;}
@@ -69,27 +72,60 @@ protected:
 private:
     friend class GarbageCollector;
 
-    void relocate(Block* newBlock)              {assert(_ptr); _ptr = newBlock->dataPtr();}
+    void relocate(Block* newBlock, IN_HEAP) {
+        assert(_ptr);
+        _ptr = newBlock->dataPtr();
+        _val = Val(newBlock, heap);
+    }
 
-    Val      _val;
-    uint32_t _size = 0;
-    void*    _ptr = nullptr;
+    Val      _val;              // The equivalent Val
+    uint32_t _size = 0;         // Data size
+    void*    _ptr = nullptr;    // Data address
 };
 
-static_assert(sizeof(Value) == 16);
+
+
+/// A `std::optional`-like type for Value classes.
+template <class T>
+class Maybe {
+public:
+    Maybe() = default;
+    Maybe(nullptr_t)                    :Maybe() { }
+    explicit Maybe(Value const& val)    {if (val.type() == T::InstanceType) _val = val;}
+    Maybe(T const& obj) :_val(obj)      { }
+
+    explicit operator bool() const      {return !_val.isNull();}
+    operator Value() const              {return _val;}
+    operator Val() const                {return _val;}
+
+    T& value()                          {return *getp();}
+    T const& value() const              {return const_cast<Maybe*>(this)->get();}
+
+    // do not call this directly! It's only for use by MAYBE()
+    friend T _unsafeval_(Maybe<T> const& m)     {return reinterpret_cast<T const&>(m._val);}
+
+private:
+    T* getp()                           {assert(_val); return reinterpret_cast<T*>(&_val);}
+
+    Value _val;
+};
+
+
+#define if_let(VAR, EXPR)  if (auto VAR = _unsafeval_(EXPR); !VAR.isNull())
+#define unless(VAR, EXPR)  auto VAR = _unsafeval_(EXPR); if (VAR.isNull())
+
 
 
 /// A reference to a heap object -- any type except Int and Null.
 class Object : public Value {
 public:
-    Object() = default;
-    Object(nullptr_t)                               { }
-
     Object(Block const* block, IN_HEAP)             :Value(block, heap) {assert(isObject());}
     Object(Val val, IN_HEAP)                        :Value(val, heap) {assert(isObject());}
 
     Block* block() const                            {return Value::block();}
     slice<byte> rawBytes() const                    {return Value::rawBytes();}
+
+    explicit operator bool() const = delete;
 
 protected:
     template <typename T> slice<T> dataAs() const   {return slice_cast<T>(rawBytes());}
@@ -106,13 +142,8 @@ public:
     static constexpr Type InstanceType = TYPE;
 
 protected:
-    TypedObject()  :Object() { }
     TypedObject(Block const* block, IN_HEAP)          :Object(block, heap) { }
     TypedObject(Val val, IN_HEAP)            :Object(val, heap) {assert(type() == TYPE);}
-
-    /// Allocates a new Block with sufficient capacity and constructs a ref on its data.
-    TypedObject(size_t capacity, Type type, IN_MUT_HEAP)
-    :Object(Block::alloc(capacity, type, heap), heap) { }
 };
 
 

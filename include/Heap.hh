@@ -5,11 +5,11 @@
 //
 
 #pragma once
+#include "function_ref.hh"
 #include <cassert>
 #include <compare>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <utility>
@@ -133,16 +133,18 @@ public:
     /// allocated memory.
     bool validPos(heappos pos) const;
 
-    SymbolTable const& symbolTable() const {return *_symbolTable;}
-    SymbolTable& symbolTable()             {return *_symbolTable;}
+    SymbolTable const& symbolTable() const {return const_cast<Heap*>(this)->symbolTable();}
+    SymbolTable& symbolTable();
 
-    using Visitor = std::function<bool(const Block&)>;
+    using BlockVisitor = function_ref<bool(const Block&)>;
+    using ObjectVisitor = function_ref<bool(const Object&)>;
 
-    /// Calls the Visitor callback once for each live (reachable) object.
-    void visit(Visitor const&);
+    /// Calls the Visitor callback once for each live (reachable) block.
+    void visitBlocks(BlockVisitor);
+    void visit(ObjectVisitor) ;
 
     /// Calls the Visitor callback once for each object, even if it's unreachable garbage.
-    void visitAll(Visitor const&);
+    void visitAll(BlockVisitor const&);
 
     void registerExternalRoot(Value*) const;
     void unregisterExternalRoot(Value*) const;
@@ -235,6 +237,7 @@ public:
     HeapRef(Heap *h)    :ConstHeapRef(h) { }
     HeapRef(Heap &h)    :ConstHeapRef(h) { }
 
+    operator Heap* () const     {return (Heap*)_heap;}
     Heap* operator* () const    {return (Heap*)_heap;}
     Heap* operator->() const    {return (Heap*)_heap;}
 };

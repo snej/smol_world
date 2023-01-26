@@ -48,7 +48,7 @@ Heap& Heap::operator=(Heap&& h) noexcept {
     h._malloced = false;
     _allocFailureHandler = h._allocFailureHandler;
     _symbolTable = std::move(h._symbolTable);
-    _symbolTable->setHeap(this);    // <- this is the only non-default bit
+    if (_symbolTable) _symbolTable->setHeap(this);    // <- this is the only non-default bit
     _externalRoots = std::move(h._externalRoots);
     return *this;
 }
@@ -59,8 +59,8 @@ void Heap::swapMemoryWith(Heap &h) {
     std::swap(_cur, h._cur);
     std::swap(_malloced, h._malloced);
     std::swap(_symbolTable, h._symbolTable);
-    _symbolTable->setHeap(this);
-    h._symbolTable->setHeap(&h);
+    if (_symbolTable) _symbolTable->setHeap(this);
+    if (h._symbolTable) h._symbolTable->setHeap(&h);
     // _allocFailureHandle and _externalRoots are not swapped, they belong to the Heap itself.
 }
 
@@ -80,10 +80,7 @@ void Heap::reset() {
     _cur = _base;
     auto header = (Header*)rawAlloc(sizeof(Header));
     *header = {kMagic, nullval, nullval};
-    if (_symbolTable)
-        _symbolTable->setTable(nullval);
-    else
-        _symbolTable = std::make_unique<SymbolTable>(this, nullval);
+    _symbolTable.reset();
 }
 
 
@@ -102,7 +99,6 @@ Heap Heap::existing(void *base, size_t used, size_t capacity) {
             return Heap();
         }
     }
-    heap._symbolTable = std::make_unique<SymbolTable>(&heap, header->symbols);
     return heap;
 }
 
@@ -118,11 +114,24 @@ Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; retu
 void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
 Heap* Heap::current()               {return (Heap*)sCurHeap;}
 
-Val Heap::symbolTableVal() const        {return ((Header*)_base)->symbols;}
+Val Heap::symbolTableVal() const    {return ((Header*)_base)->symbols;}
 
-void Heap::setSymbolTableVal(Val v)     {
+void Heap::setSymbolTableVal(Val v) {
     ((Header*)_base)->symbols = v;
-    _symbolTable->setTable(v);
+    if (_symbolTable)
+        _symbolTable->setTable(v);
+}
+
+SymbolTable& Heap::symbolTable() {
+    if (!_symbolTable) {
+        if_let(symbols, symbolTableVal().maybeAs<Array>(this)) {
+            _symbolTable = std::make_unique<SymbolTable>(this, symbols);
+        } else {
+            _symbolTable = SymbolTable::create(this);
+        }
+        //FIXME: What if this fails?
+    }
+    return *_symbolTable;
 }
 
 
@@ -174,13 +183,13 @@ Block* Heap::nextBlock(Block *b) {
 }
 
 
-void Heap::visitAll(Visitor const& visitor) {
+void Heap::visitAll(BlockVisitor const& visitor) {
     for (auto b = firstBlock(); b; b = nextBlock(b))
         if (!visitor(*b))
             break;
 }
 
-void Heap::visit(Visitor const& visitor) {
+void Heap::visitBlocks(BlockVisitor visitor) {
     for (auto obj = firstBlock(); obj; obj = nextBlock(obj))
         obj->clearVisited();
 
@@ -209,6 +218,11 @@ void Heap::visit(Visitor const& visitor) {
             if (!process(v))
                 return;
     }
+}
+
+
+void Heap::visit(ObjectVisitor visitor) {
+    visitBlocks([&](Block const& block) { return visitor(Object(&block,this)); });
 }
 
 

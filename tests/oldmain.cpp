@@ -11,7 +11,6 @@
 
 using namespace std;
 
-#if 0
 
 int xmain(int argc, const char * argv[]) {
     string persisted;
@@ -19,22 +18,22 @@ int xmain(int argc, const char * argv[]) {
         Heap heap(100000);
         UsingHeap u(heap);
         
-        Array arr = Array::create(4, &heap);
+        Array arr = Array::create(4, &heap).value();
         assert(arr.count() == 4);
         cout << arr << endl;
         heap.setRoot(arr);
-        assert(heap.rootObject().is<Array>());
-        assert(heap.rootObject().as<Array>() == arr);
+        assert(heap.rootValue().is<Array>());
+        assert(heap.rootValue().as<Array>() == arr);
 
         arr[0] = 1234;
         arr[1] = -4567;
 
-        auto str = String::create("Cowabunga!", heap);
+        auto str = String::create("Cowabunga!", heap).value();
         cout << str << endl;
         assert(str.count() == 10);
         assert(str.get() == "Cowabunga!");
-        arr[2] = str.asVal(heap);
-        arr[3] = str.asVal(heap);
+        arr[2] = str;
+        arr[3] = str;
 
         String::create("Garbage!", heap);
 
@@ -42,22 +41,26 @@ int xmain(int argc, const char * argv[]) {
 
         cout << arr << endl;
 
+        auto objectPos = [&](Object const& obj) {
+            return uintpos(heap.pos(obj.rawBytes().begin()));
+        };
+
         int n = 0;
         cout << "Contents:\n";
         heap.visit([&](Object obj) {
             n++;
-            if (n == 1) assert(obj == &arr);
+            if (n == 1) assert(obj == arr);
             if (n == 2) assert(obj == str);
-            cout << "\t" << uintpos(heap.pos(obj)) << ": " << obj << std::endl;
+            cout << "\t" << objectPos(obj) << ": " << obj << std::endl;
             return true;
         });
         assert(n == 2);
 
         n = 0;
         cout << "Contents again:\n";
-        heap.visit([&](Object const* obj) {
+        heap.visit([&](Object obj) {
             n++;
-            cout << "\t" << uintpos(heap.pos(obj)) << ": " << obj << std::endl;
+            cout << "\t" << objectPos(obj) << ": " << obj << std::endl;
             return true;
         });
         assert(n == 2);
@@ -67,19 +70,20 @@ int xmain(int argc, const char * argv[]) {
 
     cout << "Saved as " << persisted.size() << " bytes.\n";
 
+#if 0
     {
         cout << "\nReloading...\n";
         Heap heap = Heap::existing(persisted.data(), persisted.size(), 100000);
         assert(heap.valid());
         UsingHeap u(heap);
         cout << "Root is " << heap.rootVal() << endl;
-        assert(heap.rootObject().is<Array>());
+        assert(heap.rootValue().is<Array>());
         Array *arr = heap.root<Array>();
         assert(arr);
         assert(heap.root<Dict>() == nullptr);
         cout << arr << "... at " << (void*)arr << endl;
 
-        String *str = (*arr)[2].as<String>(heap);
+        String str = (*arr)[2].as<String>(heap);
         cout << "String: " << str << "... at " << (void*)str << endl;
 
         cout << "before GC: " << heap.used() << " bytes\n";
@@ -97,8 +101,7 @@ int xmain(int argc, const char * argv[]) {
         assert(str.count() == 10);
         assert(str.get() == "Cowabunga!");
     }
-
+#endif
     return 0;
 }
 
-#endif

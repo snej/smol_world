@@ -48,6 +48,7 @@ const char* TypeName(Type t);
 
 template <typename T>
     concept ValueClass = std::is_base_of<Value, T>::value;
+template <class T> class Maybe;
 
 
 
@@ -96,6 +97,7 @@ public:
     template <ValueClass T> bool is(IN_HEAP) const      {return type(heap) == T::InstanceType;}
 
     template <ValueClass T> T as(IN_HEAP) const;
+    template <ValueClass T> Maybe<T> maybeAs(IN_HEAP) const;
 
     heappos asPos() const {
         assert(isObject());
