@@ -87,7 +87,7 @@ SymbolTable::HashTable::search(Heap *heap, string_view str, int32_t hashCode) co
     while (true) {
         if (entry->hash == hashVal) {
             Symbol sym = entry->symbol.as<Symbol>(heap);
-            if (sym.get() == str)
+            if (sym.str() == str)
                 return {entry, sym};
         } else if (entry->hash == nullval) {
             return {entry, {}};
@@ -179,7 +179,7 @@ bool SymbolTable::grow() {
     // Scan the old table, inserting each Symbol into the new table:
     for (auto e = _table.begin; e != _table.end; ++e) {
         if_let (symbol, e->symbol.maybeAs<Symbol>(_heap)) {
-            auto [newEntry, foundSym] = newTable.search(_heap, symbol.get(), e->hash.asInt());
+            auto [newEntry, foundSym] = newTable.search(_heap, symbol.str(), e->hash.asInt());
             assert(!foundSym);
             *newEntry = *e;
         }

@@ -19,9 +19,53 @@
 #include "smol_world.hh"
 #include "catch.hpp"
 #include <iostream>
+#include <sstream>
 
 using namespace std;
 
+
+static void checkTypes(Value v, Type t, string_view asString) {
+    INFO("checking type " << t << " (0x" << hex << Val(v).rawBits() << dec << ")");
+    CHECK(v.type() == t);
+    CHECK(bool(v) == (t != Type::Null));
+    CHECK(v.isNull() == (t == Type::Null));
+    CHECK(v.isBool() == (t == Type::Bool));
+    CHECK(v.isInt() == (t == Type::Int));
+    CHECK(v.isObject() == (t < Type::Null));
+
+    stringstream s;
+    s << v;
+    CHECK(s.str() == asString);
+}
+
+static void checkInt(int n) {
+    auto i = Int(n);
+    checkTypes(i, Type::Int, std::to_string(n));
+    CHECK(i.asInt() == n);
+    CHECK(i == n);
+}
+
+
+TEST_CASE("Primitive Values", "[object]") {
+    Heap heap(1000);
+    UsingHeap u(heap);
+
+    checkTypes(Null(), Type::Null, "null");
+    CHECK(Null() == nullval);
+
+    checkTypes(Bool(false), Type::Bool, "false");
+    checkTypes(Bool(true), Type::Bool, "true");
+    CHECK(Bool(false) != Null());
+    CHECK(Bool(false) != Int(0));
+    CHECK(Bool(true) != Int(1));
+
+    for (int n = -10000; n <= 10000; ++n)
+        checkInt(n);
+    for (int n = 0; n < 100; ++n) {
+        checkInt(Val::MaxInt - n);
+        checkInt(Val::MinInt + n);
+    }
+}
 
 TEST_CASE("Strings", "[object]") {
     constexpr string_view kString = "Hello, smol world!";
@@ -41,7 +85,7 @@ TEST_CASE("Strings", "[object]") {
         CHECK(obj.capacity() == len);
         CHECK(obj.count() == len);
         CHECK(obj.empty() == (len == 0));
-        CHECK(obj.get() == str);
+        CHECK(obj.str() == str);
         CHECK(string(obj.begin(), obj.end()) == str);
     }
 }
@@ -50,7 +94,7 @@ TEST_CASE("Strings", "[object]") {
 TEST_CASE("Maybe", "[object]") {
     Heap heap(1000);
     if_let (str2, String::create("maybe?", heap)) {
-        CHECK(str2.get() == "maybe?");
+        CHECK(str2.str() == "maybe?");
 
         if_let (arr, str2.maybeAs<Array>()) {
             FAIL("MAYBE false positive");
@@ -191,14 +235,14 @@ TEST_CASE("Symbols", "[object]") {
     CHECK(table.find("foo") == nullptr);
 
     if_let (foo, table.create("foo")) {
-        CHECK(foo.get() == "foo");
+        CHECK(foo.str() == "foo");
         CHECK(table.find("foo") == foo);
     } else {
         FAIL("Couldn't create 'foo'");
     }
 
     unless(bar, table.create("bar")) {FAIL("Failed to create 'bar'");}
-    CHECK(bar.get() == "bar");
+    CHECK(bar.str() == "bar");
     CHECK(table.find("bar") == bar);
     CHECK(table.count() == 2);
 
@@ -210,7 +254,7 @@ TEST_CASE("Symbols", "[object]") {
         CHECK(table.find(name) == nullptr);
         unless(sym, table.create(name)) {FAIL("Failed to alloc sym");}
         syms[i] = sym;
-        CHECK(sym.get() == name);
+        CHECK(sym.str() == name);
         CHECK(table.find(name) == sym);
         CHECK(table.count() == 3 + i);
     }
@@ -228,11 +272,11 @@ TEST_CASE("Symbols", "[object]") {
     CHECK(i == 2 + NumSymbols);
 
     // Open a heap from the current heap and check it has everything:
-    Heap heap2 = Heap::existing((void*)heap.base(), heap.used(), heap.capacity());
+    Heap heap2 = Heap::existing(heap.contents(), heap.capacity());
     SymbolTable& table2 = heap2.symbolTable();
     CHECK(table2.count() == 2 + NumSymbols);
     unless(bar2, table2.find("bar"))  {FAIL("Failed to find 'bar'");}
-    CHECK(bar2.get() == "bar");
+    CHECK(bar2.str() == "bar");
     i = 0;
     table2.visit([&](Symbol sym, uint32_t) {
         ++i;

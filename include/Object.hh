@@ -17,8 +17,9 @@ template <class T> class Maybe;
 /// Used in memory, never stored in the heap.
 class Value {
 public:
-    constexpr Value()                                   :_val(nullval) { }
+    constexpr Value()                                   :_val() { }
     constexpr Value(nullptr_t)                          :Value() { }
+    explicit constexpr Value(bool b)                    :_val(b) { }
     constexpr Value(int i)                              :_val(i) { }
 
     //    constexpr explicit Value(bool b)                      :_val(b ? TrueVal : FalseVal) { }
@@ -48,14 +49,17 @@ public:
     explicit operator bool() const                  {return !isNull();}
     constexpr bool isNull() const                   {return _val == nullval;}
 
+    constexpr bool isBool() const                   {return _val.isBool();}
+    constexpr bool asBool() const                   {return _val.asBool();}
+
     constexpr bool isInt() const                    {return _val.isInt();}
     constexpr int asInt() const                     {return _val.asInt();}
 
     bool isObject() const                           {return _ptr != nullptr;}
     Object const& asObject() const                  {assert(isObject()); return *(Object*)this;}
 
-    template <ValueClass T> bool is() const         {return type() == T::InstanceType;}
-    template <ValueClass T> T as() const            {assert(type() == T::InstanceType); return *(T*)this;}
+    template <ValueClass T> bool is() const         {return type() == T::Type;}
+    template <ValueClass T> T as() const            {assert(type() == T::Type); return *(T*)this;}
     template <ValueClass T> Maybe<T> maybeAs() const {return Maybe<T>(*this);}
 
     /// Calls `fn`, which must be a generic lambda taking an `auto` parameter,
@@ -91,7 +95,7 @@ class Maybe {
 public:
     Maybe() = default;
     Maybe(nullptr_t)                    :Maybe() { }
-    explicit Maybe(Value const& val)    {if (val.type() == T::InstanceType) _val = val;}
+    explicit Maybe(Value const& val)    {if (val.type() == T::Type) _val = val;}
     Maybe(T const& obj) :_val(obj)      { }
 
     explicit operator bool() const      {return !_val.isNull();}
@@ -103,6 +107,8 @@ public:
 
     // do not call this directly! It's only for use by MAYBE()
     friend T _unsafeval_(Maybe<T> const& m)     {return reinterpret_cast<T const&>(m._val);}
+
+    friend std::ostream& operator<< (std::ostream& o, Maybe const& m) {return o << m._val;}
 
 private:
     T* getp()                           {assert(_val); return reinterpret_cast<T*>(&_val);}
@@ -132,34 +138,48 @@ protected:
 };
 
 
-std::ostream& operator<< (std::ostream&, Object const&);
+std::ostream& operator<< (std::ostream&, Value const&);
 
 
 /// An Object subclass that implements a particular Type code.
 template <Type TYPE>
 class TypedObject : public Object {
 public:
-    static constexpr Type InstanceType = TYPE;
-
+    static constexpr Type Type = TYPE;
 protected:
-    TypedObject(Block const* block, IN_HEAP)          :Object(block, heap) { }
-    TypedObject(Val val, IN_HEAP)            :Object(val, heap) {assert(type() == TYPE);}
+    TypedObject(Block const* block, IN_HEAP)        :Object(block, heap) { }
+    TypedObject(Val val, IN_HEAP)                   :Object(val, heap) {assert(type() == TYPE);}
 };
 
 
-class NullValue : public Value {
+/// The Value subclass representing the Null type.
+class Null : public Value {
 public:
-    static constexpr Type InstanceType = Type::Null;
+    static constexpr Type Type = Type::Null;
 
-    NullValue() = default;
-    NullValue(nullptr_t)    :Value() { }
+    Null() = default;
+    Null(nullptr_t)    :Value() { }
 };
 
 
-class IntValue : public Value {
+/// The Value subclass representing the Bool type.
+class Bool : public Value {
 public:
-    static constexpr Type InstanceType = Type::Int;
+    static constexpr Type Type = Type::Bool;
 
-    IntValue(int i = 0)     :Value(i) { }
+    explicit Bool(bool b = false)  :Value(b) { }
+    explicit operator bool() const      {return asBool();}
+};
+
+
+/// The Value subclass representing the Int type.
+class Int : public Value {
+public:
+    static constexpr Type Type = Type::Int;
+
+    Int(int i = 0)     :Value(i) { }
     operator int() const    {return asInt();}
+
+    friend bool operator==(Int const& a, int b)  {return a.asInt() == b;}
+    friend bool operator==(int a, Int const& b)  {return a == b.asInt();}
 };

@@ -31,13 +31,13 @@ int xmain(int argc, const char * argv[]) {
         auto str = String::create("Cowabunga!", heap).value();
         cout << str << endl;
         assert(str.count() == 10);
-        assert(str.get() == "Cowabunga!");
+        assert(str.str() == "Cowabunga!");
         arr[2] = str;
         arr[3] = str;
 
         String::create("Garbage!", heap);
 
-        assert(str.get() == "Cowabunga!");
+        assert(str.str() == "Cowabunga!");
 
         cout << arr << endl;
 

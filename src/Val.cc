@@ -31,6 +31,8 @@ Type Val::_type() const {
         return Type::Int;
     else if (isNull())
         return Type::Null;
+    else if (isBool())
+        return Type::Bool;
     else {
         assert(!isObject());    // will fail
         return Type::String;
@@ -41,27 +43,33 @@ Type Val::_type() const {
 Type Val::type(IN_HEAP) const {
     if (isInt())
         return Type::Int;
+    else if (_val > FalseVal)
+        return asBlock(heap)->type();
     else if (isNull())
         return Type::Null;
     else
-        return asBlock(heap)->type();
+        return Type::Bool;
 }
 
 
 const char* TypeName(Type t) {
-    static constexpr const char* kTypeNames[10] = {
+    static constexpr const char* kTypeNames[11] = {
         "bignum", "string", "symbol", "blob",
         "array", "dict", "?spare1?", "?spare2?",
-        "null", "int"
+        "null", "bool", "int"
     };
-    if (uint8_t(t) >= 10) return "!BAD_TYPE!";
+    if (uint8_t(t) >= 11) return "!BAD_TYPE!";
     return kTypeNames[uint8_t(t)];
 }
+
+std::ostream& operator<<(std::ostream& out, Type t) {return out << TypeName(t);}
 
 
 std::ostream& operator<<(std::ostream& out, Val val) {
     if (val.isNull()) {
         out << "null";
+    } else if (val.isBool()) {
+        out << (val.asBool() ? "true" : "false");
     } else if (val.isInt()) {
         out << val.asInt();
     } else if (auto heap = Heap::current()) {

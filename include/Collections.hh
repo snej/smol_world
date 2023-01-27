@@ -75,7 +75,7 @@ public:
     }
 
     const char* data() const        {return begin();}
-    string_view get() const         {return {begin(), size()};}
+    string_view str() const         {return {begin(), size()};}
 };
 
 
@@ -86,7 +86,7 @@ public:
 class Symbol : public Collection<char, Type::Symbol> {
 public:
     const char* data() const        {return begin();}
-    string_view get() const         {auto i = items(); return {i.begin(), i.size()};}
+    string_view str() const         {auto i = items(); return {i.begin(), i.size()};}
 
 private:
     friend class SymbolTable;
@@ -128,8 +128,8 @@ public:
         return Maybe<Array>(_create(capacity, vals.begin(), vals.size(), heap));
     }
 
-    Val& operator[] (heapsize i)        {return items()[i];}
-    Val  operator[] (heapsize i) const  {return items()[i];}
+    Val& operator[] (heapsize i)                {return items()[i];}
+    Val const&  operator[] (heapsize i) const   {return items()[i];}
 };
 
 
@@ -206,17 +206,16 @@ std::ostream& operator<<(std::ostream&, Array const&);
 
 template <typename FN>
 bool Value::visit(FN fn) const {
-    if (!*this)
-        return false;
     switch (type()) {
-        case Type::Null:    fn(as<NullValue>()); break;
-        case Type::Int:     fn(as<IntValue>()); break;
+        case Type::Null:    fn(as<Null>()); break;
+        case Type::Bool:    fn(as<Bool>()); break;
+        case Type::Int:     fn(as<Int>()); break;
         case Type::String:  fn(as<String>()); break;
         case Type::Symbol:  fn(as<Symbol>()); break;
         case Type::Blob:    fn(as<Blob>()); break;
         case Type::Array:   fn(as<Array>()); break;
         case Type::Dict:    fn(as<Dict>()); break;
-        default:            return false;
+        default:            assert(false); return false;
     }
     return true;
 }

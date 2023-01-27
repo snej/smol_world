@@ -24,6 +24,7 @@ const size_t Heap::Overhead = sizeof(Header);
 
 static thread_local Heap const* sCurHeap;
 
+static std::vector<Heap*> sKnownHeaps;
 
 Heap::Heap(void *base, size_t capacity, bool malloced)
 :_base((byte*)base)
@@ -32,20 +33,33 @@ Heap::Heap(void *base, size_t capacity, bool malloced)
 ,_malloced(malloced)
 {
     assert(capacity >= sizeof(Header));
+    registr();
 }
+
+Heap::~Heap() {
+    assert(this != current());
+    if (_malloced) free(_base);
+    unregistr();
+}
+
 
 Heap::Heap()                                    :_base(nullptr), _end(nullptr), _cur(nullptr) { }
 Heap::Heap(void *base, size_t cap) noexcept     :Heap(base, cap, false) {reset();}
 Heap::Heap(size_t cap)                          :Heap(::malloc(cap), cap, true) {reset();}
-Heap::Heap(Heap&& h) noexcept                   {*this = std::move(h);}
-Heap::~Heap()                               {assert(this != current()); if (_malloced) free(_base);}
+
+Heap::Heap(Heap&& h) noexcept {
+    *this = std::move(h);
+}
 
 Heap& Heap::operator=(Heap&& h) noexcept {
+    unregistr();
     _base = h._base;
     _end = h._end;
     _cur = h._cur;
     _malloced = h._malloced;
     h._malloced = false;
+    registr();
+    h.unregistr();
     _allocFailureHandler = h._allocFailureHandler;
     _symbolTable = std::move(h._symbolTable);
     if (_symbolTable) _symbolTable->setHeap(this);    // <- this is the only non-default bit
@@ -64,6 +78,24 @@ void Heap::swapMemoryWith(Heap &h) {
     // _allocFailureHandle and _externalRoots are not swapped, they belong to the Heap itself.
 }
 
+void Heap::registr() {
+    if (_base)
+        sKnownHeaps.push_back(this);
+}
+
+void Heap::unregistr() {
+    if (_base) {
+        sKnownHeaps.erase(std::find(sKnownHeaps.begin(), sKnownHeaps.end(), this));
+        _base = nullptr;
+    }
+}
+
+Heap* Heap::heapContaining(const void *ptr) {
+    for (Heap* h : sKnownHeaps)
+        if (h->contains(ptr))
+            return h;
+    return nullptr;
+}
 
 
 bool Heap::resize(size_t newSize) {
@@ -84,9 +116,12 @@ void Heap::reset() {
 }
 
 
-Heap Heap::existing(void *base, size_t used, size_t capacity) {
-    Heap heap(base, capacity, false);
-    heap._cur += used;
+Heap Heap::existing(slice<byte> contents, size_t capacity) {
+    assert(contents.size() > sizeof(Header));
+    assert(capacity >= contents.size());
+    Heap heap(contents.begin(), capacity, false);
+    heap._cur = contents.end();
+
     auto header = (Header*)heap._base;
     if (header->magic != kMagic) {
         std::cout << "Invalid Heap: wrong magic number\n";
@@ -94,7 +129,7 @@ Heap Heap::existing(void *base, size_t used, size_t capacity) {
     }
     if (header->root.isObject()) {
         heappos rootPos = header->root.asPos();
-        if (rootPos < sizeof(Header) || rootPos >= used) {
+        if (rootPos < sizeof(Header) || rootPos >= heap.used()) {
             std::cout << "Invalid Heap: bad root offset\n";
             return Heap();
         }

@@ -6,6 +6,7 @@
 
 #pragma once
 #include "function_ref.hh"
+#include "slice.hh"
 #include <cassert>
 #include <compare>
 #include <cstddef>
@@ -47,18 +48,18 @@ public:
     static constexpr size_t  MaxSize = 1 << 31;
     static const size_t Overhead;
 
-    // Constructs a new empty Heap starting at address `base` and capacity `size`.
+    /// Constructs a new empty Heap starting at address `base` and capacity `size`.
     Heap(void *base, size_t capacity) noexcept;
 
-    // Constructs a new empty Heap with space allocated by malloc.
+    /// Constructs a new empty Heap with space allocated by malloc.
     explicit Heap(size_t capacity);
 
     Heap(Heap&&) noexcept;
     Heap& operator=(Heap&&) noexcept;
     ~Heap();
 
-    // Constructs a Heap from already-existing heap data. Throws if the data is not valid.
-    static Heap existing(void *base, size_t used, size_t capacity);
+    /// Constructs a Heap from already-existing heap data. Throws if the data is not valid.
+    static Heap existing(slice<byte> contents, size_t capacity);
 
     bool valid() const                  {return _base != nullptr;}
 
@@ -67,6 +68,9 @@ public:
     const size_t used() const           {return _cur - _base;}  ///< Maximum byte-offset used
     const size_t remaining() const      {return _end - _cur;}   ///< Bytes of capacity left
     const size_t available() const      {return remaining();}
+
+    /// The contents of the heap. You can persist the heap by writing this to a file or socket.
+    slice<byte> contents() const        {return {_base, _cur};}
 
     /// The heap's root value. Starts as Null, but usually an Array or Dict.
     Val rootVal() const;
@@ -84,6 +88,9 @@ public:
 
     /// The current heap of the current thread, or nullptr if none.
     static Heap* current();
+
+    /// Returns the Heap that owns this address, or nullptr if none.
+    static Heap* heapContaining(const void *);
 
     //---- Allocation:
 
@@ -141,7 +148,7 @@ public:
 
     /// Calls the Visitor callback once for each live (reachable) block.
     void visitBlocks(BlockVisitor);
-    void visit(ObjectVisitor) ;
+    void visit(ObjectVisitor);
 
     /// Calls the Visitor callback once for each object, even if it's unreachable garbage.
     void visitAll(BlockVisitor const&);
@@ -161,6 +168,8 @@ private:
 
     Heap();
     Heap(void *base, size_t capacity, bool malloced);
+    void registr();
+    void unregistr();
     void clearForwarding();
 
     Heap const* enter() const;

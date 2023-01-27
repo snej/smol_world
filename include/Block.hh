@@ -111,10 +111,10 @@ private:
 
     // Tag bits stored in an Block's meta word, alongsize its size.
     enum Tags : uint8_t {
-        Fwd          = 0b000001,    // If set, all 31 remaining bits are the forwarding address
+        Fwd          = 0b00000001,    // If set, all 31 remaining bits are the forwarding address
 
-        Large        = 0b010000,    // If set, size is 32-bit not 16-bit
-        Visited      = 0b100000,    // Marker used by Heap::visit()
+        Large        = 0b00010000,    // If set, size is 32-bit not 16-bit
+        Visited      = 0b00100000,    // Marker used by Heap::visit()
 
         // scalars:
         TypeBigNumber= uint8_t(Type::BigNumber) << 1,
@@ -127,7 +127,7 @@ private:
         Type_spare1  = uint8_t(Type::_spare1) << 1,
         Type_spare2  = uint8_t(Type::_spare2) << 1,
 
-        TypeMask     = 0b001110,            // type tags
+        TypeMask     = 0b00001110,          // type tags
         TagsMask     = (1 << TagBits) - 1,  // all tags
     };
 

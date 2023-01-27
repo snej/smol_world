@@ -40,10 +40,12 @@ enum class Type : uint8_t {
     _spare2,
     // Primitives:
     Null,
+    Bool,
     Int,
 };
 
 const char* TypeName(Type t);
+std::ostream& operator<<(std::ostream& out, Type);
 
 
 template <typename T>
@@ -62,7 +64,7 @@ public:
     constexpr Val()                                     :_val(NullVal) { }
     Val(nullptr_t)                                      :Val() { }
 
-//    constexpr explicit Val(bool b)                      :_val(b ? TrueVal : FalseVal) { }
+    constexpr explicit Val(bool b)                      :_val(b ? TrueVal : FalseVal) { }
 
     constexpr Val(int i)
     :_val(uint32_t((i << TagSize) | IntTag))            {assert(i >= MinInt && i <= MaxInt);}
@@ -78,14 +80,14 @@ public:
 
     constexpr bool isNull() const                       {return _val == NullVal;}
 
-//    constexpr bool isBool() const                       {return _val == FalseVal || _val == TrueVal;}
-//    constexpr int asBool() const                        {return _val > FalseVal;}
+    constexpr bool isBool() const                       {return _val == FalseVal || _val == TrueVal;}
+    constexpr bool asBool() const                       {return _val > FalseVal;}
 
     constexpr bool isInt() const                        {return (_val & IntTag) != 0;}
     constexpr int asInt() const                         {assert(isInt()); return int32_t(_val) >> TagSize;}
 
     constexpr bool isObject() const {
-        return (_val & IntTag) == 0 && _val != NullVal;
+        return (_val & IntTag) == 0 && _val > TrueVal;
     }
 
     Object asObject(IN_HEAP) const;
@@ -94,7 +96,7 @@ public:
         return isObject() ? (Block*)heap->at(asPos()) : nullptr;
     }
 
-    template <ValueClass T> bool is(IN_HEAP) const      {return type(heap) == T::InstanceType;}
+    template <ValueClass T> bool is(IN_HEAP) const      {return type(heap) == T::Type;}
 
     template <ValueClass T> T as(IN_HEAP) const;
     template <ValueClass T> Maybe<T> maybeAs(IN_HEAP) const;
@@ -104,21 +106,24 @@ public:
         return heappos(_val >> TagSize);
     }
 
-    uint32_t rawBits() const                            {return _val;}
+    uint32_t rawBits() const                                {return _val;}
 
-    friend bool operator== (Val a, Val b)               {return a._val == b._val;}
-    friend bool operator!= (Val a, Val b)               {return a._val != b._val;}
+    friend bool operator== (Val const& a, Val const& b)     {return a._val == b._val;}
+    friend bool operator!= (Val const& a, Val const& b)     {return a._val != b._val;}
 
     // key comparator for Dicts
-    static bool keyCmp(Val a, Val b)                    {return a._val > b._val;} // descending order
+    static bool keyCmp(Val const& a, Val const& b)          {return a._val > b._val;} // descending order
 
 private:
     enum TagBits : uint32_t {
         IntTag      = 0b001,
     };
 
-    static constexpr int      TagSize = 1;
-    static constexpr uint32_t NullVal = 0;
+    static constexpr int      TagSize  = 1;
+
+    static constexpr uint32_t NullVal  = 0;
+    static constexpr uint32_t FalseVal = 2;
+    static constexpr uint32_t TrueVal  = 4;
 
     uintpos _val;
 };

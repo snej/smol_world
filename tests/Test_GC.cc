@@ -70,7 +70,7 @@ TEST_CASE("GC On Demand", "[gc]") {
         CHECK(a[i] == nullval);
     heap.setRoot(a);
     for (int i = 0; i < 500; ++i) {
-        cout << "Blob #" << i << " -- used " << heap.used() << " free " << heap.available() << endl;
+        //cout << "Blob #" << i << " -- used " << heap.used() << " free " << heap.available() << endl;
         auto blob = Blob::create(1000, heap);
         REQUIRE(blob);
         (a)[i] = blob;

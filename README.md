@@ -15,15 +15,15 @@
     can be found here too
     
     Everything's quite compact
-    with nothing to be lacked
+    there's nothing that we lack
     it's a smol, smol world!
     
-    while (true) {
+    do {
         It's a smol world after all...
         It's a smol world after all...
         It's a smol world after all...
-        It's a smol, smol world
-    }
+        It's a smol, smol world!
+    } while(!insane);
 
 ## What?
 
@@ -84,32 +84,40 @@ With unaligned memory blocks, the heap metadata contains the exact block size. T
 
 A `Heap` has a (native) pointer to a range of up to 2^31^ bytes. It can `malloc` the memory for you, or you can point it to memory you got some other way, like with `mmap`.
 
+You can persist or transmit a heap if you want, by writing the memory range given by its `contents` property to a file or socket. It can be reconstituted by calling `Heap::existing()`. This works because all the pointers in a heap are relative to its base.
+
+> **Warning:** It’s not yet safe to reconstitute a heap from an untrusted (or corrupted) source. Making that safe will require scanning the heap blocks and internal pointers for validity. Reading or writing an invalid heap can cause crashes or memory corruption and other Bad Stuff.
+
 ### Pointers
 
-Pointers within a heap are 32-bit integers, wrapped in an opaque type (an `enum class`) called `heappos`.
+Pointers within a heap, *smol pointers*, are 32-bit integers, wrapped in an opaque type (an `enum class`) called `heappos`.
 
-There are two ways to implement smol pointers, based on what address they’re relative to:
+> Note: Any time I use the word “pointer” from now on it means a smol pointer unless I say otherwise.
 
-- They can be unsigned offsets from a known base address
-- or they can be signed offsets relative to the location of *the pointer itself* – in other words, a pointer at address `A` with value `n` resolves to address `A+n`.
+Smol pointers are byte offsets, not absolute addresses. There are two ways to define them:
+
+- They can be unsigned offsets from a known base address — in other words, if the heap starts at base address `B`, then a pointer with value `n` resolves to address `B+n`.
+- or they can be signed offsets relative to the location of *the pointer itself* — in other words, a pointer at address `A` with value `n` resolves to address `A+n`.
 
 I went with the first type, even though it has the awkward requirement that you can’t dereference (or create) such a pointer without knowing the base address, i.e. the Heap. Right now, you have to pass a Heap parameter to any method that uses a pointer, but the intention is to have a thread-local “current heap” state and use that implicitly.
 
-> Why not the second type? I looked at it, but realized it’s tricky to code for. I thought of creating a `RelativePtr` smart-pointer class to do the arithmetic, but such a class would have some weird behaviors: it can’t be treated as a value type at all, only a reference, because it breaks if copied. I may still try implementing this in the future.
+> Why not the second type? I looked at it, but realized it’s tricky to code for. Such a pointer is a weird type of value that can’t be copied, even into a local variable, because the copy must have a different address, which breaks it. I think it’s possible to implement this using a C++ wrapper class with a custom copy constructor that updates the offset, but I haven’t tried it yet.
 
 ### The allocator
 
-When a new heap is created, the first 8 bytes are allocated for a header. The header contains a 32-bit magic number, followed by a pointer to the root object.
+When a new heap is created, the first 8 bytes are reserved for a header. The header contains a 32-bit magic number, followed by a pointer to the root object.
 
 Memory allocations start from low memory (the heap’s `_base`) and go up. The heap keeps a pointer `_cur` to the first unallocated byte. Memory is allocated by simply moving `_cur` forward and returning its starting value.
 
-If `_cur` would pass the end of the heap, the Heap instead calls a user-supplied callback that can free up space, then retries. If theres’ no callback, or the callback returns false, it returns `nullptr`. The obvious things for the callback to do are run a garbage collector (q.v.) or grow the heap by moving its `_end` pointer upward.
+If `_cur` would pass the end of the heap, the Heap instead calls a user-supplied callback that can free up space, then retries. If theres’ no callback, or the callback couldn’t make enough space available, it gives up and returns `nullptr`. The obvious things for the callback to do are run a garbage collector (q.v.) or grow the heap by moving its `_end` pointer upward.
+
+(I originally had allocation failure throw a C++ `bad_alloc` exception, but then I decided I didn’t want to make this library rely on exceptions. Of course an application’s callback can throw an exception when it fails.)
 
 ### Heap blocks
 
 The class `Block` represents a heap block. After the allocator reserves some memory, it constructs a `Block` instance at that address. 
 
-A Block usually occupies two bytes, or 16 bits. Six of those bits are flags: Three indicate the type of object stored in the block, one is a “mark” flag for the garbage collector, another is a flag for heap iteration, and the last indicates whether it’s a large block. That leaves 10 bits for the size, up to 1023 bytes.
+A `Block` usually occupies two bytes, or 16 bits. Six of those bits are flags: Three indicate the type of object stored in the block, one is a “mark” flag for the garbage collector, another is a flag for heap iteration, and the last indicates whether it’s a large block. That leaves 10 bits for the size, up to 1023 bytes.
 
 A block of 1024 or more bytes sets the “large” flag bit, and stores 16 more bits of size in the next two bytes. That makes the maximum size of a block 64MB.
 
@@ -120,47 +128,58 @@ Since each block starts with its size, it effectively points to the next block, 
 The root data type is `Value`. There are currently seven subtypes:
 
 - `Null` (a singleton)
+- `Bool` (true or false)
 - `Integer` (31 bits signed, range ±1,073,741,824)
 - `String` (UTF-8 encoding)
-- `Symbol` (like a String but de-duplicated so each instance is unique)
+- `Symbol` (like a String, but de-duplicated so each instance is unique)
 - `Blob` (arbitrary binary data)
-- `Array` (or values)
-- `Dict` (mapping Symbols to Values)
+- `Array` (of values)
+- `Dict` (maps Symbols to Values)
 
 `Null` and `Integer` are tagged types stored in the `Value` itself; the others are allocated on the heap, and the flag bits in the heap `Block` give its type.
 
 There are actually two forms of value. `Value`, and the others listed above, are used as local variables or function parameters; they contain real pointers so they’re faster and easier to work with. But when a value is stored in the heap, in an `Array` or `Dict`, it’s stored in a 32-bit form called `Val`.
 
-`Val` has one tag bit. If that tag is set, the other 31 bits hold an integer; if not, a pointer (the small form of pointer described earlier.) If that pointer is 0, the value is `Null`.
+`Val` has one tag bit. If the LSB is 1, the other 31 bits hold an integer; if not, a smol pointer, except for special values for null, false and true:
+
+```
+00000000000000000000000000000000 = null
+00000000000000000000000000000010 = false
+00000000000000000000000000000100 = true
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0 = Pointer (except the values above)
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1 = Integer
+```
 
 ## Objects
 
-All the heap-based object types are basically arrays: of `char`, `Val` or `Entry`  (where `Entry`, used by `Dict`,is a key-value pair of `Val`s.) 
+All the heap-based object types are arrays: of `char`, `byte`, `Val` or `DictEntry`  (a key-value pair of `Val`s.)
 
-No separate size field is needed since the size is easily determined from the `Block`’s size. This does mean that you can’t resize an object, since altering the block size would break the linked list of blocks used by the heap. However, you can zero/null pad.
+No separate size field is needed since the size is easily determined from the `Block`’s size, possibly right-shifted.
 
-`Dict` always keeps its `{key, value}` pairs sorted by key. It’s literally just a descending sort of the 32-bit key; descending is because we want the null values representing empty pairs to collect at the end. This means that keys are compared by pointer equality, so if you use strings as keys you need to de-duplicate them – fortunately, Symbol objects do exactly that.
+`Dict` always keeps its `{key, value}` entries sorted by key. It’s literally just a descending sort of the 32-bit raw key; descending because we want the null (0x00) values representing empty pairs to collect at the end. This means that keys are compared by pointer equality, so if you use strings as keys you need to de-duplicate them – fortunately, `Symbol` objects do exactly that.
 
-Symbols are managed by a SymbolTable, which owns an Array that it uses as a set of Symbol objects. The set is implemented as an open hash table. A 4-byte slot in the heap header points to this array.
+Symbols are managed by a `SymbolTable`, which owns a global-per-Heap `Array` that it treats as a hash-set of `Symbol` objects (using open addressing.) A `Val` in the heap header points to this array.
 
 ## The Garbage Collector
 
-smol_world implements a simple copying garbage collector that uses the venerable Cheney algorithm. You have to give the collector a second Heap to copy into.
+smol_world has a simple copying garbage collector that uses the venerable [Cheney](https://en.wikipedia.org/wiki/Cheney's_algorithm) algorithm. It takes a second Heap as the destination, and copies all the live objects from your Heap into it, then swaps the two Heaps’ pointers so your Heap now contains the newly-copied objects. 
 
-The algorithm is:
+In a traditional “semispace” setup you’d keep both Heaps around and let the collector alternate between them, but it’s not required: you can just malloc the second heap on the fly when it’s time to collect and free it afterwards.
 
-1. Iterate the source heap by block and clear each block’s `Fwd` flag.
-2. Clear the destination heap, i.e. reset its `_cur` pointer back to the beginning.
-3. **Move** (q.v) the `root` pointer in the source heap header and write it to the destination heap’s root pointer.
-4. **Move** the heap’s symbol table, if it has one.
-5. **Move** any other `Val`s given by the application; these are additional roots or existing pointers from the stack or external memory.
-6. Scan through the objects in the destination heap until you reach the end; for each object:
-   1. If the object is an Array or Dict, iterate through it and **Move** each Val.
+### Roots & Handles
 
-7. Swap the pointers of the source and destination heaps: now the source heap contains only live objects.
+Any garbage collector has to have some root pointers to start scanning from. 
 
-To **Move** a Val:
+A Heap has a `root` property you can set to point to its root/global object.
 
-1. If the `Val` isn’t a pointer, do nothing, just return it as-is.
-2. Dereference the `Val` in the source heap. If the Object’s `Fwd` flag is set, interpret the rest of the Object header as a pointer in the _destination_ heap, and return the Val with its pointer replaced by the new one.
-3. Else allocate an exact copy of the object in the destination heap, and return a `Val` pointing to the destination object.
+For temporary stack-based references you should use `Handle` objects. A `Handle<T>` is a reference just like a `T`, but it’s also known to the Heap as a root. (Its constructor registers it with the current Heap; the destructor unregisters it.) This means that any object pointed to by a `Handle` won’t be discarded when the GC runs; and also, the GC will update the pointer stored in the `Handle` with the object’s new address after the collection.
+
+Conversely, this means that if you have a non-`Handle` object reference, like just a `String` or `Array` variable, and then the GC runs (explicitly or due to the heap filling up), you’re in trouble. That object might be destroyed as garbage, and even if it isn’t, it’s been moved to a different address and your reference is now bogus. Don’t do this!
+
+The guideline is:
+
+- `Handle`s are slightly more expensive than regular references, so you may not want to always use them.
+- If the code you’re writing doesn’t create any objects, nor calls any code that does, it’s safe to skip using Handles.
+- If you create an object, or call a function that does, then any references that traverse that call (were created before *and* used afterwards) must be `Handle`s.
+
+> (Old-school classic MacOS programmers like myself will recognize the similarity to the use of handles in the memory manager, and for basically the same reason.)
