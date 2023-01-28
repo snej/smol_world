@@ -58,7 +58,7 @@
 		27AA27FA2970835E00BF17A5 /* Heap.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Heap.cc; sourceTree = "<group>"; };
 		27AA27FC2970BFF300BF17A5 /* Val.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Val.hh; sourceTree = "<group>"; };
 		27AA27FD2970BFF300BF17A5 /* Val.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Val.cc; sourceTree = "<group>"; };
-		27AA27FF2970C04900BF17A5 /* Object.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Object.hh; sourceTree = "<group>"; };
+		27AA27FF2970C04900BF17A5 /* Value.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Value.hh; sourceTree = "<group>"; };
 		27AA28002970C04900BF17A5 /* Collections.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Collections.cc; sourceTree = "<group>"; };
 		27AA28082973859D00BF17A5 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -156,7 +156,7 @@
 				27AA27F92970835E00BF17A5 /* Heap.hh */,
 				2770B1AB297F1E7A00E2C126 /* Block.hh */,
 				27AA27FC2970BFF300BF17A5 /* Val.hh */,
-				27AA27FF2970C04900BF17A5 /* Object.hh */,
+				27AA27FF2970C04900BF17A5 /* Value.hh */,
 				2705301129776C46003D4C93 /* Collections.hh */,
 				27733D0B297C6E1100EDA2E9 /* SymbolTable.hh */,
 				2770B1AE2980776400E2C126 /* GarbageCollector.hh */,

@@ -7,7 +7,7 @@
 #pragma once
 #include "Heap.hh"
 #include "Val.hh"
-#include "Object.hh"
+#include "Value.hh"
 
 
 /// A typical copying garbage collector that copies all live objects into another Heap.

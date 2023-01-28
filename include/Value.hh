@@ -1,5 +1,5 @@
 //
-// Object.hh
+// Value.hh
 //
 // Copyright © 2023 Jens Alfke. All rights reserved.
 //
