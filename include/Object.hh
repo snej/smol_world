@@ -24,8 +24,8 @@ public:
 
     //    constexpr explicit Value(bool b)                      :_val(b ? TrueVal : FalseVal) { }
 
-    Value(Val val, IN_HEAP)
-    :_val(val) {
+    Value(Val const& val, IN_HEAP) {
+        _val = val;
         if (Block *block = val.asBlock(heap)) {
             auto bytes = block->data<byte>();
             _ptr = bytes.begin();
@@ -44,7 +44,15 @@ public:
         }
     }
 
-    operator Val() const                            {return _val;}
+    Value (Value const& v)
+    :_size(v._size)
+    ,_ptr(v._ptr) {
+        _val = v._val;
+    }
+
+    operator Val const&() const                     {return _val;}
+    Val const& asVal() const                        {return _val;}
+    
     Type type() const                               {return _ptr ? block()->type() : _val._type();}
     explicit operator bool() const                  {return !isNull();}
     constexpr bool isNull() const                   {return _val == nullval;}
@@ -58,8 +66,8 @@ public:
     bool isObject() const                           {return _ptr != nullptr;}
     Object const& asObject() const                  {assert(isObject()); return *(Object*)this;}
 
-    template <ValueClass T> bool is() const         {return type() == T::Type;}
-    template <ValueClass T> T as() const            {assert(type() == T::Type); return *(T*)this;}
+    template <ValueClass T> bool is() const         {return T::HasType(type());}
+    template <ValueClass T> T as() const            {assert(is<T>()); return *(T*)this;}
     template <ValueClass T> Maybe<T> maybeAs() const {return Maybe<T>(*this);}
 
     /// Calls `fn`, which must be a generic lambda taking an `auto` parameter,
@@ -88,6 +96,9 @@ private:
 };
 
 
+std::ostream& operator<< (std::ostream&, Value const&);
+
+
 
 /// A `std::optional`-like type for Value classes.
 template <class T>
@@ -95,12 +106,12 @@ class Maybe {
 public:
     Maybe() = default;
     Maybe(nullptr_t)                    :Maybe() { }
-    explicit Maybe(Value const& val)    {if (val.type() == T::Type) _val = val;}
+    explicit Maybe(Value const& val)    {if (T::HasType(val.type())) _val = val;}
     Maybe(T const& obj) :_val(obj)      { }
 
     explicit operator bool() const      {return !_val.isNull();}
     operator Value() const              {return _val;}
-    operator Val() const                {return _val;}
+    operator Val const&() const         {return _val;}
 
     T& value()                          {return *getp();}
     T const& value() const              {return const_cast<Maybe*>(this)->get();}
@@ -125,8 +136,10 @@ private:
 /// A reference to a heap object -- any type except Int and Null.
 class Object : public Value {
 public:
+    static bool HasType(enum Type t) {return t < Type::Null;}
+
     Object(Block const* block, IN_HEAP)             :Value(block, heap) {assert(isObject());}
-    Object(Val val, IN_HEAP)                        :Value(val, heap) {assert(isObject());}
+    Object(Val const& val, IN_HEAP)                 :Value(val, heap) {assert(isObject());}
 
     Block* block() const                            {return Value::block();}
     slice<byte> rawBytes() const                    {return Value::rawBytes();}
@@ -138,27 +151,14 @@ protected:
 };
 
 
-std::ostream& operator<< (std::ostream&, Value const&);
-
-
-/// An Object subclass that implements a particular Type code.
-template <Type TYPE>
-class TypedObject : public Object {
-public:
-    static constexpr Type Type = TYPE;
-protected:
-    TypedObject(Block const* block, IN_HEAP)        :Object(block, heap) { }
-    TypedObject(Val val, IN_HEAP)                   :Object(val, heap) {assert(type() == TYPE);}
-};
-
-
 /// The Value subclass representing the Null type.
 class Null : public Value {
 public:
     static constexpr Type Type = Type::Null;
+    static bool HasType(enum Type t) {return t == Type;}
 
     Null() = default;
-    Null(nullptr_t)    :Value() { }
+    Null(nullptr_t)                     :Value() { }
 };
 
 
@@ -166,8 +166,9 @@ public:
 class Bool : public Value {
 public:
     static constexpr Type Type = Type::Bool;
+    static bool HasType(enum Type t) {return t == Type;}
 
-    explicit Bool(bool b = false)  :Value(b) { }
+    explicit Bool(bool b = false)       :Value(b) { }
     explicit operator bool() const      {return asBool();}
 };
 
@@ -176,10 +177,23 @@ public:
 class Int : public Value {
 public:
     static constexpr Type Type = Type::Int;
+    static bool HasType(enum Type t) {return t == Type;}
 
-    Int(int i = 0)     :Value(i) { }
+    Int(int i = 0)          :Value(i) { }
     operator int() const    {return asInt();}
 
     friend bool operator==(Int const& a, int b)  {return a.asInt() == b;}
     friend bool operator==(int a, Int const& b)  {return a == b.asInt();}
+};
+
+
+/// An Object subclass that implements a particular Type code.
+template <Type TYPE>
+class TypedObject : public Object {
+public:
+    static constexpr Type Type = TYPE;
+    static bool HasType(enum Type t) {return t == Type;}
+protected:
+    TypedObject(Block const* block, IN_HEAP)        :Object(block, heap) { }
+    TypedObject(Val const& val, IN_HEAP)            :Object(val, heap) {assert(type() == TYPE);}
 };

@@ -36,7 +36,7 @@ public:
     /// on any live references to values in `fromHeap`, or they'll be out of date.
     ///
     /// Do not do anything else with the heap while the GarbageCollector is in scope!
-    [[nodiscard]] Val scan(Val v);
+    Value scan(Value v);
 
     [[nodiscard]] Block* scan(Block*);
 
@@ -48,7 +48,6 @@ public:
 
 private:
     void scanRoot();
-    template <class T> Val scanValueAs(Val val);
     Block* move(Block*);
 
     std::unique_ptr<Heap> _tempHeap;    // Owns temporary heap, if there is one

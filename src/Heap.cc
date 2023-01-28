@@ -14,10 +14,10 @@
 
 static constexpr uint32_t kMagic = 0xA189933A;
 
-struct Header {
+struct Heap::Header {
     uint32_t magic;   // Must equal kMagic
-    Val      root;    // Pointer to root object
-    Val      symbols; // Pointer to symbol table
+    heappos  root;    // Pointer to root object
+    heappos  symbols; // Pointer to symbol table
 };
 
 const size_t Heap::Overhead = sizeof(Header);
@@ -111,7 +111,7 @@ bool Heap::resize(size_t newSize) {
 void Heap::reset() {
     _cur = _base;
     auto header = (Header*)rawAlloc(sizeof(Header));
-    *header = {kMagic, nullval, nullval};
+    *header = {kMagic, nullpos, nullpos};
     _symbolTable.reset();
 }
 
@@ -122,13 +122,12 @@ Heap Heap::existing(slice<byte> contents, size_t capacity) {
     Heap heap(contents.begin(), capacity, false);
     heap._cur = contents.end();
 
-    auto header = (Header*)heap._base;
-    if (header->magic != kMagic) {
+    auto header = heap.header();
+    if (header.magic != kMagic) {
         std::cout << "Invalid Heap: wrong magic number\n";
         return Heap();
     }
-    if (header->root.isObject()) {
-        heappos rootPos = header->root.asPos();
+    if (heappos rootPos = header.root; rootPos != nullpos) {
         if (rootPos < sizeof(Header) || rootPos >= heap.used()) {
             std::cout << "Invalid Heap: bad root offset\n";
             return Heap();
@@ -139,27 +138,31 @@ Heap Heap::existing(slice<byte> contents, size_t capacity) {
 
 bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos < used();}
 
+Value Heap::posToValue(heappos pos) const {
+    if (pos == nullpos)
+        return nullptr;
+    return Value((Block*)at(pos), this);
+}
 
-Val Heap::rootVal() const           {return ((Header*)_base)->root;}
-void Heap::setRoot(Val val)         {((Header*)_base)->root = val;}
+heappos Heap::valueToPos(Value const& obj) const {
+    return obj.isObject() ? obj.asVal().asPos() : nullpos;
+}
 
-Value Heap::rootValue() const       {return Value(rootVal(), this);}
+
+Maybe<Object> Heap::root() const                {return posToValue(header().root).maybeAs<Object>();}
+void Heap::setRoot(Maybe<Object> root)          {header().root = valueToPos(root);}
+Value Heap::symbolTableArray() const            {return posToValue(header().symbols);}
+void Heap::setSymbolTableArray(Value const& v)  {header().symbols = valueToPos(v);}
+
 
 Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
 void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
 Heap* Heap::current()               {return (Heap*)sCurHeap;}
 
-Val Heap::symbolTableVal() const    {return ((Header*)_base)->symbols;}
-
-void Heap::setSymbolTableVal(Val v) {
-    ((Header*)_base)->symbols = v;
-    if (_symbolTable)
-        _symbolTable->setTable(v);
-}
 
 SymbolTable& Heap::symbolTable() {
     if (!_symbolTable) {
-        if_let(symbols, symbolTableVal().maybeAs<Array>(this)) {
+        if_let(symbols, symbolTableArray().maybeAs<Array>()) {
             _symbolTable = std::make_unique<SymbolTable>(this, symbols);
         } else {
             _symbolTable = SymbolTable::create(this);
@@ -230,7 +233,7 @@ void Heap::visitBlocks(BlockVisitor visitor) {
 
     std::deque<Block*> stack;
 
-    auto process = [&](Val val) -> bool {
+    auto process = [&](Val const& val) -> bool {
         if (val.isObject()) {
             Block *b = val.asBlock(this);
             if (!b->isVisited()) {
@@ -244,12 +247,12 @@ void Heap::visitBlocks(BlockVisitor visitor) {
         return true;
     };
 
-    if (!process(rootVal()))
+    if (!process(root()))
         return;
     while (!stack.empty()) {
         Block *b = stack.front();
         stack.pop_front();
-        for (Val v : b->vals())
+        for (Val const& v : b->vals())
             if (!process(v))
                 return;
     }

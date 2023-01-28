@@ -54,17 +54,17 @@ void GarbageCollector::scanRoot() {
         assert(!obj->isForwarded());
 #endif
     _toHeap.reset();
-    _toHeap.setRoot(scan(_fromHeap.rootVal()));
-    _toHeap.setSymbolTableVal(scan(_fromHeap.symbolTableVal())); // TODO: Scan buckets as weak references to Symbols
+    _toHeap.setRoot(scan(_fromHeap.root()).maybeAs<Object>());
+    _toHeap.setSymbolTableArray(scan(_fromHeap.symbolTableArray())); // TODO: Scan buckets as weak references to Symbols
     for (Value *refp : _fromHeap._externalRoots)
         update(*refp);
 }
 
 
-Val GarbageCollector::scan(Val val) {
+Value GarbageCollector::scan(Value val) {
     if (val.isObject()) {
-        Block *block = val.asBlock(_fromHeap);
-        return Val(scan(block), _toHeap);
+        Block *block = val.block();
+        return Value(scan(block), _toHeap);
     } else {
         return val;
     }
@@ -114,12 +114,6 @@ Block* GarbageCollector::move(Block* src) {
         return dst;
     }
 }
-
-
-void GarbageCollector::update(Val* val) {
-    *val = scan(*val);
-}
-
 
 
 void Heap::garbageCollectTo(Heap &dstHeap) {

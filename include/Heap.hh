@@ -21,6 +21,7 @@ class Object;
 class SymbolTable;
 class Val;
 class Value;
+template <class T> class Maybe;
 
 
 using byte = std::byte;
@@ -73,11 +74,10 @@ public:
     slice<byte> contents() const        {return {_base, _cur};}
 
     /// The heap's root value. Starts as Null, but usually an Array or Dict.
-    Val rootVal() const;
-    Value rootValue() const;
+    Maybe<Object> root() const;
 
     /// Sets the heap's root value.
-    void setRoot(Val);
+    void setRoot(Maybe<Object>);
 
     /// Resets the Heap to an empty state.
     void reset();
@@ -165,13 +165,17 @@ private:
     friend class GarbageCollector;
     friend class UsingHeap;
     friend class HandleBase;
+    struct Header;
 
     Heap();
     Heap(void *base, size_t capacity, bool malloced);
+    Header& header()                {return *(Header*)_base;}
+    Header const& header() const    {return *(Header*)_base;}
+    Value posToValue(heappos pos) const;
+    heappos valueToPos(Value const& obj) const;
     void registr();
     void unregistr();
     void clearForwarding();
-
     Heap const* enter() const;
     void exit() const;
     void exit(Heap const* newCurrent) const;
@@ -193,8 +197,8 @@ private:
     Block* firstBlock();
     Block* nextBlock(Block *obj);
 
-    Val symbolTableVal() const;
-    void setSymbolTableVal(Val);
+    Value symbolTableArray() const;
+    void setSymbolTableArray(Value const&);
 
     void swapMemoryWith(Heap&);
 

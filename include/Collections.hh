@@ -39,7 +39,7 @@ public:
 protected:
     Collection() = default;
 
-    Collection(Val val, IN_HEAP)
+    Collection(Val const& val, IN_HEAP)
     :TypedObject<TYPE>(val, heap) { }
 
     Collection(Block *block, IN_MUT_HEAP, size_t capacity, const Item* items, size_t count)
@@ -169,17 +169,17 @@ public:
     heapsize count() const              {return heapsize(items().size());}
     size_t size() const                 {return count();}
 
-    Val* find(Val key);
-    const Val* find(Val key) const      {return const_cast<Dict*>(this)->find(key);}
-    Val get(Val key) const              {auto v = find(key); return v ? *v : nullval;}
-    bool contains(Val key) const        {return find(key) != nullptr;}
+    Val* find(Val const& key);
+    const Val* find(Val const& key) const      {return const_cast<Dict*>(this)->find(key);}
+    Value get(Val const& key, IN_HEAP) const              {auto v = find(key); return v ? Value(*v, heap) : nullptr;}
+    bool contains(Val const& key) const        {return find(key) != nullptr;}
 
-    bool set(Val key, Val newValue)     {return set(key, newValue, false);}
-    bool insert(Val key, Val newValue)  {return set(key, newValue, true);}
-    bool replace(Val key, Val newValue);
-    bool remove(Val key);
+    bool set(Val const& key, Val const& newValue)     {return set(key, newValue, false);}
+    bool insert(Val const& key, Val const& newValue)  {return set(key, newValue, true);}
+    bool replace(Val const& key, Val const& newValue);
+    bool remove(Val const& key);
 
-    Val operator[] (Val key) const      {return get(key);}
+    //Val operator[] (Val const& key) const      {return get(key);}
 
     slice<DictEntry> items() const;
 
@@ -195,7 +195,7 @@ private:
     void sort(size_t count);
     void sort()                                     {sort(capacity());}
     const_iterator endAll() const                   {return begin() + capacity();}
-    bool set(Val key, Val value, bool insertOnly);
+    bool set(Val const& key, Val const& value, bool insertOnly);
 };
 
 

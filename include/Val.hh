@@ -96,7 +96,7 @@ public:
         return isObject() ? (Block*)heap->at(asPos()) : nullptr;
     }
 
-    template <ValueClass T> bool is(IN_HEAP) const      {return type(heap) == T::Type;}
+    template <ValueClass T> bool is(IN_HEAP) const      {return T::HasType(type(heap));}
 
     template <ValueClass T> T as(IN_HEAP) const;
     template <ValueClass T> Maybe<T> maybeAs(IN_HEAP) const;
@@ -125,13 +125,15 @@ private:
     static constexpr uint32_t FalseVal = 2;
     static constexpr uint32_t TrueVal  = 4;
 
+    Val(Val const&) = delete;
+
     uintpos _val;
 };
 
 static constexpr Val nullval;
 
 
-std::ostream& operator<<(std::ostream&, Val);
+std::ostream& operator<<(std::ostream&, Val const&);
 
 
 //template <class T> T* Heap:: root() const {

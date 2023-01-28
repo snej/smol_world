@@ -21,23 +21,28 @@
 #include <iostream>
 
 
-// just like DictEntry except `key` isn't const, allowing it to be swapped/assigned.
-struct MutEntry {
-    Val key;
-    Val value;
-    operator DictEntry&() {return *(DictEntry*)this;}    // so that Dict::keyCmp will work
+struct FakeEntry {
+    uint32_t key;
+    uint32_t value;
 };
+
+static bool fakeKeyCmp(FakeEntry const& a, FakeEntry const& b) {
+    return a.key > b.key;
+}
 
 
 // Returns the DictEntry with this key, or else the pos where it should go (DictEntry with next higher key),
 // or else the end.
-static DictEntry* _findEntry(slice<DictEntry> entries, Val key) {
-    return std::lower_bound(entries.begin(), entries.end(), DictEntry{key, nullval}, Dict::keyCmp);
+static DictEntry* _findEntry(slice<DictEntry> entries, Val const& key) {
+    FakeEntry target = {key.rawBits(), 0};
+    return (DictEntry*) std::lower_bound((FakeEntry*)entries.begin(),
+                                         (FakeEntry*)entries.end(),
+                                         target, fakeKeyCmp);
 }
 
 
 void Dict::sort(size_t count) {
-    std::sort((MutEntry*)begin(), (MutEntry*)begin() + count, Dict::keyCmp);
+    std::sort((FakeEntry*)begin(), (FakeEntry*)begin() + count, fakeKeyCmp);
 }
 
 
@@ -47,7 +52,7 @@ slice<DictEntry> Dict::items() const {
 }
 
 
-Val* Dict::find(Val key) {
+Val* Dict::find(Val const& key) {
     slice<DictEntry> all = allItems();
     if (DictEntry *ep = _findEntry(all, key); ep != all.end() && ep->key == key)
         return &ep->value;
@@ -56,7 +61,7 @@ Val* Dict::find(Val key) {
 }
 
 
-bool Dict::set(Val key, Val value, bool insertOnly) {
+bool Dict::set(Val const& key, Val const& value, bool insertOnly) {
     slice<DictEntry> all = allItems();
     if (DictEntry *ep = _findEntry(all, key); ep == all.end()) {
         return false;   // not found, and would go after last item (so dict must be full)
@@ -66,7 +71,8 @@ bool Dict::set(Val key, Val value, bool insertOnly) {
         return true;
     } else if (all.back().key == nullval) {
         ::memmove(ep + 1, ep, (all.end() - ep - 1) * sizeof(DictEntry));
-        new (ep) DictEntry {key, value};
+        (Val&)ep->key = key;
+        ep->value = value;
         return true;
     } else {
         return false; // not found, but no room to insert
@@ -74,7 +80,7 @@ bool Dict::set(Val key, Val value, bool insertOnly) {
 }
 
 
-bool Dict::replace(Val key, Val newValue) {
+bool Dict::replace(Val const& key, Val const& newValue) {
     if (Val *valp = find(key)) {
         *valp = newValue;
         return true;
@@ -84,11 +90,11 @@ bool Dict::replace(Val key, Val newValue) {
 }
 
 
-bool Dict::remove(Val key) {
+bool Dict::remove(Val const& key) {
     slice<DictEntry> all = allItems();
     if (DictEntry *ep = _findEntry(all, key); ep != all.end() && ep->key == key) {
         ::memmove(ep, ep + 1, (all.end() - (ep + 1)) * sizeof(DictEntry));
-        new (&all.back()) DictEntry {nullval, nullval};
+        new (&all.back()) DictEntry {};
         return true;
     } else {
         return false;
@@ -133,7 +139,7 @@ std::ostream& operator<<(std::ostream& out, Array const& arr) {
     if (!arr.empty()) {
         out << ": ";
         int n = 0;
-        for (Val val : arr) {
+        for (Val const& val : arr) {
             if (n++) out << ", ";
             out << val;
         }

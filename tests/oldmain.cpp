@@ -22,9 +22,11 @@ int xmain(int argc, const char * argv[]) {
         assert(arr.count() == 4);
         cout << arr << endl;
         heap.setRoot(arr);
-        assert(heap.rootValue().is<Array>());
-        assert(heap.rootValue().as<Array>() == arr);
-
+        {
+            unless(root, heap.root()) {assert(false);}
+            assert(root.is<Array>());
+            assert(root.as<Array>() == arr);
+        }
         arr[0] = 1234;
         arr[1] = -4567;
 

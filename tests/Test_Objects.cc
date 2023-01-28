@@ -25,7 +25,7 @@ using namespace std;
 
 
 static void checkTypes(Value v, Type t, string_view asString) {
-    INFO("checking type " << t << " (0x" << hex << Val(v).rawBits() << dec << ")");
+    INFO("checking type " << t);
     CHECK(v.type() == t);
     CHECK(bool(v) == (t != Type::Null));
     CHECK(v.isNull() == (t == Type::Null));
@@ -78,7 +78,7 @@ TEST_CASE("Strings", "[object]") {
         unless(obj, String::create(str, heap)) {FAIL("Failed to alloc String");}
         REQUIRE(obj.type() == Type::String);
         REQUIRE(obj.is<String>());
-        Val val = obj;
+        Val const& val = obj;
         CHECK(val.type(heap) == Type::String);
         CHECK(val.as<String>(heap) == obj);
 
@@ -115,7 +115,7 @@ TEST_CASE("Blobs", "[object]") {
         unless(obj, Blob::create(kBlob.data(), len, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(obj.type() == Type::Blob);
         REQUIRE(obj.is<Blob>());
-        Val val = obj;
+        Val const& val = obj;
         CHECK(val.as<Blob>(heap) == obj);
 
         CHECK(obj.capacity() == len);
@@ -139,7 +139,7 @@ TEST_CASE("Arrays", "[object]") {
         unless(obj, Array::create(len, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(obj.type() == Type::Array);
         REQUIRE(obj.is<Array>());
-        Val val = obj;
+        Val const& val = obj;
         CHECK(val.as<Array>(heap) == obj);
 
         CHECK(obj.capacity() == len);
@@ -178,7 +178,7 @@ TEST_CASE("Dicts", "[object]") {
         unless(obj, Dict::create(len, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(obj.type() == Type::Dict);
         REQUIRE(obj.is<Dict>());
-        Val val = obj;
+        Val const& val = obj;
         CHECK(val.as<Dict>(heap) == obj);
 
         CHECK(obj.capacity() == len);
@@ -186,21 +186,21 @@ TEST_CASE("Dicts", "[object]") {
 
         for (int i = 0; i <= len; ++i) {
             INFO("i = " << i);
-            Val key = strs[i];
+            Val const& key = strs[i];
             CHECK(obj.count() == i);
             CHECK(obj.full() == (i == len));
             CHECK(!obj.contains(key));
             CHECK(!obj.replace(key, -1));
             if (i < len) {
                 CHECK(obj.set(key, i));
-                CHECK(obj.get(key) == i);
+                CHECK(obj.get(key, heap) == i);
                 CHECK(obj.contains(key));
                 CHECK(!obj.empty());
                 CHECK(!obj.insert(key, -1));
                 CHECK(obj.replace(key, -i));
 
                 for (int j = 0; j < 10; ++j)
-                    CHECK(obj.get(strs[j]) == ((j <= i) ? Val(-j) : nullval));
+                    CHECK(obj.get(strs[j], heap) == ((j <= i) ? Value(-j) : nullval));
 
             } else {
                 CHECK(!obj.set(key, i));
@@ -212,7 +212,7 @@ TEST_CASE("Dicts", "[object]") {
         shuffle(strs+0, strs+len);
         for (int i = 0; i < len; ++i) {
             INFO("i = " << i);
-            Val key = strs[i];
+            Val const& key = strs[i];
             CHECK(obj.count() == len-i);
             CHECK(obj.full() == (i == 0));
             CHECK(obj.contains(key));

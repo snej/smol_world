@@ -130,7 +130,7 @@ std::unique_ptr<SymbolTable> SymbolTable::create(IN_MUT_HEAP) {
 }
 
 
-void SymbolTable::setTable(Val tableVal) {
+void SymbolTable::setTable(Val const& tableVal) {
     Array array = tableVal.as<Array>(_heap);
     if (array != _table.array) {  // if called from my own setTable(Array) method, don't do this
         _table = HashTable(array);
@@ -165,7 +165,7 @@ Maybe<Symbol> SymbolTable::create(string_view str) {
         entry->symbol = symbol;
         ++_count;
         if (_count == 1)
-            _heap->setSymbolTableVal(_table.array); // make sure it's registered with the Heap
+            _heap->setSymbolTableArray(_table.array); // make sure it's registered with the Heap
     }
     return symbol;
 }
@@ -186,7 +186,7 @@ bool SymbolTable::grow() {
     }
     // Switch to the new table:
     _table = newTable;
-    _heap->setSymbolTableVal(newArray);
+    _heap->setSymbolTableArray(newArray);
     return true;
 }
 

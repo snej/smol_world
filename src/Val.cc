@@ -65,7 +65,7 @@ const char* TypeName(Type t) {
 std::ostream& operator<<(std::ostream& out, Type t) {return out << TypeName(t);}
 
 
-std::ostream& operator<<(std::ostream& out, Val val) {
+std::ostream& operator<<(std::ostream& out, Val const& val) {
     if (val.isNull()) {
         out << "null";
     } else if (val.isBool()) {

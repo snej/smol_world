@@ -53,7 +53,7 @@ private:
     };
 
     void setHeap(Heap* h)                               {_heap = h;}
-    void setTable(Val newTable);
+    void setTable(Val const& newTable);
     bool grow();
 
     Heap*       _heap = nullptr;
