@@ -35,7 +35,7 @@ TEST_CASE("Empty Heap", "[heap]") {
     CHECK(!heap.contains(nullptr));
 
     // roots:
-    CHECK(heap.root() == nullval);
+    CHECK(heap.root() == nullvalue);
 
     // current heap:
     CHECK(Heap::current() == nullptr);

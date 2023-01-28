@@ -169,17 +169,17 @@ public:
     heapsize count() const              {return heapsize(items().size());}
     size_t size() const                 {return count();}
 
-    Val* find(Val const& key);
-    const Val* find(Val const& key) const      {return const_cast<Dict*>(this)->find(key);}
-    Value get(Val const& key, IN_HEAP) const              {auto v = find(key); return v ? Value(*v, heap) : nullptr;}
-    bool contains(Val const& key) const        {return find(key) != nullptr;}
+    Val* find(Value key);
+    const Val* find(Value key) const      {return const_cast<Dict*>(this)->find(key);}
+    Value get(Value key, IN_HEAP) const              {auto v = find(key); return v ? Value(*v, heap) : nullptr;}
+    bool contains(Value key) const        {return find(key) != nullptr;}
 
-    bool set(Val const& key, Val const& newValue)     {return set(key, newValue, false);}
-    bool insert(Val const& key, Val const& newValue)  {return set(key, newValue, true);}
-    bool replace(Val const& key, Val const& newValue);
-    bool remove(Val const& key);
+    bool set(Value key, Value newValue)     {return set(key, newValue, false);}
+    bool insert(Value key, Value newValue)  {return set(key, newValue, true);}
+    bool replace(Value key, Value newValue);
+    bool remove(Value key);
 
-    //Val operator[] (Val const& key) const      {return get(key);}
+    //Val operator[] (Value key) const      {return get(key);}
 
     slice<DictEntry> items() const;
 
@@ -188,14 +188,12 @@ public:
     const_iterator begin() const        {return const_cast<Dict*>(this)->begin();}
     const_iterator end() const          {return const_cast<Dict*>(this)->end();}
 
-    static bool keyCmp(DictEntry const& a, DictEntry const& b) {return Val::keyCmp(a.key, b.key);}
-
 private:
     slice<DictEntry> allItems() const               {return Collection::items();}
     void sort(size_t count);
     void sort()                                     {sort(capacity());}
     const_iterator endAll() const                   {return begin() + capacity();}
-    bool set(Val const& key, Val const& value, bool insertOnly);
+    bool set(Value key, Value value, bool insertOnly);
 };
 
 

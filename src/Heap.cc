@@ -145,7 +145,7 @@ Value Heap::posToValue(heappos pos) const {
 }
 
 heappos Heap::valueToPos(Value const& obj) const {
-    return obj.isObject() ? obj.asVal().asPos() : nullpos;
+    return obj.isObject() ? obj.asPos(this) : nullpos;
 }
 
 
@@ -233,28 +233,29 @@ void Heap::visitBlocks(BlockVisitor visitor) {
 
     std::deque<Block*> stack;
 
-    auto process = [&](Val const& val) -> bool {
-        if (val.isObject()) {
-            Block *b = val.asBlock(this);
-            if (!b->isVisited()) {
-                b->setVisited();
-                if (!visitor(*b))
-                    return false;
-                if (Block::typeContainsPointers(b->type()) && b->dataSize() > 0)
-                    stack.push_back(b);
-            }
+    auto processBlock = [&](Block *b) -> bool {
+        if (!b->isVisited()) {
+            b->setVisited();
+            if (!visitor(*b))
+                return false;
+            if (Block::typeContainsPointers(b->type()) && b->dataSize() > 0)
+                stack.push_back(b);
         }
         return true;
     };
 
-    if (!process(root()))
-        return;
+    if_let(rootObj, root()) {
+        if (!processBlock(rootObj.block()))
+            return;
+    }
+
     while (!stack.empty()) {
         Block *b = stack.front();
         stack.pop_front();
-        for (Val const& v : b->vals())
-            if (!process(v))
+        for (Val const& val : b->vals()) {
+            if (val.isObject() && !processBlock(val.asBlock(this)))
                 return;
+        }
     }
 }
 

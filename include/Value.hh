@@ -44,18 +44,9 @@ public:
         }
     }
 
-    Value (Value const& v)
-    :_size(v._size)
-    ,_ptr(v._ptr) {
-        _val = v._val;
-    }
-
-    operator Val const&() const                     {return _val;}
-    Val const& asVal() const                        {return _val;}
-    
     Type type() const                               {return _ptr ? block()->type() : _val._type();}
     explicit operator bool() const                  {return !isNull();}
-    constexpr bool isNull() const                   {return _val == nullval;}
+    constexpr bool isNull() const                   {return _val.isNull();}
 
     constexpr bool isBool() const                   {return _val.isBool();}
     constexpr bool asBool() const                   {return _val.asBool();}
@@ -74,6 +65,9 @@ public:
     /// with this value cast to its runtime type.
     template <typename FN> bool visit(FN fn) const;
 
+    heappos asPos(IN_HEAP) const                    {return heap->pos(block());}
+    ValBase asValBase() const                       {return _val;}
+
     friend bool operator==(Value const& a, Value const& b)  {return a._val == b._val && a._ptr == b._ptr;}
     friend bool operator!=(Value const& a, Value const& b)  {return !(a == b);}
 
@@ -90,11 +84,12 @@ private:
         _val = Val(newBlock, heap);
     }
 
-    Val      _val;              // The equivalent Val
+    ValBase  _val;              // The equivalent Val, but the pointer bits aren't valid
     uint32_t _size = 0;         // Data size
     void*    _ptr = nullptr;    // Data address
 };
 
+constexpr Value nullvalue;
 
 std::ostream& operator<< (std::ostream&, Value const&);
 
@@ -111,7 +106,6 @@ public:
 
     explicit operator bool() const      {return !_val.isNull();}
     operator Value() const              {return _val;}
-    operator Val const&() const         {return _val;}
 
     T& value()                          {return *getp();}
     T const& value() const              {return const_cast<Maybe*>(this)->get();}

@@ -22,19 +22,23 @@
 
 
 struct FakeEntry {
-    uint32_t key;
-    uint32_t value;
+    ValBase key;
+    ValBase value;
 };
 
 static bool fakeKeyCmp(FakeEntry const& a, FakeEntry const& b) {
-    return a.key > b.key;
+    return a.key.rawBits() > b.key.rawBits();
+}
+
+static inline bool operator==(Val val, Value value) {
+    return val.rawBits() == value.asValBase().rawBits();
 }
 
 
 // Returns the DictEntry with this key, or else the pos where it should go (DictEntry with next higher key),
 // or else the end.
-static DictEntry* _findEntry(slice<DictEntry> entries, Val const& key) {
-    FakeEntry target = {key.rawBits(), 0};
+static DictEntry* _findEntry(slice<DictEntry> entries, Value key) {
+    FakeEntry target = {key.asValBase(), nullval};
     return (DictEntry*) std::lower_bound((FakeEntry*)entries.begin(),
                                          (FakeEntry*)entries.end(),
                                          target, fakeKeyCmp);
@@ -48,20 +52,20 @@ void Dict::sort(size_t count) {
 
 slice<DictEntry> Dict::items() const {
     slice<DictEntry> all = allItems();
-    return {all.begin(), _findEntry(all, nullval)};
+    return {all.begin(), _findEntry(all, nullvalue)};
 }
 
 
-Val* Dict::find(Val const& key) {
+Val* Dict::find(Value key) {
     slice<DictEntry> all = allItems();
-    if (DictEntry *ep = _findEntry(all, key); ep != all.end() && ep->key == key)
+    if (DictEntry *ep = _findEntry(all, key); ep != all.end() && ep->key.rawBits() == key.asValBase().rawBits())
         return &ep->value;
     else
         return nullptr;
 }
 
 
-bool Dict::set(Val const& key, Val const& value, bool insertOnly) {
+bool Dict::set(Value key, Value value, bool insertOnly) {
     slice<DictEntry> all = allItems();
     if (DictEntry *ep = _findEntry(all, key); ep == all.end()) {
         return false;   // not found, and would go after last item (so dict must be full)
@@ -80,7 +84,7 @@ bool Dict::set(Val const& key, Val const& value, bool insertOnly) {
 }
 
 
-bool Dict::replace(Val const& key, Val const& newValue) {
+bool Dict::replace(Value key, Value newValue) {
     if (Val *valp = find(key)) {
         *valp = newValue;
         return true;
@@ -90,7 +94,7 @@ bool Dict::replace(Val const& key, Val const& newValue) {
 }
 
 
-bool Dict::remove(Val const& key) {
+bool Dict::remove(Value key) {
     slice<DictEntry> all = allItems();
     if (DictEntry *ep = _findEntry(all, key); ep != all.end() && ep->key == key) {
         ::memmove(ep, ep + 1, (all.end() - (ep + 1)) * sizeof(DictEntry));

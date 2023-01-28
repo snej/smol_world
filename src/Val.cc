@@ -25,8 +25,13 @@ Val::Val(Object const& obj, IN_HEAP)     :Val(obj.block(), heap) { }
 
 Object Val::asObject(IN_HEAP) const      {return Object(*this, heap);}
 
+Val& Val::operator= (Value value) {
+    _val = value.asValBase().rawBits();
+    return *this;
+}
 
-Type Val::_type() const {
+
+Type ValBase::_type() const {
     if (isInt())
         return Type::Int;
     else if (isNull())

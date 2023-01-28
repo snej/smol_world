@@ -130,8 +130,8 @@ std::unique_ptr<SymbolTable> SymbolTable::create(IN_MUT_HEAP) {
 }
 
 
-void SymbolTable::setTable(Val const& tableVal) {
-    Array array = tableVal.as<Array>(_heap);
+void SymbolTable::setTable(Value const& tableVal) {
+    Array array = tableVal.as<Array>();
     if (array != _table.array) {  // if called from my own setTable(Array) method, don't do this
         _table = HashTable(array);
         _count = _table.count();
