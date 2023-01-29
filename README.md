@@ -22,7 +22,7 @@
         It's a smol world after all...
         It's a smol world after all...
         It's a smol world after all...
-        It's a smol, smol world!
+        It's a smol, smol world
     } while(!insane);
 
 ## What?
@@ -90,18 +90,20 @@ You can persist or transmit a heap if you want, by writing the memory range give
 
 ### Pointers
 
-Pointers within a heap, *smol pointers*, are 32-bit integers, wrapped in an opaque type (an `enum class`) called `heappos`.
+Pointers within a heap, *smol pointers*, are 32-bit integers. They’re hidden inside a class called `Val` which is described later; `Val` is a typical tagged value that represents either a pointer or an integer.
 
 > Note: Any time I use the word “pointer” from now on it means a smol pointer unless I say otherwise.
 
-Smol pointers are byte offsets, not absolute addresses. There are two ways to define them:
+Smol pointers are byte offsets, not absolute addresses. There are basicall two ways to do this:
 
 - They can be unsigned offsets from a known base address — in other words, if the heap starts at base address `B`, then a pointer with value `n` resolves to address `B+n`.
 - or they can be signed offsets relative to the location of *the pointer itself* — in other words, a pointer at address `A` with value `n` resolves to address `A+n`.
 
-I went with the first type, even though it has the awkward requirement that you can’t dereference (or create) such a pointer without knowing the base address, i.e. the Heap. Right now, you have to pass a Heap parameter to any method that uses a pointer, but the intention is to have a thread-local “current heap” state and use that implicitly.
+I originally used the first type because they’re simpler. But since dereferencing a pointer required knowing the heap’s base address, it meant either making that a global variable (nope), or passing a reference to the heap all through the API (yuck.)
 
-> Why not the second type? I looked at it, but realized it’s tricky to code for. Such a pointer is a weird type of value that can’t be copied, even into a local variable, because the copy must have a different address, which breaks it. I think it’s possible to implement this using a C++ wrapper class with a custom copy constructor that updates the offset, but I haven’t tried it yet.
+So on Jan 28 2023 **I rebuilt Val to use relative pointers**. This was frustrating, but it made almost everything else a lot cleaner, especially the API. 
+
+> (The trick to getting this to work was to delete Val’s copy constructor. You can’t let Vals be copyable or they’re likely to end up on the stack, and there’s no guarantee the stack is within ±2GB of a pointer’s target. Of course this change broke a ton of my code and I had to adapt to passing Vals by reference. Also there were some really, really annoying things I had to do in the Dict implementation and the garbage collector.)
 
 ### The allocator
 
@@ -168,9 +170,9 @@ In a traditional “semispace” setup you’d keep both Heaps around and let th
 
 ### Roots & Handles
 
-Any garbage collector has to have some root pointers to start scanning from. 
+Any garbage collector needs to be given root pointers to start scanning from. 
 
-A Heap has a `root` property you can set to point to its root/global object.
+A `Heap` has a `root` property you can set to point to its root/global object.
 
 For temporary stack-based references you should use `Handle` objects. A `Handle<T>` is a reference just like a `T`, but it’s also known to the Heap as a root. (Its constructor registers it with the current Heap; the destructor unregisters it.) This means that any object pointed to by a `Handle` won’t be discarded when the GC runs; and also, the GC will update the pointer stored in the `Handle` with the object’s new address after the collection.
 
