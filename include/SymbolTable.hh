@@ -13,7 +13,7 @@
 
 class SymbolTable {
 public:
-    static std::unique_ptr<SymbolTable> create(IN_MUT_HEAP);
+    static std::unique_ptr<SymbolTable> create(Heap *heap);
 
     SymbolTable(Heap *heap, Array array)
     :_heap(heap)
@@ -30,7 +30,7 @@ public:
     bool visit(Visitor visitor) const;
 
     friend std::ostream& operator<<(std::ostream& out, SymbolTable const &st) {
-        st._table.dump(out, st._heap); return out;
+        st._table.dump(out); return out;
     }
 private:
     friend class Heap;
@@ -48,8 +48,8 @@ private:
         uint32_t size() const  {return sizeMask + 1;}
         explicit operator bool() const  {return begin != nullptr;}
         uint32_t count() const;
-        std::pair<HashEntry*,Maybe<Symbol>> search(Heap*, string_view str, int32_t hashCode) const;
-        void dump(std::ostream&, Heap const*) const;
+        std::pair<HashEntry*,Maybe<Symbol>> search(string_view str, int32_t hashCode) const;
+        void dump(std::ostream&) const;
     };
 
     void setHeap(Heap* h)                               {_heap = h;}

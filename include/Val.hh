@@ -5,9 +5,9 @@
 //
 
 #pragma once
-#include "Heap.hh"
-#include <array>
+#include "Base.hh"
 #include <iosfwd>
+#include <type_traits>
 
 
 enum class ValType : uint8_t {
@@ -20,9 +20,7 @@ enum class ValType : uint8_t {
 };
 
 class Block;
-class String;
-class Array;
-class Dict;
+class Object;
 class Value;
 
 
@@ -53,39 +51,51 @@ template <typename T>
 template <class T> class Maybe;
 
 
+enum class relpos : int32_t { Null = 0 };
 
-/// A 32-bit polymorphic data value associated with a Heap.
-/// Can be null, an integer, or a reference to a String, Array, or Dict object in the heap.
+
+// base class of Val that lacks the prohibition on copying. For internal use.
 class ValBase {
 public:
     static constexpr int MaxInt = (1 << 30) - 1;
     static constexpr int MinInt = -MaxInt - 1;
 
-    constexpr ValBase()                                 :_val(NullVal) { }
-    constexpr explicit ValBase(nullptr_t)               :ValBase() { }
-    constexpr explicit ValBase(bool b)                  :_val(b ? TrueVal : FalseVal) { }
-    constexpr explicit ValBase(int i)                   :_val(uint32_t((i << TagSize) | IntTag))
-                                                        {assert(i >= MinInt && i <= MaxInt);}
-    constexpr explicit ValBase(heappos pos)             :_val(uint32_t(pos) << TagSize)
-                                                        {assert(pos != nullpos);}
-    constexpr bool isNull() const                       {return _val == NullVal;}
+    constexpr ValBase()                         :_val(NullVal) { }
+    constexpr explicit ValBase(nullptr_t)       :ValBase() { }
+    constexpr explicit ValBase(bool b)          :_val(b ? TrueVal : FalseVal) { }
+    constexpr explicit ValBase(int i)           :_val(uint32_t((i << TagSize) | IntTag))
+                                                    {assert(i >= MinInt && i <= MaxInt);}
+    constexpr explicit ValBase(relpos pos)      {setRelPos(pos);}
 
-    constexpr bool isBool() const                       {return _val == FalseVal || _val == TrueVal;}
-    constexpr bool asBool() const                       {return _val > FalseVal;}
+    constexpr bool isNull() const               {return _val == NullVal;}
+    constexpr bool isBool() const               {return _val == FalseVal || _val == TrueVal;}
+    constexpr bool asBool() const               {return _val > FalseVal;}
+    constexpr bool isInt() const                {return (_val & IntTag) != 0;}
+    constexpr int asInt() const                 {assert(isInt()); return int32_t(_val) >> TagSize;}
 
-    constexpr bool isInt() const                        {return (_val & IntTag) != 0;}
-    constexpr int asInt() const                         {assert(isInt()); return int32_t(_val) >> TagSize;}
+    constexpr bool isObject() const             {return (_val & IntTag) == 0 && _val > TrueVal;}
 
-    constexpr bool isObject() const {
-        return (_val & IntTag) == 0 && _val > TrueVal;
+    uint32_t rawBits() const                    {return _val;}
+
+    ValBase& operator= (Block const* dst) {
+        if (dst) {
+            auto off = intptr_t(dst) - intptr_t(this);
+            assert(off <= INT32_MAX && off >= INT32_MIN);
+            setRelPos(relpos(off));
+        } else {
+            _val = NullVal;
+        }
+        return *this;
     }
 
-    heappos asPos() const {
+    Block* block() const {
+        return isObject() ? _block() : nullptr;
+    }
+
+    Block* _block() const {
         assert(isObject());
-        return heappos(_val >> TagSize);
+        return (Block*)(intptr_t(this) + int32_t(relPos()));
     }
-
-    uint32_t rawBits() const                                {return _val;}
 
 protected:
     friend class Value;
@@ -102,6 +112,16 @@ protected:
 
     constexpr explicit ValBase(uint32_t val)               :_val(val) { }
     Type _type() const;
+
+    relpos relPos() const {
+        assert(isObject());
+        return relpos(int32_t(_val) >> TagSize);
+    }
+
+    constexpr void setRelPos(relpos pos) {
+        assert(pos != relpos::Null);
+        _val = uint32_t(pos) << TagSize;
+    }
 
     friend bool operator== (ValBase const& a, ValBase const& b)     {return a._val == b._val;}
     friend bool operator!= (ValBase const& a, ValBase const& b)     {return a._val != b._val;}
@@ -121,35 +141,30 @@ public:
     constexpr Val()                                     :ValBase(NullVal) { }
     constexpr explicit Val(bool b)                      :ValBase(b) { }
     constexpr explicit Val(int i)                       :ValBase(i) { }
-    constexpr explicit Val(heappos p)                   :ValBase(p) { }
-    Val(Object const&, IN_HEAP);
-    Val(Block const* b, IN_HEAP)                        :Val(heap->pos(b)) { }
+    constexpr explicit Val(relpos p)                    :ValBase(p) { }
+    explicit Val(Block const* b)                        {*this = b;}
+    explicit Val(Object const&);
 
+    Val& operator= (Val const&);
     Val& operator= (Value);
+    Val& operator= (Block const* b)                     {ValBase::operator=(b); return *this;}
 
-    Type type(IN_HEAP) const;
+    Type type() const;
 
-    Object asObject(IN_HEAP) const;
+    Object asObject() const;
 
-    Block* asBlock(IN_HEAP) const {
-        return isObject() ? (Block*)heap->at(asPos()) : nullptr;
-    }
+    template <ValueClass T> bool is() const                 {return T::HasType(type());}
 
-    template <ValueClass T> bool is(IN_HEAP) const      {return T::HasType(type(heap));}
-
-    template <ValueClass T> T as(IN_HEAP) const;
-    template <ValueClass T> Maybe<T> maybeAs(IN_HEAP) const;
+    template <ValueClass T> T as() const;
+    template <ValueClass T> Maybe<T> maybeAs() const;
 
     friend bool operator== (Val const& a, Val const& b)     {return a._val == b._val;}
     friend bool operator!= (Val const& a, Val const& b)     {return a._val != b._val;}
+
+    friend std::ostream& operator<<(std::ostream&, Val const&);
+
+    friend void swap(Val const&, Val const&);
+    Val(Val const&) = delete;
 };
 
 static constexpr Val nullval;
-
-
-std::ostream& operator<<(std::ostream&, Val const&);
-
-
-//template <class T> T* Heap:: root() const {
-//    return rootVal().as<T>(this);
-//}

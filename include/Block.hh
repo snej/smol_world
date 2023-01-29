@@ -5,6 +5,7 @@
 //
 
 #pragma once
+#include "Heap.hh"
 #include "slice.hh"
 #include "Val.hh"
 
@@ -16,14 +17,14 @@ public:
 
     //---- Allocation:
 
-    static Block* alloc(size_t dataSize, Type type, IN_MUT_HEAP) {
+    static Block* alloc(size_t dataSize, Type type, Heap &heap) {
         assert(dataSize <= MaxSize);
         auto blockSize = sizeof(Block) + dataSize;
         if (blockSize < 4)
             blockSize = 4;  // Block must allocate at least enough space to store forwarding pos
         else if (dataSize >= LargeSize)
             blockSize += 2;      // Add room for 32-bit dataSize
-        void *addr = heap->rawAlloc(heapsize(blockSize));
+        void *addr = heap.rawAlloc(heapsize(blockSize));
         if (!addr)
             return nullptr;
         return new (addr) Block(heapsize(dataSize), type);
@@ -131,7 +132,7 @@ private:
         TagsMask     = (1 << TagBits) - 1,  // all tags
     };
 
-    static void* operator new(size_t size, void *addr) {return addr;} // "placement" operator new
+    static void* operator new(size_t, void *addr) {return addr;} // "placement" operator new
 
     Block(heapsize dataSize, Type type) {
         assert(dataSize <= MaxSize);

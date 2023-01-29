@@ -21,13 +21,32 @@
 #include <iostream>
 
 
-Val::Val(Object const& obj, IN_HEAP)     :Val(obj.block(), heap) { }
+Val::Val(Object const& obj)     :Val(obj.block()) { }
 
-Object Val::asObject(IN_HEAP) const      {return Object(*this, heap);}
+Object Val::asObject() const      {return Object(*this);}
+
+Val& Val::operator= (Val const& value) {
+    if (value.isObject())
+        *this = value.block();
+    else
+        _val = value.rawBits();
+    return *this;
+}
 
 Val& Val::operator= (Value value) {
-    _val = value.asValBase().rawBits();
+    if (value.isObject())
+        *this = value.block();
+    else
+        _val = value.asValBase().rawBits();
     return *this;
+}
+
+
+bool operator==(Val const& val, Value const& value) {
+    if (val.isObject())
+        return value.isObject() && val.block() == value.block();
+    else
+        return !value.isObject() && val.rawBits() == value.asValBase().rawBits();
 }
 
 
@@ -45,11 +64,11 @@ Type ValBase::_type() const {
 }
 
 
-Type Val::type(IN_HEAP) const {
+Type Val::type() const {
     if (isInt())
         return Type::Int;
     else if (_val > FalseVal)
-        return asBlock(heap)->type();
+        return _block()->type();
     else if (isNull())
         return Type::Null;
     else
@@ -71,16 +90,11 @@ std::ostream& operator<<(std::ostream& out, Type t) {return out << TypeName(t);}
 
 
 std::ostream& operator<<(std::ostream& out, Val const& val) {
-    if (val.isNull()) {
-        out << "null";
-    } else if (val.isBool()) {
-        out << (val.asBool() ? "true" : "false");
-    } else if (val.isInt()) {
-        out << val.asInt();
-    } else if (auto heap = Heap::current()) {
-        out << TypeName(val.type(heap)) << "@" << uintpos(val.asPos());
-    } else {
-        out << "???@" << std::hex << val.rawBits() << std::dec;
+    switch (val.type()) {
+        case Type::Null:    out << "null"; break;
+        case Type::Bool:    out << (val.asBool() ? "true" : "false"); break;
+        case Type::Int:     out << val.asInt(); break;
+        default:            out << TypeName(val.type()) << "@" << (void*)val.block(); break;
     }
     return out;
 }

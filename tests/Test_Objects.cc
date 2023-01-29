@@ -18,6 +18,7 @@
 
 #include "smol_world.hh"
 #include "catch.hpp"
+#include <array>
 #include <iostream>
 #include <sstream>
 
@@ -149,7 +150,7 @@ TEST_CASE("Arrays", "[object]") {
         for (int i = 0; i < len; ++i)
             obj[i] = strs[i];
         for (int i = 0; i < len; ++i)
-            CHECK(obj[i].as<String>(heap) == strs[i]);
+            CHECK(obj[i].as<String>() == strs[i]);
     }
 }
 
@@ -173,53 +174,57 @@ TEST_CASE("Dicts", "[object]") {
     shuffle(strs+0, strs+11);
 
     for (int len = 0; len <= 10; ++len) {
-        //cerr << "len is " << len << endl;
+        cerr << "\n====len is " << len << endl;
         INFO("len is " << len);
-        unless(obj, Dict::create(len, heap)) {FAIL("Failed to alloc object");}
-        REQUIRE(obj.type() == Type::Dict);
-        REQUIRE(obj.is<Dict>());
-        Value val = obj;
-        CHECK(val.as<Dict>() == obj);
+        unless(dict, Dict::create(len, heap)) {FAIL("Failed to alloc object");}
+        REQUIRE(dict.type() == Type::Dict);
+        REQUIRE(dict.is<Dict>());
+        Value val = dict;
+        CHECK(val.as<Dict>() == dict);
 
-        CHECK(obj.capacity() == len);
-        CHECK(obj.empty());
+        CHECK(dict.capacity() == len);
+        CHECK(dict.empty());
+        dict.dump(cout);
 
         for (int i = 0; i <= len; ++i) {
             INFO("i = " << i);
             Value key = strs[i];
-            CHECK(obj.count() == i);
-            CHECK(obj.full() == (i == len));
-            CHECK(!obj.contains(key));
-            CHECK(!obj.replace(key, -1));
+            CHECK(dict.count() == i);
+            CHECK(dict.full() == (i == len));
+            CHECK(!dict.contains(key));
+            CHECK(!dict.replace(key, -1));
             if (i < len) {
-                CHECK(obj.set(key, i));
-                CHECK(obj.get(key, heap) == i);
-                CHECK(obj.contains(key));
-                CHECK(!obj.empty());
-                CHECK(!obj.insert(key, -1));
-                CHECK(obj.replace(key, -i));
+                cerr << "----i is " << i << ", adding " << (void*)strs[i].value().block() << endl;
+                CHECK(dict.set(key, i));
+                dict.dump(cout);
+                CHECK(!dict.empty());
+                CHECK(dict.contains(key));
+                CHECK(dict.get(key) == i);
+                CHECK(!dict.insert(key, -1));
+                CHECK(dict.replace(key, -i));
 
                 for (int j = 0; j < 10; ++j)
-                    CHECK(obj.get(strs[j], heap) == ((j <= i) ? Value(-j) : nullvalue));
+                    CHECK(dict.get(strs[j]) == ((j <= i) ? Value(-j) : nullvalue));
 
             } else {
-                CHECK(!obj.set(key, i));
-                CHECK(!obj.insert(key, -1));
-                CHECK(!obj.contains(key));
+                CHECK(!dict.set(key, i));
+                CHECK(!dict.insert(key, -1));
+                CHECK(!dict.contains(key));
             }
         }
 
+        cout << ".... checking\n";
         shuffle(strs+0, strs+len);
         for (int i = 0; i < len; ++i) {
-            INFO("i = " << i);
             Value key = strs[i];
-            CHECK(obj.count() == len-i);
-            CHECK(obj.full() == (i == 0));
-            CHECK(obj.contains(key));
-            CHECK(obj.remove(key));
-            CHECK(!obj.contains(key));
-            CHECK(!obj.remove(key));
-            CHECK(obj.empty() == (i == len-1));
+            INFO("i = " << i << ", key = " << (void*)key.block());
+            CHECK(dict.count() == len-i);
+            CHECK(dict.full() == (i == 0));
+            CHECK(dict.contains(key));
+            CHECK(dict.remove(key));
+            CHECK(!dict.contains(key));
+            CHECK(!dict.remove(key));
+            CHECK(dict.empty() == (i == len-1));
         }
     }
 }
@@ -264,7 +269,7 @@ TEST_CASE("Symbols", "[object]") {
     }
 
     size_t i = 0;
-    table.visit([&](Symbol sym, uint32_t) {
+    table.visit([&](Symbol, uint32_t) {
         ++i;
         return true;
     });
@@ -278,7 +283,7 @@ TEST_CASE("Symbols", "[object]") {
     unless(bar2, table2.find("bar"))  {FAIL("Failed to find 'bar'");}
     CHECK(bar2.str() == "bar");
     i = 0;
-    table2.visit([&](Symbol sym, uint32_t) {
+    table2.visit([&](Symbol, uint32_t) {
         ++i;
         return true;
     });

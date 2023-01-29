@@ -5,16 +5,12 @@
 //
 
 #pragma once
+#include "Base.hh"
 #include "function_ref.hh"
 #include "slice.hh"
-#include <cassert>
 #include <compare>
-#include <cstddef>
-#include <cstdint>
-#include <memory>
-#include <stdexcept>
-#include <utility>
 #include <vector>
+
 
 class Block;
 class Object;
@@ -23,11 +19,6 @@ class Val;
 class Value;
 template <class T> class Maybe;
 
-
-using byte = std::byte;
-
-using  intpos =  int32_t;
-using uintpos = uint32_t;
 
 using heapsize = uintpos;      ///< Like `size_t` for Heaps.
 
@@ -124,14 +115,11 @@ public:
     //---- Address Translation:
 
     /// Translates a `heappos` offset to a real address.
-    void* at(heappos off)               {assert(validPos(off)); return _base + uintpos(off);}
+    void* at(heappos off)               {assert(validPos(off)); return _at(off);}
     const void* at(heappos off) const   {assert(validPos(off)); return _base + uintpos(off);}
 
     /// Translates a real address to a `heappos` offset.
-    heappos pos(const void *ptr) const {
-        assert(ptr >= _base && ptr < _end);
-        return heappos((byte*)ptr - _base);
-    }
+    heappos pos(const void *ptr) const {assert(ptr >= _base && ptr < _end); return _pos(ptr);}
 
     bool contains(const void *ptr) const     {return ptr >= _base && ptr < _cur;}
     bool contains(Object) const;
@@ -171,6 +159,8 @@ private:
     Heap(void *base, size_t capacity, bool malloced);
     Header& header()                {return *(Header*)_base;}
     Header const& header() const    {return *(Header*)_base;}
+    void* _at(heappos off)          {return _base + uintpos(off);}
+    heappos _pos(const void *ptr) const {return heappos((byte*)ptr - _base);}
     Value posToValue(heappos pos) const;
     heappos valueToPos(Value const& obj) const;
     void registr();
@@ -224,39 +214,3 @@ private:
     Heap const* _heap;
     Heap const* _prev;
 };
-
-
-
-class ConstHeapRef {
-public:
-    ConstHeapRef()                  :_heap(Heap::current()) { }
-    ConstHeapRef(nullptr_t)         :ConstHeapRef() { }
-    ConstHeapRef(Heap const* h)     :_heap(h) { }
-    ConstHeapRef(Heap const& h)     :_heap(&h) { }
-
-    Heap const* get()           {return _heap;}
-    Heap const* operator* ()    {return _heap;}
-    Heap const* operator->()    {return _heap;}
-
-protected:
-    Heap const* _heap;
-};
-
-
-class HeapRef : public ConstHeapRef {
-public:
-    HeapRef()           :ConstHeapRef() { }
-    HeapRef(nullptr_t)  :ConstHeapRef() { }
-    HeapRef(Heap *h)    :ConstHeapRef(h) { }
-    HeapRef(Heap &h)    :ConstHeapRef(h) { }
-
-    operator Heap* () const     {return (Heap*)_heap;}
-    Heap* operator* () const    {return (Heap*)_heap;}
-    Heap* operator->() const    {return (Heap*)_heap;}
-};
-
-
-#define IN_MUT_HEAP HeapRef heap //= nullptr
-#define IN_HEAP     ConstHeapRef heap //= nullptr
-
-#define CUR_HEAP    ConstHeapRef(nullptr)

@@ -46,7 +46,7 @@ TEST_CASE("Empty Heap", "[heap]") {
     CHECK(Heap::current() == nullptr);
 
     // visit:
-    heap.visitBlocks([&](const Block &obj) { FAIL("Visitor should not be called"); return false; });
+    heap.visitBlocks([&](const Block&) { FAIL("Visitor should not be called"); return false; });
 }
 
 

@@ -21,44 +21,61 @@
 #include <iostream>
 
 
-struct FakeEntry {
-    ValBase key;
-    ValBase value;
-};
-
-static bool fakeKeyCmp(FakeEntry const& a, FakeEntry const& b) {
-    return a.key.rawBits() > b.key.rawBits();
+static bool keyCmp(DictEntry const& a, DictEntry const& b) {
+    return a.key.block() > b.key.block();   // reverse order
 }
 
-static inline bool operator==(Val val, Value value) {
-    return val.rawBits() == value.asValBase().rawBits();
+static bool keyValueCmp(DictEntry const& a, Block const* b) {
+    return a.key.block() > b;   // reverse order
 }
+
+DictEntry& DictEntry::operator=(DictEntry && other) {
+    (Val&)key = other.key;
+    value = other.value;
+    return *this;
+}
+
+void swap(DictEntry const&, DictEntry const&);
+
 
 
 // Returns the DictEntry with this key, or else the pos where it should go (DictEntry with next higher key),
 // or else the end.
-static DictEntry* _findEntry(slice<DictEntry> entries, Value key) {
-    FakeEntry target = {key.asValBase(), nullval};
-    return (DictEntry*) std::lower_bound((FakeEntry*)entries.begin(),
-                                         (FakeEntry*)entries.end(),
-                                         target, fakeKeyCmp);
+static DictEntry* _findEntry(slice<DictEntry> entries, Block const* key) {
+    return (DictEntry*) std::lower_bound(entries.begin(), entries.end(), key, keyValueCmp);
 }
 
 
+void Dict::dump(std::ostream& out) const {
+    string_view prefix = "\t[";
+    for (auto &entry : allItems()) {
+        out << prefix << std::setw(10) << (void*)entry.key.block() << " " << entry.key
+            << " = " << entry.value;
+        prefix = "\n\t ";
+    }
+    if (capacity() == 0)
+        out << prefix;
+    out << " ]\n";
+}
+
+void Dict::dump() const {dump(std::cout);}
+
+
+
 void Dict::sort(size_t count) {
-    std::sort((FakeEntry*)begin(), (FakeEntry*)begin() + count, fakeKeyCmp);
+    std::sort(begin(), begin() + count, keyCmp);
 }
 
 
 slice<DictEntry> Dict::items() const {
     slice<DictEntry> all = allItems();
-    return {all.begin(), _findEntry(all, nullvalue)};
+    return {all.begin(), _findEntry(all, nullptr)};
 }
 
 
 Val* Dict::find(Value key) {
     slice<DictEntry> all = allItems();
-    if (DictEntry *ep = _findEntry(all, key); ep != all.end() && ep->key.rawBits() == key.asValBase().rawBits())
+    if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == key)
         return &ep->value;
     else
         return nullptr;
@@ -67,14 +84,15 @@ Val* Dict::find(Value key) {
 
 bool Dict::set(Value key, Value value, bool insertOnly) {
     slice<DictEntry> all = allItems();
-    if (DictEntry *ep = _findEntry(all, key); ep == all.end()) {
+    if (DictEntry *ep = _findEntry(all, key.block()); ep == all.end()) {
         return false;   // not found, and would go after last item (so dict must be full)
     } else if (ep->key == key) {
         if (insertOnly) return false;
         ep->value = value;
         return true;
     } else if (all.back().key == nullval) {
-        ::memmove(ep + 1, ep, (all.end() - ep - 1) * sizeof(DictEntry));
+        for (auto p = all.end()-1; p > ep; --p) // can't use memmove bc of damned relative ptrs
+            p[0] = std::move(p[-1]);
         (Val&)ep->key = key;
         ep->value = value;
         return true;
@@ -96,8 +114,9 @@ bool Dict::replace(Value key, Value newValue) {
 
 bool Dict::remove(Value key) {
     slice<DictEntry> all = allItems();
-    if (DictEntry *ep = _findEntry(all, key); ep != all.end() && ep->key == key) {
-        ::memmove(ep, ep + 1, (all.end() - (ep + 1)) * sizeof(DictEntry));
+    if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == key) {
+        for (auto p = ep + 1; p < all.end(); ++p) // can't use memmove bc of damned relative ptrs
+            p[-1] = std::move(p[0]);
         new (&all.back()) DictEntry {};
         return true;
     } else {

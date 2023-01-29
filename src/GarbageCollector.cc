@@ -64,7 +64,7 @@ void GarbageCollector::scanRoot() {
 Value GarbageCollector::scan(Value val) {
     if (val.isObject()) {
         Block *block = val.block();
-        return Value(scan(block), _toHeap);
+        return Value(scan(block));
     } else {
         return val;
     }
@@ -73,7 +73,7 @@ Value GarbageCollector::scan(Value val) {
 
 void GarbageCollector::update(Value& obj) {
     if (obj.isObject())
-        obj.relocate(scan(obj.block()), _toHeap);
+        obj.relocate(scan(obj.block()));
 }
 
 
@@ -88,10 +88,12 @@ Block* GarbageCollector::scan(Block *src) {
     while (toScan < (Block*)_toHeap._cur) {
         // Scan the contents of `toScan`:
         for (Val &v : toScan->vals()) {
-            // Note: v is in toHeap, but was memcpy'd from fromHeap,
-            // so any address in it is still relative to fromHeap.
-            if (Block *b = v.asBlock(_fromHeap))
-                v = Val(move(b), _toHeap);
+            if (Block *block = v.block()) {
+                // Note: v is in toHeap, but was memcpy'd from fromHeap,
+                // so any address in it is still relative to fromHeap.
+                block = (Block*)_fromHeap.at(_toHeap._pos(block));   // translate it back to fromHeap
+                v = Val(move(block));
+            }
         }
         // And advance it to the next block in _toHeap:
         toScan = toScan->nextBlock();
@@ -107,9 +109,29 @@ Block* GarbageCollector::move(Block* src) {
     if (src->isForwarded()) {
         return (Block*)_toHeap.at(src->getForwardingAddress());
     } else {
-        auto size = src->blockSize();
-        auto dst = (Block*)_toHeap.rawAlloc(size);
-        ::memcpy(dst, src, size);
+        Block *dst;
+        if (src->containsVals()) {
+            // Ugh. We have to move a bunch of relative-pointers, which still need to resolve to
+            // their original addresses until they get processed during the loop in scan().
+            // But there's no guarantee toHeap is within 2GB of fromHeap, so they're not capable
+            // of pointing back to it.
+            // The workaround is to transform each pointer-based value into a pointer to the
+            // equivalent heap offset. So if the original Val pointed to fromHeap+3F8, the copied
+            // Val points to toHeap+3F8. This isn't a useable Val, but scan() can undo this.
+            dst = Block::alloc(src->dataSize(), src->type(), _toHeap);
+            auto dstVal = (Val*)dst->dataPtr();
+            for (Val const& srcVal : src->vals()) {
+                if (srcVal.isObject())
+                    *dstVal++ = (Block*)_toHeap._at(_fromHeap.pos(srcVal._block()));
+                else
+                    *dstVal++ = srcVal;
+            }
+        } else {
+            auto size = src->blockSize();
+            assert(size < 2000);//TEMP
+            dst = (Block*)_toHeap.rawAlloc(size);
+            ::memcpy(dst, src, size);
+        }
         src->setForwardingAddress(_toHeap.pos(dst));
         return dst;
     }

@@ -81,12 +81,12 @@ uint32_t SymbolTable::HashTable::count() const {
 
 
 std::pair<SymbolTable::HashEntry*,Maybe<Symbol>>
-SymbolTable::HashTable::search(Heap *heap, string_view str, int32_t hashCode) const {
+SymbolTable::HashTable::search(string_view str, int32_t hashCode) const {
     Val hashVal(hashCode);
     HashEntry *entry = begin + (uint32_t(hashCode) & sizeMask);
     while (true) {
         if (entry->hash == hashVal) {
-            Symbol sym = entry->symbol.as<Symbol>(heap);
+            Symbol sym = entry->symbol.as<Symbol>();
             if (sym.str() == str)
                 return {entry, sym};
         } else if (entry->hash == nullval) {
@@ -98,12 +98,12 @@ SymbolTable::HashTable::search(Heap *heap, string_view str, int32_t hashCode) co
 }
 
 
-void SymbolTable::HashTable::dump(std::ostream &out, Heap const* heap) const {
+void SymbolTable::HashTable::dump(std::ostream &out) const {
     uint32_t count = 0, probes = 0;
     uint32_t i = 0;
     for (auto e = begin; e != end; ++e, ++i) {
         out << setw(3) << i << ": ";
-        if (auto symbol = e->symbol.maybeAs<Symbol>(heap)) {
+        if (auto symbol = e->symbol.maybeAs<Symbol>()) {
             ++count;
             uint32_t hashCode = uint32_t(e->hash.asInt());
             uint32_t delta = i - (hashCode & sizeMask);
@@ -122,8 +122,8 @@ void SymbolTable::HashTable::dump(std::ostream &out, Heap const* heap) const {
 }
 
 
-std::unique_ptr<SymbolTable> SymbolTable::create(IN_MUT_HEAP) {
-    if_let(table, Array::create(2 * kInitialNumberOfEntries, heap))
+std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap) {
+    if_let(table, Array::create(2 * kInitialNumberOfEntries, *heap))
         return std::make_unique<SymbolTable>(heap, table);
     else
         return nullptr;
@@ -142,7 +142,7 @@ void SymbolTable::setTable(Value const& tableVal) {
 Maybe<Symbol> SymbolTable::find(string_view str) const {
     if (!_table)
         return nullptr;
-    auto [entry, symbol] = _table.search(_heap, str, computeHash(str));
+    auto [entry, symbol] = _table.search(str, computeHash(str));
     return symbol;
 }
 
@@ -153,12 +153,12 @@ Maybe<Symbol> SymbolTable::create(string_view str) {
             if (!grow()) return nullptr;
         }
     } else {
-        setTable(Array::create(2 * kInitialNumberOfEntries, _heap));
+        setTable(Array::create(2 * kInitialNumberOfEntries, *_heap));
     }
     int32_t hashCode = computeHash(str);
-    auto [entry, symbol] = _table.search(_heap, str, hashCode);
+    auto [entry, symbol] = _table.search(str, hashCode);
     if (!symbol) {
-        symbol = Symbol::create(str, _heap);
+        symbol = Symbol::create(str, *_heap);
         if (!symbol)
             return nullptr;
         entry->hash = hashCode;
@@ -174,12 +174,12 @@ Maybe<Symbol> SymbolTable::create(string_view str) {
 bool SymbolTable::grow() {
 //    std::cout << "=== Growing symbol table from " << _table.size
 //              << " to " << 2*_table.size << " buckets ===\n";
-    unless(newArray, Array::create(4 * _table.size(), _heap)) { return false; }
+    unless(newArray, Array::create(4 * _table.size(), *_heap)) { return false; }
     HashTable newTable(newArray);
     // Scan the old table, inserting each Symbol into the new table:
     for (auto e = _table.begin; e != _table.end; ++e) {
-        if_let (symbol, e->symbol.maybeAs<Symbol>(_heap)) {
-            auto [newEntry, foundSym] = newTable.search(_heap, symbol.str(), e->hash.asInt());
+        if_let (symbol, e->symbol.maybeAs<Symbol>()) {
+            auto [newEntry, foundSym] = newTable.search(symbol.str(), e->hash.asInt());
             assert(!foundSym);
             *newEntry = *e;
         }
@@ -195,7 +195,7 @@ bool SymbolTable::visit(Visitor visitor) const {
     if (!_table)
         return true;
     for (auto i = _table.begin; i != _table.end; ++i) {
-        if_let (symbol, i->symbol.maybeAs<Symbol>(_heap)) {
+        if_let (symbol, i->symbol.maybeAs<Symbol>()) {
             if (!visitor(symbol, i->hash.asInt()))
                 return false;
         }

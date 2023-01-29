@@ -12,13 +12,13 @@
 using namespace std;
 
 
-int xmain(int argc, const char * argv[]) {
+int xmain(int /*argc*/, const char * /*argv*/[]) {
     string persisted;
     {
         Heap heap(100000);
         UsingHeap u(heap);
         
-        Array arr = Array::create(4, &heap).value();
+        Array arr = Array::create(4, heap).value();
         assert(arr.count() == 4);
         cout << arr << endl;
         heap.setRoot(arr);

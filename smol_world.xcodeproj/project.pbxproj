@@ -44,6 +44,7 @@
 		2770B1B129807E5C00E2C126 /* Test_GC.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_GC.cc; sourceTree = "<group>"; };
 		2770B1B32982F0E000E2C126 /* function_ref.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = function_ref.hh; sourceTree = "<group>"; };
 		2770B1B429846D7300E2C126 /* Test_RelPtr.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_RelPtr.cc; sourceTree = "<group>"; };
+		2770B1B62985AA9300E2C126 /* Base.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Base.hh; sourceTree = "<group>"; };
 		27733D03297B39D300EDA2E9 /* Test_Objects.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_Objects.cc; sourceTree = "<group>"; };
 		27733D06297B51E200EDA2E9 /* wyhash32.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = wyhash32.h; sourceTree = "<group>"; };
 		27733D07297B51E200EDA2E9 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
@@ -152,10 +153,11 @@
 			isa = PBXGroup;
 			children = (
 				2705301429776CB2003D4C93 /* smol_world.hh */,
+				2770B1B62985AA9300E2C126 /* Base.hh */,
 				2770B1AC297F1EDD00E2C126 /* slice.hh */,
+				27AA27FC2970BFF300BF17A5 /* Val.hh */,
 				27AA27F92970835E00BF17A5 /* Heap.hh */,
 				2770B1AB297F1E7A00E2C126 /* Block.hh */,
-				27AA27FC2970BFF300BF17A5 /* Val.hh */,
 				27AA27FF2970C04900BF17A5 /* Value.hh */,
 				2705301129776C46003D4C93 /* Collections.hh */,
 				27733D0B297C6E1100EDA2E9 /* SymbolTable.hh */,
@@ -368,6 +370,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GCC_ENABLE_CPP_EXCEPTIONS = YES;
 				GCC_ENABLE_CPP_RTTI = NO;
+				GCC_WARN_UNUSED_PARAMETER = YES;
 				LD_GENERATE_MAP_FILE = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -381,6 +384,7 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				GCC_ENABLE_CPP_EXCEPTIONS = YES;
 				GCC_ENABLE_CPP_RTTI = NO;
+				GCC_WARN_UNUSED_PARAMETER = YES;
 				LD_GENERATE_MAP_FILE = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};

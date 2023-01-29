@@ -141,11 +141,11 @@ bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos <
 Value Heap::posToValue(heappos pos) const {
     if (pos == nullpos)
         return nullptr;
-    return Value((Block*)at(pos), this);
+    return Value((Block*)at(pos));
 }
 
 heappos Heap::valueToPos(Value const& obj) const {
-    return obj.isObject() ? obj.asPos(this) : nullpos;
+    return obj.isObject() ? pos(obj.block()) : nullpos;
 }
 
 
@@ -206,7 +206,7 @@ void* Heap::rawAllocFailed(heapsize size) {
 
 void* Heap::alloc(heapsize size) {
     // As a general-purpose allocator we just allocate a raw Block and return its data.
-    auto blob = Block::alloc(size, Type::Blob, this);
+    auto blob = Block::alloc(size, Type::Blob, *this);
     return blob ? blob->dataPtr() : nullptr;
 }
 
@@ -253,7 +253,7 @@ void Heap::visitBlocks(BlockVisitor visitor) {
         Block *b = stack.front();
         stack.pop_front();
         for (Val const& val : b->vals()) {
-            if (val.isObject() && !processBlock(val.asBlock(this)))
+            if (Block *block = val.block(); block && !processBlock(block))
                 return;
         }
     }
@@ -261,7 +261,7 @@ void Heap::visitBlocks(BlockVisitor visitor) {
 
 
 void Heap::visit(ObjectVisitor visitor) {
-    visitBlocks([&](Block const& block) { return visitor(Object(&block,this)); });
+    visitBlocks([&](Block const& block) { return visitor(Object(&block)); });
 }
 
 

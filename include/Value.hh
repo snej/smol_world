@@ -5,8 +5,8 @@
 //
 
 #pragma once
-#include "slice.hh"
 #include "Block.hh"
+#include "slice.hh"
 #include "Val.hh"
 
 
@@ -19,29 +19,21 @@ class Value {
 public:
     constexpr Value()                                   :_val() { }
     constexpr Value(nullptr_t)                          :Value() { }
-    explicit constexpr Value(bool b)                    :_val(b) { }
+    constexpr explicit Value(bool b)                    :_val(b) { }
     constexpr Value(int i)                              :_val(i) { }
 
-    //    constexpr explicit Value(bool b)                      :_val(b ? TrueVal : FalseVal) { }
-
-    Value(Val const& val, IN_HEAP) {
-        _val = val;
-        if (Block *block = val.asBlock(heap)) {
-            auto bytes = block->data<byte>();
-            _ptr = bytes.begin();
-            _size = bytes.size();
-        }
+    explicit Value(Val const& val) {
+        if (Block *block = val.block())
+            setBlock(block);
+        else
+            _val = val;
     }
 
-    Value(Block const* block, IN_HEAP) {
-        if (block) {
-            _val = Val(block, heap);
-            auto bytes = block->data<byte>();
-            _ptr = bytes.begin();
-            _size = bytes.size();
-        } else {
+    explicit Value(Block const* block) {
+        if (block)
+            setBlock(block);
+        else
             _val = nullval;
-        }
     }
 
     Type type() const                               {return _ptr ? block()->type() : _val._type();}
@@ -65,23 +57,33 @@ public:
     /// with this value cast to its runtime type.
     template <typename FN> bool visit(FN fn) const;
 
-    heappos asPos(IN_HEAP) const                    {return heap->pos(block());}
-    ValBase asValBase() const                       {return _val;}
-
     friend bool operator==(Value const& a, Value const& b)  {return a._val == b._val && a._ptr == b._ptr;}
     friend bool operator!=(Value const& a, Value const& b)  {return !(a == b);}
+    friend bool operator==(Val const& val, Value const& value);
+
+    ValBase asValBase() const                       {assert(!_ptr); return _val;}
+    Block* block() const                        {assert(_ptr); return Block::fromData(rawBytes());}
 
 protected:
-    Block* block() const                        {assert(_ptr); return Block::fromData(rawBytes());}
+    friend class GarbageCollector;
+    friend class Heap;
+    friend class Val;
+
     slice<byte> rawBytes() const                {assert(_ptr); return {(byte*)_ptr, _size};}
 
 private:
-    friend class GarbageCollector;
+    static constexpr ValBase PlaceholderPosVal = ValBase(relpos(-1));
 
-    void relocate(Block* newBlock, IN_HEAP) {
+    void setBlock(Block const* block) {
+        auto bytes = block->data<byte>();
+        _ptr = bytes.begin();
+        _size = bytes.size();
+        _val = PlaceholderPosVal;
+    }
+
+    void relocate(Block* newBlock) {
         assert(_ptr);
         _ptr = newBlock->dataPtr();
-        _val = Val(newBlock, heap);
     }
 
     ValBase  _val;              // The equivalent Val, but the pointer bits aren't valid
@@ -132,8 +134,8 @@ class Object : public Value {
 public:
     static bool HasType(enum Type t) {return t < Type::Null;}
 
-    Object(Block const* block, IN_HEAP)             :Value(block, heap) {assert(isObject());}
-    Object(Val const& val, IN_HEAP)                 :Value(val, heap) {assert(isObject());}
+    explicit Object(Block const* block)             :Value(block) {assert(isObject());}
+    explicit Object(Val const& val)                 :Value(val) {assert(isObject());}
 
     Block* block() const                            {return Value::block();}
     slice<byte> rawBytes() const                    {return Value::rawBytes();}
@@ -188,6 +190,6 @@ public:
     static constexpr Type Type = TYPE;
     static bool HasType(enum Type t) {return t == Type;}
 protected:
-    TypedObject(Block const* block, IN_HEAP)        :Object(block, heap) { }
-    TypedObject(Val const& val, IN_HEAP)            :Object(val, heap) {assert(type() == TYPE);}
+    explicit TypedObject(Block const* block)        :Object(block) { }
+    explicit TypedObject(Val const& val)            :Object(val) {assert(type() == TYPE);}
 };
