@@ -31,7 +31,7 @@
 
 * A memory space called a “heap”, which internally uses 32-bit pointers
 * A super fast “bump” or “arena” memory allocator
-* Allocated blocks with only two bytes of overhead; a 3-bit type field, some GC-related flags, and the block's _exact_ size [Disclaimer: blocks 1KB and larger have 4 bytes overhead.] Blocks are **not** aligned. No space is wasted for alignment.
+* Allocated blocks with only two bytes of overhead; they have a 3-bit type field, some GC-related flags, and the _exact_ size. [Disclaimer: blocks 1KB and larger have 4 bytes overhead.] Blocks are **not** aligned. No space is wasted for alignment.
 * A simple Cheney-style garbage collector that copies the live blocks to another heap
 * Basic JSON-ish object types: strings, arrays and dictionaries/maps. Plus binary blobs.
 * Symbols, i.e. unique de-duplicated strings for use as dictionary keys

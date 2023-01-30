@@ -59,8 +59,7 @@ public:
     const void*  base() const           {return _base;}         ///< Address of start of heap.
     const size_t capacity() const       {return _end - _base;}  ///< Maximum size it can grow to
     const size_t used() const           {return _cur - _base;}  ///< Maximum byte-offset used
-    const size_t remaining() const      {return _end - _cur;}   ///< Bytes of capacity left
-    const size_t available() const      {return remaining();}
+    const size_t available() const      {return _end - _cur;}   ///< Bytes of capacity left
 
     /// The contents of the heap. You can persist the heap by writing this to a file or socket.
     slice<byte> contents() const        {return {_base, _cur};}
@@ -158,8 +157,8 @@ private:
 
     Heap();
     Heap(void *base, size_t capacity, bool malloced);
-    Header& header()                {return *(Header*)_base;}
-    Header const& header() const    {return *(Header*)_base;}
+    Header& header()                {assert(_base); return *(Header*)_base;}
+    Header const& header() const    {assert(_base); return *(Header*)_base;}
     void* _at(heappos off)          {return _base + uintpos(off);}
     heappos _pos(const void *ptr) const {return heappos((byte*)ptr - _base);}
     Value posToValue(heappos pos) const;
@@ -175,7 +174,7 @@ private:
     void* rawAlloc(heapsize size) {
         byte *result = _cur;
         byte *newCur = result + size;
-        if (newCur <= _end) {
+        if (_likely(newCur <= _end)) {
             _cur = newCur;
             return result;
         } else {

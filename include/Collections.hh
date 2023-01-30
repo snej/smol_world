@@ -58,7 +58,7 @@ protected:
         assert(count <= capacity);
         Block *block = Block::alloc(capacity * sizeof(Item), TYPE, heap);
         if (!block)
-            return nullptr;
+            return nullvalue;
         return Collection(block, capacity, items, count);
     }
 
@@ -143,7 +143,6 @@ struct DictEntry {
     DictEntry() = default;
     DictEntry(DictEntry&& other) {*this = std::move(other);}
     DictEntry& operator=(DictEntry &&);
-   // friend void swap(DictEntry const&, DictEntry const&);
 };
 
 
@@ -160,14 +159,12 @@ public:
     /// Creates a dictionary from a list of key-value pairs. It will have no extra capacity.
     static Maybe<Dict> create(std::initializer_list<DictEntry> vals, Heap &heap) {
         return Maybe<Dict>(_create(vals.size(), vals.begin(), vals.size(), heap));
-        // FIXME: Sort!
     }
 
     /// Creates a dictionary from a list of key-value pairs.
     /// The capacity must be at least the number of pairs but can be larger.
     static Maybe<Dict> create(std::initializer_list<DictEntry> vals, heapsize capacity, Heap &heap) {
         return Maybe<Dict>(_create(size_t(capacity), vals.begin(), vals.size(), heap));
-        // FIXME: Sort!
     }
 
     heapsize capacity() const           {return Collection::capacity();}
@@ -197,8 +194,18 @@ public:
 
     void dump(std::ostream& out) const;
     void dump() const;
-    
+
+    void postGC()                       {sort();}   // GC changes the ordering of pointers
 private:
+    static Maybe<Dict> _create(size_t capacity, const Item* items, size_t count, Heap &heap) {
+        Maybe<Dict> dict(Collection::_create(capacity, items, count, heap));
+        if (count > 0) {
+            if_let(d, dict) {
+                d.sort(count);
+            }
+        }
+        return dict;
+    }
     slice<DictEntry> allItems() const               {return Collection::items();}
     void sort(size_t count);
     void sort()                                     {sort(capacity());}
@@ -215,14 +222,14 @@ std::ostream& operator<<(std::ostream&, Array const&);
 template <typename FN>
 bool Value::visit(FN fn) const {
     switch (type()) {
-        case Type::Null:    fn(as<Null>()); break;
-        case Type::Bool:    fn(as<Bool>()); break;
-        case Type::Int:     fn(as<Int>()); break;
-        case Type::String:  fn(as<String>()); break;
-        case Type::Symbol:  fn(as<Symbol>()); break;
-        case Type::Blob:    fn(as<Blob>()); break;
-        case Type::Array:   fn(as<Array>()); break;
-        case Type::Dict:    fn(as<Dict>()); break;
+        case Type::Null:    fn(_as<Null>()); break;
+        case Type::Bool:    fn(_as<Bool>()); break;
+        case Type::Int:     fn(_as<Int>()); break;
+        case Type::String:  fn(_as<String>()); break;
+        case Type::Symbol:  fn(_as<Symbol>()); break;
+        case Type::Blob:    fn(_as<Blob>()); break;
+        case Type::Array:   fn(_as<Array>()); break;
+        case Type::Dict:    fn(_as<Dict>()); break;
         default:            assert(false); return false;
     }
     return true;

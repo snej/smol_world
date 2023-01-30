@@ -62,7 +62,7 @@ public:
     friend bool operator!=(Value const& a, Value const& b)  {return !(a == b);}
     friend bool operator==(Val const& val, Value const& value);
 
-    ValBase asValBase() const                       {assert(!_ptr); return _val;}
+    ValBase asValBase() const                   {assert(!_ptr); return _val;}
     Block* block() const                        {assert(_ptr); return Block::fromData(rawBytes());}
 
 protected:
@@ -74,6 +74,8 @@ protected:
 
 private:
     static constexpr ValBase PlaceholderPosVal = ValBase(relpos(-1));
+
+    template <ValueClass T> T _as() const       {return *(T*)this;}
 
     void setBlock(Block const* block) {
         auto bytes = block->data<byte>();

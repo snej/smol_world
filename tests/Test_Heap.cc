@@ -31,7 +31,7 @@ TEST_CASE("Empty Heap", "[heap]") {
     CHECK(heap.base() != nullptr);
     CHECK(heap.capacity() == 10000);
     CHECK(heap.used() == Heap::Overhead);
-    CHECK(heap.remaining() == 10000 - Heap::Overhead);
+    CHECK(heap.available() == 10000 - Heap::Overhead);
 
     CHECK(!heap.contains(nullptr));
 
@@ -61,7 +61,7 @@ TEST_CASE("Alloc", "[heap]") {
     CHECK(!heap.contains(ptr + 123));
 
     CHECK(heap.used() == Heap::Overhead + 2 + 123);
-    CHECK(heap.remaining() == 10000 - Heap::Overhead - 2 - 123);
+    CHECK(heap.available() == 10000 - Heap::Overhead - 2 - 123);
 
     int i = 0;
     heap.visitAll([&](const Block &obj) {
@@ -82,7 +82,7 @@ TEST_CASE("Alloc", "[heap]") {
     CHECK(!heap.contains(ptr2 + 9859));
 
     CHECK(heap.used() == 10000);
-    CHECK(heap.remaining() == 0);
+    CHECK(heap.available() == 0);
 
     i = 0;
     heap.visitAll([&](const Block &obj) {

@@ -17,9 +17,7 @@
 //
 
 #include "GarbageCollector.hh"
-#include "Heap.hh"
-#include "Block.hh"
-#include "Val.hh"
+#include "smol_world.hh"
 #include "Value.hh"
 #include <iostream>
 
@@ -87,7 +85,7 @@ Block* GarbageCollector::scan(Block *src) {
     Block *toScan = (Block*)_toHeap._cur;
     Block *dst = move(src);
     while (toScan < (Block*)_toHeap._cur) {
-        // Scan the contents of `toScan`:
+        // Scan & update the contents of the Object in `toScan`:
         for (Val &v : toScan->vals()) {
             if (Block *block = v.block()) {
                 // Note: v is in toHeap, but was memcpy'd from fromHeap,
@@ -96,6 +94,10 @@ Block* GarbageCollector::scan(Block *src) {
                 v = Val(move(block));
             }
         }
+        // Some types need cleanup after this:
+        if (toScan->type() == Type::Dict)
+            Object(toScan)._as<Dict>().postGC();
+
         // And advance it to the next block in _toHeap:
         toScan = toScan->nextBlock();
     }
