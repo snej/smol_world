@@ -10,6 +10,8 @@
 #include <initializer_list>
 #include <string_view>
 
+namespace snej::smol {
+
 using string_view = std::string_view;
 
 
@@ -233,4 +235,6 @@ template <ValueClass T> T Val::as() const {
 
 template <ValueClass T> Maybe<T> Val::maybeAs() const {
     return Value(*this).maybeAs<T>();
+}
+
 }

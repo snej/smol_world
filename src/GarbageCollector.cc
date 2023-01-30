@@ -23,6 +23,7 @@
 #include "Value.hh"
 #include <iostream>
 
+namespace snej::smol {
 
 GarbageCollector::GarbageCollector(Heap &heap)
 :_tempHeap(std::make_unique<Heap>(heap.capacity()))
@@ -140,4 +141,6 @@ Block* GarbageCollector::move(Block* src) {
 
 void Heap::garbageCollectTo(Heap &dstHeap) {
     GarbageCollector gc(*this, dstHeap);
+}
+
 }

@@ -21,7 +21,7 @@
 #include <iostream>
 
 using namespace std;
-
+using namespace snej::smol;
 
 
 template <typename T>

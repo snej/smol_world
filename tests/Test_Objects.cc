@@ -23,6 +23,7 @@
 #include <sstream>
 
 using namespace std;
+using namespace snej::smol;
 
 
 static void checkTypes(Value v, Type t, string_view asString) {

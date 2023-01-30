@@ -21,6 +21,8 @@
 #include <iostream>
 #include <cmath>
 
+namespace snej::smol {
+
 namespace wy {
 #include "wyhash32.h"
 }
@@ -40,7 +42,7 @@ using namespace std;
  The `hash` field is redundant, but makes it faster to skip collision chains. It also speeds up
  growing the table since the Symbol strings don't have to be rehashed. It will also be needed if I
  implement Robin Hood hashing.
-*/
+ */
 
 // Initial size of hash table (number of entries.)
 static constexpr heapsize kInitialNumberOfEntries   = 128;
@@ -124,7 +126,7 @@ void SymbolTable::HashTable::dump(std::ostream &out) const {
 
 std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap) {
     if_let(table, Array::create(2 * kInitialNumberOfEntries, *heap))
-        return std::make_unique<SymbolTable>(heap, table);
+    return std::make_unique<SymbolTable>(heap, table);
     else
         return nullptr;
 }
@@ -172,8 +174,8 @@ Maybe<Symbol> SymbolTable::create(string_view str) {
 
 
 bool SymbolTable::grow() {
-//    std::cout << "=== Growing symbol table from " << _table.size
-//              << " to " << 2*_table.size << " buckets ===\n";
+    //    std::cout << "=== Growing symbol table from " << _table.size
+    //              << " to " << 2*_table.size << " buckets ===\n";
     unless(newArray, Array::create(4 * _table.size(), *_heap)) { return false; }
     HashTable newTable(newArray);
     // Scan the old table, inserting each Symbol into the new table:
@@ -201,4 +203,6 @@ bool SymbolTable::visit(Visitor visitor) const {
         }
     }
     return true;
+}
+
 }

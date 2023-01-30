@@ -12,6 +12,8 @@
 #include <deque>
 #include <iostream>
 
+namespace snej::smol {
+
 static constexpr uint32_t kMagic = 0xA189933A;
 
 struct Heap::Header {
@@ -178,7 +180,7 @@ void* Heap::rawAllocFailed(heapsize size) {
     if (_allocFailureHandler) {
         while(true) {
             std::cerr << "** Heap full: " << size << " bytes requested, only "
-                      << avail << " available -- invoking failure handler **\n";
+            << avail << " available -- invoking failure handler **\n";
             if (!_allocFailureHandler(this, size))
                 break;
             auto oldAvail = avail;
@@ -199,7 +201,7 @@ void* Heap::rawAllocFailed(heapsize size) {
         }
     }
     std::cerr << "** Heap allocation failed: " << size << " bytes requested, only "
-              << avail << " available **\n";
+    << avail << " available **\n";
     return nullptr;
 }
 
@@ -274,4 +276,6 @@ void Heap::unregisterExternalRoot(Value* ref) const {
     auto i = std::find(_externalRoots.rbegin(), _externalRoots.rend(), ref);
     assert(i != _externalRoots.rend());
     _externalRoots.erase(std::prev(i.base()));
+}
+
 }

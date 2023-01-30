@@ -9,12 +9,12 @@
 #include "slice.hh"
 #include "Val.hh"
 
+namespace snej::smol {
 
 /// A heap block; always created inside a Heap.
 /// Contains the metadata that gives its data size in bytes, its Type, and a few flags for GC.
 class Block {
 public:
-
     //---- Allocation:
 
     static Block* alloc(size_t dataSize, Type type, Heap &heap) {
@@ -83,7 +83,7 @@ public:
     //---- Data type:
 
     Type type() const                           {assert(!isForwarded());
-                                                 return Type((_tags & TypeMask) >> 1);}
+        return Type((_tags & TypeMask) >> 1);}
 
     //---- Stuff used by Heap and GC:
 
@@ -161,3 +161,5 @@ private:
 
 static_assert(sizeof(Block) == 2);
 static_assert(alignof(Block) == 1);
+
+}

@@ -11,6 +11,7 @@
 #include <compare>
 #include <vector>
 
+namespace snej::smol {
 
 class Block;
 class Object;
@@ -214,3 +215,5 @@ private:
     Heap const* _heap;
     Heap const* _prev;
 };
+
+}

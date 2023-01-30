@@ -10,6 +10,7 @@
 #include <iosfwd>
 #include <memory>
 
+namespace snej::smol {
 
 class SymbolTable {
 public:
@@ -61,3 +62,4 @@ private:
     uint32_t    _count = 0;
 };
 
+}

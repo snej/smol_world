@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstdint>
 
+namespace snej::smol {
 
 /// Generic pointer+length pair, a range of values.
 template <typename T>
@@ -41,3 +42,5 @@ private:
     T* _begin;
     T* _end;
 };
+
+}

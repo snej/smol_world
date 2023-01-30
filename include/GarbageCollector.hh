@@ -9,6 +9,7 @@
 #include "Val.hh"
 #include "Value.hh"
 
+namespace snej::smol {
 
 /// A typical copying garbage collector that copies all live objects into another Heap.
 /// At the end it swaps the memory of the two Heaps, so the original heap is now clean,
@@ -64,3 +65,5 @@ public:
     Handle(OBJ const& o)            :OBJ(o) {Heap::current()->registerExternalRoot(this);}
     ~Handle()                       {Heap::current()->unregisterExternalRoot(this);}
 };
+
+}

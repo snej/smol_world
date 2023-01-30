@@ -9,6 +9,7 @@
 #include "slice.hh"
 #include "Val.hh"
 
+namespace snej::smol {
 
 template <class T> class Maybe;
 
@@ -193,3 +194,5 @@ protected:
     explicit TypedObject(Block const* block)        :Object(block) { }
     explicit TypedObject(Val const& val)            :Object(val) {assert(type() == TYPE);}
 };
+
+}

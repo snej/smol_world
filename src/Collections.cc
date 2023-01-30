@@ -20,6 +20,7 @@
 #include <iomanip>
 #include <iostream>
 
+namespace snej::smol {
 
 static bool keyCmp(DictEntry const& a, DictEntry const& b) {
     return a.key.block() > b.key.block();   // reverse order
@@ -50,7 +51,7 @@ void Dict::dump(std::ostream& out) const {
     string_view prefix = "\t[";
     for (auto &entry : allItems()) {
         out << prefix << std::setw(10) << (void*)entry.key.block() << " " << entry.key
-            << " = " << entry.value;
+        << " = " << entry.value;
         prefix = "\n\t ";
     }
     if (capacity() == 0)
@@ -183,4 +184,6 @@ std::ostream& operator<<(std::ostream& out, Dict const& dict) {
 std::ostream& operator<< (std::ostream& out, Value const& val) {
     val.visit([&](auto t) {out << t;});
     return out;
+}
+
 }

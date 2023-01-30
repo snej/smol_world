@@ -10,6 +10,7 @@
 #include <string>
 
 using namespace std;
+using namespace snej::smol;
 
 
 int xmain(int /*argc*/, const char * /*argv*/[]) {

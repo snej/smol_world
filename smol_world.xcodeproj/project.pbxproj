@@ -45,6 +45,7 @@
 		2770B1B32982F0E000E2C126 /* function_ref.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = function_ref.hh; sourceTree = "<group>"; };
 		2770B1B429846D7300E2C126 /* Test_RelPtr.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_RelPtr.cc; sourceTree = "<group>"; };
 		2770B1B62985AA9300E2C126 /* Base.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Base.hh; sourceTree = "<group>"; };
+		2770B1B72986102700E2C126 /* Base.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Base.h; sourceTree = "<group>"; };
 		27733D03297B39D300EDA2E9 /* Test_Objects.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_Objects.cc; sourceTree = "<group>"; };
 		27733D06297B51E200EDA2E9 /* wyhash32.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = wyhash32.h; sourceTree = "<group>"; };
 		27733D07297B51E200EDA2E9 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
@@ -153,6 +154,7 @@
 			isa = PBXGroup;
 			children = (
 				2705301429776CB2003D4C93 /* smol_world.hh */,
+				2770B1B72986102700E2C126 /* Base.h */,
 				2770B1B62985AA9300E2C126 /* Base.hh */,
 				2770B1AC297F1EDD00E2C126 /* slice.hh */,
 				27AA27FC2970BFF300BF17A5 /* Val.hh */,

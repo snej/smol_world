@@ -20,6 +20,7 @@
 #include "Value.hh"
 #include <iostream>
 
+namespace snej::smol {
 
 Val::Val(Object const& obj)     :Val(obj.block()) { }
 
@@ -97,4 +98,6 @@ std::ostream& operator<<(std::ostream& out, Val const& val) {
         default:            out << TypeName(val.type()) << "@" << (void*)val.block(); break;
     }
     return out;
+}
+
 }

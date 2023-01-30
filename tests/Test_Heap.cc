@@ -21,6 +21,7 @@
 #include <iostream>
 
 using namespace std;
+using namespace snej::smol;
 
 
 TEST_CASE("Empty Heap", "[heap]") {

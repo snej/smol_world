@@ -9,6 +9,7 @@
 #include <iosfwd>
 #include <type_traits>
 
+namespace snej::smol {
 
 enum class ValType : uint8_t {
     Null,
@@ -47,7 +48,7 @@ std::ostream& operator<<(std::ostream& out, Type);
 
 
 template <typename T>
-    concept ValueClass = std::is_base_of<Value, T>::value;
+concept ValueClass = std::is_base_of<Value, T>::value;
 template <class T> class Maybe;
 
 
@@ -168,3 +169,5 @@ public:
 };
 
 static constexpr Val nullval;
+
+}
