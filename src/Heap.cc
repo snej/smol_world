@@ -61,7 +61,7 @@ Heap& Heap::operator=(Heap&& h) noexcept {
     h.unregistr();
     _allocFailureHandler = h._allocFailureHandler;
     _symbolTable = std::move(h._symbolTable);
-    if (_symbolTable) _symbolTable->setHeap(this);    // <- this is the only non-default bit
+    if (_symbolTable) _symbolTable->setHeap(*this);    // <- this is the only non-default bit
     _externalRoots = std::move(h._externalRoots);
     return *this;
 }
@@ -72,8 +72,8 @@ void Heap::swapMemoryWith(Heap &h) {
     std::swap(_cur, h._cur);
     std::swap(_malloced, h._malloced);
     std::swap(_symbolTable, h._symbolTable);
-    if (_symbolTable) _symbolTable->setHeap(this);
-    if (h._symbolTable) h._symbolTable->setHeap(&h);
+    if (_symbolTable) _symbolTable->setHeap(*this);
+    if (h._symbolTable) h._symbolTable->setHeap(h);
     // _allocFailureHandle and _externalRoots are not swapped, they belong to the Heap itself.
 }
 

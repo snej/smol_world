@@ -74,6 +74,7 @@ public:
     string_view str() const         {auto i = items(); return {i.begin(), i.size()};}
 
 private:
+    friend class HashTable; //TEMP
     friend class SymbolTable;
     static Value create(string_view str, Heap &heap);
 };

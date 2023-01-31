@@ -24,10 +24,6 @@
 
 namespace snej::smol {
 
-namespace wy {
-#include "wyhash32.h"
-}
-
 using namespace std;
 
 
@@ -48,86 +44,6 @@ using namespace std;
 // Initial size of hash table (number of entries.)
 static constexpr heapsize kInitialNumberOfEntries   = 128;
 
-// Max fraction of entries that can be used; at this point we grow the hash table.
-static constexpr float kMaxLoad = 0.9;
-
-static constexpr unsigned kHashSeed = 0xFE152280;
-//TODO: choosing different seed for each Heap would protect against some DoS attacks
-
-
-#pragma mark - HASH TABLE:
-
-
-// hash function for Symbol strings: WyHash64.
-// `Val` can only store 31-bit signed ints, so reinterpret hash as int32, then shift right 1 bit.
-static inline int32_t computeHash(string_view str) {
-    return int32_t(wy::wyhash32(str.data(), str.size(), kHashSeed)) >> 1 ;
-}
-
-
-SymbolTable::HashTable::HashTable(Array a)
-:array(a)
-{
-    sizeMask = uint32_t(array.size() / 2 - 1);
-    assert((sizeMask & (sizeMask + 1)) == 0); // must be power of 2 - 1
-    capacity = uint32_t(round(tableSize() * kMaxLoad));
-}
-
-
-uint32_t SymbolTable::HashTable::count() const {
-    uint32_t count = 0;
-    for (auto i = begin(); i < end(); i++) {
-        if (i->symbol != nullval)
-            ++count;
-    }
-    return count;
-}
-
-
-std::pair<SymbolTable::HashEntry*,Maybe<Symbol>>
-SymbolTable::HashTable::search(string_view str, int32_t hashCode) const {
-    Val hashVal(hashCode);
-    HashEntry *entry = begin() + (uint32_t(hashCode) & sizeMask);
-    while (true) {
-        if (entry->hash == hashVal) {
-            Symbol sym = entry->symbol.as<Symbol>();
-            if (sym.str() == str)
-                return {entry, sym};
-        } else if (entry->hash == nullval) {
-            return {entry, {}};
-        }
-        if (++entry == end())
-            entry = begin();
-    }
-}
-
-
-void SymbolTable::HashTable::dump(std::ostream &out) const {
-    uint32_t count = 0, probes = 0;
-    uint32_t i = 0;
-    for (auto e = begin(); e != end(); ++e, ++i) {
-        out << setw(3) << i << ": ";
-        if (auto symbol = e->symbol.maybeAs<Symbol>()) {
-            ++count;
-            uint32_t hashCode = uint32_t(e->hash.asInt());
-            uint32_t delta = i - (hashCode & sizeMask);
-            if (delta) {
-                out << '+' << setw(2) << delta << ' '; // distance from optimal position
-            } else {
-                out << "    ";
-            }
-            probes += 1 + delta;
-            out << setw(8) << hex << hashCode << dec << ' ' << symbol;
-        }
-        out << endl;
-    }
-    auto size = end() - begin();
-    out << count << " symbols in " << size << " buckets; " << (count/float(size)*100.0) << "% full. total #probes is " << probes << ", avg is " << (probes/float(count));
-}
-
-
-#pragma mark - SYMBOL TABLE:
-
 
 std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap) {
     if_let(table, newArray(2 * kInitialNumberOfEntries, *heap))
@@ -137,62 +53,20 @@ std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap) {
 }
 
 
-Maybe<Symbol> SymbolTable::find(string_view str) const {
-    auto [entry, symbol] = _table.search(str, computeHash(str));
-    return symbol;
-}
-
-
 Maybe<Symbol> SymbolTable::create(string_view str) {
-    if (_count >= _table.capacity) {
-        if (!grow())
-            return nullptr;
-    }
-    int32_t hashCode = computeHash(str);
-    auto [entry, symbol] = _table.search(str, hashCode);
-    if (!symbol) {
-        Value v = Symbol::create(str, *_heap);
-        if (!v)
-            return nullptr;
-        symbol = v.as<Symbol>();
-        entry->hash = hashCode;
-        entry->symbol = symbol;
-        ++_count;
-        if (_count == 1)
-            _heap->setSymbolTableArray(_table.array); // make sure it's registered with the Heap
-    }
-    return symbol;
-}
-
-
-bool SymbolTable::grow() {
-    //    std::cout << "=== Growing symbol table from " << _table.size
-    //              << " to " << 2*_table.size << " buckets ===\n";
-    unless(array, newArray(4 * _table.tableSize(), *_heap)) { return false; }
-    HashTable newTable(array);
-    // Scan the old table, inserting each Symbol into the new table:
-    for (auto e = _table.begin(); e != _table.end(); ++e) {
-        if_let (symbol, e->symbol.maybeAs<Symbol>()) {
-            auto [newEntry, foundSym] = newTable.search(symbol.str(), e->hash.asInt());
-            assert(!foundSym);
-            *newEntry = *e;
-        }
-    }
-    // Switch to the new table:
-    _table = newTable;
-    _heap->setSymbolTableArray(array);
-    return true;
+    bool inserted = false;
+    auto sym = _table.findOrInsert(str, [&](Heap &heap) {
+        inserted = true;
+        return Maybe<Symbol>(Symbol::create(str, heap));
+    });
+    if (inserted)
+        _table.heap().setSymbolTableArray(_table.array());
+    return Maybe<Symbol>(sym);
 }
 
 
 bool SymbolTable::visit(Visitor visitor) const {
-    for (auto i = _table.begin(); i != _table.end(); ++i) {
-        if_let (symbol, i->symbol.maybeAs<Symbol>()) {
-            if (!visitor(symbol, i->hash.asInt()))
-                return false;
-        }
-    }
-    return true;
+    return _table.visit([&](Value val, int32_t) {return visitor(val.as<Symbol>());});
 }
 
 }

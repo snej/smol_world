@@ -270,7 +270,7 @@ TEST_CASE("Symbols", "[object]") {
     }
 
     size_t i = 0;
-    table.visit([&](Symbol, uint32_t) {
+    table.visit([&](Symbol) {
         ++i;
         return true;
     });
@@ -284,7 +284,7 @@ TEST_CASE("Symbols", "[object]") {
     unless(bar2, table2.find("bar"))  {FAIL("Failed to find 'bar'");}
     CHECK(bar2.str() == "bar");
     i = 0;
-    table2.visit([&](Symbol, uint32_t) {
+    table2.visit([&](Symbol) {
         ++i;
         return true;
     });
