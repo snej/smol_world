@@ -5,7 +5,6 @@
 //
 
 #pragma once
-#include "Heap.hh"
 #include "Value.hh"
 #include <initializer_list>
 #include <string_view>
@@ -23,13 +22,12 @@ public:
 
     static constexpr heapsize MaxCount = (Block::MaxSize / sizeof(Item)) - 1;
 
-    slice<Item> items()             {return this->template dataAs<Item>();}
-    slice<Item> items() const       {return this->template dataAs<Item>();}
+    slice<Item> items()             {return slice_cast<Item>(this->rawBytes());}
+    slice<Item> items() const       {return slice_cast<Item>(this->rawBytes());}
 
     heapsize capacity() const       {return items().size();}
-    heapsize count() const          {return capacity();}        // Dict "overrides" this
-    size_t size() const             {return count();}
-    bool empty() const              {return count() == 0;}
+    heapsize size() const           {return capacity();}        // Dict "overrides" this
+    bool empty() const              {return size() == 0;}
 
     using iterator = Item*;
     using const_iterator = const Item*;
@@ -53,18 +51,6 @@ protected:
             count = 0;
         ::memset(begin() + count, 0, (capacity - count) * sizeof(Item));
     }
-
-    static Value _create(size_t capacity, const Item* items, size_t count, Heap &heap) {
-        assert(count <= capacity);
-        Block *block = Block::alloc(capacity * sizeof(Item), TYPE, heap);
-        if (!block)
-            return nullvalue;
-        return Collection(block, capacity, items, count);
-    }
-
-    static Value _create(const Item* items, size_t count, Heap &heap) {
-        return _create(count, items, count, heap);
-    }
 };
 
 
@@ -72,14 +58,11 @@ protected:
 /// A string object. Stores UTF-8 characters. Not zero-terminated.
 class String : public Collection<char, Type::String> {
 public:
-    static Maybe<String> create(string_view str, Heap &heap) {
-        return Maybe<String>(_create(str.size(), str.data(), str.size(), heap));
-    }
-
     const char* data() const        {return begin();}
     string_view str() const         {return {begin(), size()};}
 };
 
+Maybe<String> newString(string_view str, Heap &heap);
 
 
 
@@ -92,9 +75,7 @@ public:
 
 private:
     friend class SymbolTable;
-    static Maybe<Symbol> create(string_view str, Heap &heap) {
-        return Maybe<Symbol>(_create(str.size(), str.data(), str.size(), heap));
-    }
+    static Value create(string_view str, Heap &heap);
 };
 
 
@@ -102,45 +83,30 @@ private:
 /// A blob object ... just like a String but with `byte` instead of `char`.
 class Blob : public Collection<byte, Type::Blob> {
 public:
-    static Maybe<Blob> create(size_t capacity, Heap &heap) {
-        return Maybe<Blob>(_create(nullptr, capacity, heap));
-    }
-
-    static Maybe<Blob> create(const void *data, size_t size, Heap &heap) {
-        return Maybe<Blob>(_create((byte*)data, size, heap));
-    }
-
     slice<byte> bytes()             {return items();}
 };
 
+Maybe<Blob> newBlob(size_t capacity, Heap &heap);
+Maybe<Blob> newBlob(const void *data, size_t size, Heap &heap);
 
 
 /// An array of `Val`s.
 class Array : public Collection<Val, Type::Array> {
 public:
-    static Maybe<Array> create(heapsize count, Heap &heap) {
-        return Maybe<Array>(_create(nullptr, count, heap));
-    }
-    
-    static Maybe<Array> create(std::initializer_list<Val> vals, Heap &heap) {
-        return Maybe<Array>(_create(vals.begin(), vals.size(), heap));
-    }
-
-    static Maybe<Array> create(slice<Val> vals, size_t capacity, Heap &heap) {
-        return Maybe<Array>(_create(capacity, vals.begin(), vals.size(), heap));
-    }
-
     Val& operator[] (heapsize i)                {return items()[i];}
     Val const&  operator[] (heapsize i) const   {return items()[i];}
 };
 
+Maybe<Array> newArray(heapsize count, Heap &heap);
+Maybe<Array> newArray(std::initializer_list<Val> vals, Heap &heap);
+Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap);
 
 
 struct DictEntry {
     Val const key;
     Val       value;
 
-    DictEntry() = default;
+    DictEntry() { };
     DictEntry(DictEntry&& other) {*this = std::move(other);}
     DictEntry& operator=(DictEntry &&);
 };
@@ -151,27 +117,10 @@ struct DictEntry {
 /// contents are not the same key!) Values can be anything including null.
 class Dict : public Collection<DictEntry, Type::Dict> {
 public:
-    /// Creates an empty dictionary with the given capacity.
-    static Maybe<Dict> create(heapsize capacity, Heap &heap) {
-        return Maybe<Dict>(_create(capacity, nullptr, capacity, heap));
-    }
-
-    /// Creates a dictionary from a list of key-value pairs. It will have no extra capacity.
-    static Maybe<Dict> create(std::initializer_list<DictEntry> vals, Heap &heap) {
-        return Maybe<Dict>(_create(vals.size(), vals.begin(), vals.size(), heap));
-    }
-
-    /// Creates a dictionary from a list of key-value pairs.
-    /// The capacity must be at least the number of pairs but can be larger.
-    static Maybe<Dict> create(std::initializer_list<DictEntry> vals, heapsize capacity, Heap &heap) {
-        return Maybe<Dict>(_create(size_t(capacity), vals.begin(), vals.size(), heap));
-    }
-
     heapsize capacity() const           {return Collection::capacity();}
     bool full() const                   {return capacity() == 0 || (endAll() - 1)->key != nullval;}
     bool empty() const                  {return capacity() == 0 || begin()->key == nullval;}
-    heapsize count() const              {return heapsize(items().size());}
-    size_t size() const                 {return count();}
+    heapsize size() const               {return heapsize(items().size());} // "overridden"
 
     Val* find(Value key);
     const Val* find(Value key) const    {return const_cast<Dict*>(this)->find(key);}
@@ -183,7 +132,7 @@ public:
     bool replace(Value key, Value newValue);
     bool remove(Value key);
 
-    //Val operator[] (Value key) const      {return get(key);}
+    Value operator[] (Value key) const  {return get(key);}
 
     slice<DictEntry> items() const;
 
@@ -195,23 +144,19 @@ public:
     void dump(std::ostream& out) const;
     void dump() const;
 
-    void postGC()                       {sort();}   // GC changes the ordering of pointers
-private:
-    static Maybe<Dict> _create(size_t capacity, const Item* items, size_t count, Heap &heap) {
-        Maybe<Dict> dict(Collection::_create(capacity, items, count, heap));
-        if (count > 0) {
-            if_let(d, dict) {
-                d.sort(count);
-            }
-        }
-        return dict;
-    }
-    slice<DictEntry> allItems() const               {return Collection::items();}
     void sort(size_t count);
-    void sort()                                     {sort(capacity());}
+    void sort()                         {sort(capacity());}
+    void postGC()                       {sort();}   // GC changes the ordering of pointers
+
+private:
+    slice<DictEntry> allItems() const               {return Collection::items();}
     const_iterator endAll() const                   {return begin() + capacity();}
     bool set(Value key, Value value, bool insertOnly);
 };
+
+Maybe<Dict> newDict(heapsize capacity, Heap &heap);
+Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, Heap &heap);
+Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, heapsize capacity, Heap &heap);
 
 
 
@@ -222,14 +167,14 @@ std::ostream& operator<<(std::ostream&, Array const&);
 template <typename FN>
 bool Value::visit(FN fn) const {
     switch (type()) {
-        case Type::Null:    fn(_as<Null>()); break;
-        case Type::Bool:    fn(_as<Bool>()); break;
-        case Type::Int:     fn(_as<Int>()); break;
-        case Type::String:  fn(_as<String>()); break;
-        case Type::Symbol:  fn(_as<Symbol>()); break;
-        case Type::Blob:    fn(_as<Blob>()); break;
-        case Type::Array:   fn(_as<Array>()); break;
-        case Type::Dict:    fn(_as<Dict>()); break;
+        case Type::Null:    fn(as<Null>()); break;
+        case Type::Bool:    fn(as<Bool>()); break;
+        case Type::Int:     fn(as<Int>()); break;
+        case Type::String:  fn(as<String>()); break;
+        case Type::Symbol:  fn(as<Symbol>()); break;
+        case Type::Blob:    fn(as<Blob>()); break;
+        case Type::Array:   fn(as<Array>()); break;
+        case Type::Dict:    fn(as<Dict>()); break;
         default:            assert(false); return false;
     }
     return true;

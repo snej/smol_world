@@ -107,9 +107,9 @@ static void testAllocRangeOfSizes(heapsize BaseSize, int NumBlocks) {
     vector<Block*> blocks(NumBlocks);
     size_t dataSize = 0;
     for (int i = 0; i < NumBlocks; ++i) {
-        size_t size = BaseSize + i;
+        heapsize size = BaseSize + i;
         INFO("Block size " << size);
-        Block *b = blocks[i] = Block::alloc(size, Type::Blob, heap);
+        Block *b = blocks[i] = heap.allocBlock(size, Type::Blob);
         //cerr << "Block " << size << " = " << (void*)blob << endl;
         REQUIRE(b != nullptr);
         CHECK(heap.contains(b));

@@ -6,6 +6,7 @@
 
 #pragma once
 #include "Base.hh"
+#include "Collections.hh"
 #include "function_ref.hh"
 #include "slice.hh"
 #include <compare>
@@ -13,27 +14,7 @@
 
 namespace snej::smol {
 
-class Block;
-class Object;
-class SymbolTable;
-class Val;
-class Value;
-template <class T> class Maybe;
-
-
-using heapsize = uintpos;      ///< Like `size_t` for Heaps.
-
-enum class heappos : uintpos { };      ///< A position in a Heap, relative to its base.
-
-static constexpr heappos nullpos {0};
-
-static inline heappos operator+ (heappos p, intpos i) {return heappos(uintpos(p) + i);}
-static inline heappos operator- (heappos p, intpos i) {return heappos(uintpos(p) - i);}
-static inline std::strong_ordering operator<=> (heappos p, size_t i) {return uintpos(p) <=> i;}
-static inline std::strong_ordering operator<=> (heappos p, intpos i) {return int64_t(p) <=> int64_t(i);}
-
-
-/// A simple container for dynamic allocation.
+/// A container for dynamic allocation.
 /// Pointers within a Heap are 32-bit values, offsets from the heap's base address.
 /// Allocation uses a simple bump (arena) allocator.
 class Heap {
@@ -94,6 +75,11 @@ public:
     /// then `alloc` may move objects, invalidating `Object` pointers and `Val`s!
     void* alloc(heapsize size);
 
+    /// Allocates a Block; does not initialize its contents.
+    Block* allocBlock(heapsize dataSize, Type);
+    /// Allocates a Block and copies the data in `contents` into it, filling the rest with 0.
+    Block* allocBlock(heapsize dataSize, Type, slice<byte> contents);
+
     /// A callback that's invoked when the Heap doesn't have enough space for an allocation.
     /// It should attempt to increase the free space, then return true.
     /// If it can't do anything, it must return false.
@@ -141,8 +127,8 @@ public:
     /// Calls the Visitor callback once for each object, even if it's unreachable garbage.
     void visitAll(BlockVisitor const&);
 
-    void registerExternalRoot(Value*) const;
-    void unregisterExternalRoot(Value*) const;
+    void registerExternalRoot(Object*) const;
+    void unregisterExternalRoot(Object*) const;
 
     void registerExternalRoots(Val rootArray[], size_t count);
     void unregisterExternalRoots(Val rootArray[]);
@@ -162,7 +148,7 @@ private:
     void* _at(heappos off)          {return _base + uintpos(off);}
     heappos _pos(const void *ptr) const {return heappos((byte*)ptr - _base);}
     Value posToValue(heappos pos) const;
-    heappos valueToPos(Value const& obj) const;
+    heappos valueToPos(Value obj) const;
     void registr();
     void unregistr();
     void clearForwarding();
@@ -171,16 +157,7 @@ private:
     void exit(Heap const* newCurrent) const;
 
     // Allocates space without initializing it. Caller MUST initialize (see Block constructor)
-    void* rawAlloc(heapsize size) {
-        byte *result = _cur;
-        byte *newCur = result + size;
-        if (_likely(newCur <= _end)) {
-            _cur = newCur;
-            return result;
-        } else {
-            return rawAllocFailed(size); // handle heap-full
-        }
-    }
+    void* rawAlloc(heapsize size);
 
     void* rawAllocFailed(heapsize size);
 
@@ -188,7 +165,7 @@ private:
     Block* nextBlock(Block *obj);
 
     Value symbolTableArray() const;
-    void setSymbolTableArray(Value const&);
+    void setSymbolTableArray(Value);
 
     void swapMemoryWith(Heap&);
 
@@ -197,7 +174,7 @@ private:
     byte*   _cur;
     AllocFailureHandler _allocFailureHandler = nullptr;
     std::unique_ptr<SymbolTable> _symbolTable;
-    std::vector<Value*> mutable _externalRoots;
+    std::vector<Object*> mutable _externalRoots;
     bool    _malloced = false;
 };
 

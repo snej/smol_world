@@ -44,6 +44,7 @@ public:
     // These are equivalent to scanValue but update the Val/Ptr/Block in place:
     void update(Val*);
     void update(Value&);
+    void update(Object&);
 
     ~GarbageCollector();
 
@@ -58,7 +59,7 @@ private:
 
 /// A Handle is an object reference that is known to the Heap; during a garbage collection it
 /// will be updated to point to the new location of the object.
-template <ValueClass OBJ>
+template <ObjectClass OBJ>
 class Handle : public OBJ {
 public:
     Handle()                        :OBJ()  {Heap::current()->registerExternalRoot(this);}

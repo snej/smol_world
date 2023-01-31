@@ -19,8 +19,8 @@ int xmain(int /*argc*/, const char * /*argv*/[]) {
         Heap heap(100000);
         UsingHeap u(heap);
         
-        Array arr = Array::create(4, heap).value();
-        assert(arr.count() == 4);
+        Array arr = newArray(4, heap).value();
+        assert(arr.size() == 4);
         cout << arr << endl;
         heap.setRoot(arr);
         {
@@ -31,14 +31,14 @@ int xmain(int /*argc*/, const char * /*argv*/[]) {
         arr[0] = 1234;
         arr[1] = -4567;
 
-        auto str = String::create("Cowabunga!", heap).value();
+        auto str = newString("Cowabunga!", heap).value();
         cout << str << endl;
-        assert(str.count() == 10);
+        assert(str.size() == 10);
         assert(str.str() == "Cowabunga!");
         arr[2] = str;
         arr[3] = str;
 
-        String::create("Garbage!", heap);
+        newString("Garbage!", heap);
 
         assert(str.str() == "Cowabunga!");
 
@@ -98,10 +98,10 @@ int xmain(int /*argc*/, const char * /*argv*/[]) {
         cout << "after GC: " << heap.used() << " bytes\n";
         cout << "Now array is " << arr << "... at " << (void*)arr << endl;
         assert(arr.is<Array>());
-        assert(arr.count() == 4);
+        assert(arr.size() == 4);
         cout << "Now string is " << str << "... at " << (void*)str << endl;
         assert(str.is<String>());
-        assert(str.count() == 10);
+        assert(str.size() == 10);
         assert(str.get() == "Cowabunga!");
     }
 #endif

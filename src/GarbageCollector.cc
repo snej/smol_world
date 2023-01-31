@@ -55,24 +55,25 @@ void GarbageCollector::scanRoot() {
     _toHeap.reset();
     _toHeap.setRoot(scan(_fromHeap.root()).maybeAs<Object>());
     _toHeap.setSymbolTableArray(scan(_fromHeap.symbolTableArray())); // TODO: Scan buckets as weak references to Symbols
-    for (Value *refp : _fromHeap._externalRoots)
+    for (Object *refp : _fromHeap._externalRoots)
         update(*refp);
 }
 
 
 Value GarbageCollector::scan(Value val) {
-    if (val.isObject()) {
-        Block *block = val.block();
-        return Value(scan(block));
-    } else {
-        return val;
-    }
+    update(val);
+    return val;
 }
 
 
-void GarbageCollector::update(Value& obj) {
-    if (obj.isObject())
-        obj.relocate(scan(obj.block()));
+void GarbageCollector::update(Value& val) {
+    if (Block *block = val.block())
+        val = Value(scan(block));
+}
+
+
+void GarbageCollector::update(Object& obj) {
+    obj.relocate(scan(obj.block()));
 }
 
 
@@ -110,7 +111,7 @@ Block* GarbageCollector::scan(Block *src) {
 // - Otherwise copies (appends) it to _toHeap, then overwrites it with the forwarding address.
 Block* GarbageCollector::move(Block* src) {
     if (src->isForwarded()) {
-        return (Block*)_toHeap.at(src->getForwardingAddress());
+        return (Block*)_toHeap.at(src->forwardingAddress());
     } else {
         Block *dst;
         if (src->containsVals()) {
@@ -121,7 +122,7 @@ Block* GarbageCollector::move(Block* src) {
             // The workaround is to transform each pointer-based value into a pointer to the
             // equivalent heap offset. So if the original Val pointed to fromHeap+3F8, the copied
             // Val points to toHeap+3F8. This isn't a useable Val, but scan() can undo this.
-            dst = Block::alloc(src->dataSize(), src->type(), _toHeap);
+            dst = _toHeap.allocBlock(src->dataSize(), src->type());
             auto dstVal = (Val*)dst->dataPtr();
             for (Val const& srcVal : src->vals()) {
                 if (srcVal.isObject())

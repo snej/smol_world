@@ -159,7 +159,7 @@ std::ostream& operator<<(std::ostream& out, Blob const& blob) {
 }
 
 std::ostream& operator<<(std::ostream& out, Array const& arr) {
-    out << "Array[" << arr.count();
+    out << "Array[" << arr.size();
     if (!arr.empty()) {
         out << ": ";
         int n = 0;
@@ -172,7 +172,7 @@ std::ostream& operator<<(std::ostream& out, Array const& arr) {
 }
 
 std::ostream& operator<<(std::ostream& out, Dict const& dict) {
-    out << "Dict{" << dict.count();
+    out << "Dict{" << dict.size();
     int n = 0;
     for (auto &entry : dict) {
         if (n++) out << ", ";
@@ -181,7 +181,7 @@ std::ostream& operator<<(std::ostream& out, Dict const& dict) {
     return out << "}";
 }
 
-std::ostream& operator<< (std::ostream& out, Value const& val) {
+std::ostream& operator<< (std::ostream& out, Value val) {
     val.visit([&](auto t) {out << t;});
     return out;
 }

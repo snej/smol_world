@@ -77,7 +77,7 @@ TEST_CASE("Strings", "[object]") {
     for (int len = 0; len <= kString.size(); ++len) {
         INFO("len is " << len);
         string_view str = kString.substr(0, len);
-        unless(obj, String::create(str, heap)) {FAIL("Failed to alloc String");}
+        unless(obj, newString(str, heap)) {FAIL("Failed to alloc String");}
         REQUIRE(obj.type() == Type::String);
         REQUIRE(obj.is<String>());
         Value val = obj;
@@ -85,7 +85,7 @@ TEST_CASE("Strings", "[object]") {
         CHECK(val.as<String>() == obj);
 
         CHECK(obj.capacity() == len);
-        CHECK(obj.count() == len);
+        CHECK(obj.size() == len);
         CHECK(obj.empty() == (len == 0));
         CHECK(obj.str() == str);
         CHECK(string(obj.begin(), obj.end()) == str);
@@ -95,7 +95,7 @@ TEST_CASE("Strings", "[object]") {
 
 TEST_CASE("Maybe", "[object]") {
     Heap heap(1000);
-    if_let (str2, String::create("maybe?", heap)) {
+    if_let (str2, newString("maybe?", heap)) {
         CHECK(str2.str() == "maybe?");
 
         if_let (arr, str2.maybeAs<Array>()) {
@@ -114,14 +114,14 @@ TEST_CASE("Blobs", "[object]") {
 
     for (int len = 0; len <= kBlob.size(); ++len) {
         INFO("len is " << len);
-        unless(obj, Blob::create(kBlob.data(), len, heap)) {FAIL("Failed to alloc object");}
+        unless(obj, newBlob(kBlob.data(), len, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(obj.type() == Type::Blob);
         REQUIRE(obj.is<Blob>());
         Value val = obj;
         CHECK(val.as<Blob>() == obj);
 
         CHECK(obj.capacity() == len);
-        CHECK(obj.count() == len);
+        CHECK(obj.size() == len);
         CHECK(obj.empty() == (len == 0));
         CHECK(memcmp(kBlob.begin(), obj.begin(), len) == 0);
     }
@@ -134,18 +134,18 @@ TEST_CASE("Arrays", "[object]") {
 
     Maybe<String> strs[10];
     for (int i = 0; i < 10; ++i)
-        strs[i] = String::create(std::to_string(i), heap);
+        strs[i] = newString(std::to_string(i), heap);
 
     for (int len = 0; len <= 10; ++len) {
         INFO("len is " << len);
-        unless(obj, Array::create(len, heap)) {FAIL("Failed to alloc object");}
+        unless(obj, newArray(len, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(obj.type() == Type::Array);
         REQUIRE(obj.is<Array>());
         Value val = obj;
         CHECK(val.as<Array>() == obj);
 
         CHECK(obj.capacity() == len);
-        CHECK(obj.count() == len);
+        CHECK(obj.size() == len);
         CHECK(obj.empty() == (len == 0));
 
         for (int i = 0; i < len; ++i)
@@ -171,13 +171,13 @@ TEST_CASE("Dicts", "[object]") {
 
     Maybe<String> strs[11];
     for (int i = 0; i < 11; ++i)
-        strs[i] = String::create(std::to_string(i), heap);
+        strs[i] = newString(std::to_string(i), heap);
     shuffle(strs+0, strs+11);
 
     for (int len = 0; len <= 10; ++len) {
         cerr << "\n====len is " << len << endl;
         INFO("len is " << len);
-        unless(dict, Dict::create(len, heap)) {FAIL("Failed to alloc object");}
+        unless(dict, newDict(len, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(dict.type() == Type::Dict);
         REQUIRE(dict.is<Dict>());
         Value val = dict;
@@ -190,7 +190,7 @@ TEST_CASE("Dicts", "[object]") {
         for (int i = 0; i <= len; ++i) {
             INFO("i = " << i);
             Value key = strs[i];
-            CHECK(dict.count() == i);
+            CHECK(dict.size() == i);
             CHECK(dict.full() == (i == len));
             CHECK(!dict.contains(key));
             CHECK(!dict.replace(key, -1));
@@ -219,7 +219,7 @@ TEST_CASE("Dicts", "[object]") {
         for (int i = 0; i < len; ++i) {
             Value key = strs[i];
             INFO("i = " << i << ", key = " << (void*)key.block());
-            CHECK(dict.count() == len-i);
+            CHECK(dict.size() == len-i);
             CHECK(dict.full() == (i == 0));
             CHECK(dict.contains(key));
             CHECK(dict.remove(key));
@@ -236,7 +236,7 @@ TEST_CASE("Symbols", "[object]") {
     SymbolTable& table = heap.symbolTable();
     SymbolTable& tableAgain = heap.symbolTable();
     CHECK(&table == &tableAgain);
-    CHECK(table.count() == 0);
+    CHECK(table.size() == 0);
 
     CHECK(table.find("foo") == nullptr);
 
@@ -250,7 +250,7 @@ TEST_CASE("Symbols", "[object]") {
     unless(bar, table.create("bar")) {FAIL("Failed to create 'bar'");}
     CHECK(bar.str() == "bar");
     CHECK(table.find("bar") == bar);
-    CHECK(table.count() == 2);
+    CHECK(table.size() == 2);
 
     constexpr size_t NumSymbols = 100;
     Maybe<Symbol> syms[NumSymbols];
@@ -262,7 +262,7 @@ TEST_CASE("Symbols", "[object]") {
         syms[i] = sym;
         CHECK(sym.str() == name);
         CHECK(table.find(name) == sym);
-        CHECK(table.count() == 3 + i);
+        CHECK(table.size() == 3 + i);
     }
     for (size_t i = 0; i < NumSymbols; ++i) {
         string name = "Symbol #" + std::to_string(i * i);
@@ -280,7 +280,7 @@ TEST_CASE("Symbols", "[object]") {
     // Open a heap from the current heap and check it has everything:
     Heap heap2 = Heap::existing(heap.contents(), heap.capacity());
     SymbolTable& table2 = heap2.symbolTable();
-    CHECK(table2.count() == 2 + NumSymbols);
+    CHECK(table2.size() == 2 + NumSymbols);
     unless(bar2, table2.find("bar"))  {FAIL("Failed to find 'bar'");}
     CHECK(bar2.str() == "bar");
     i = 0;

@@ -59,10 +59,10 @@
 #endif
 
 
-// FLPURE functions are _read-only_. They cannot write to memory (in a way that's detectable),
+// PURE functions are _read-only_. They cannot write to memory (in a way that's detectable),
 // and they cannot access volatile data or do I/O.
 //
-// Calling an FLPURE function twice in a row with the same arguments must return the same result.
+// Calling a PURE function twice in a row with the same arguments must return the same result.
 //
 // "Many functions have no effects except the return value, and their return value depends only on
 //  the parameters and/or global variables. Such a function can be subject to common subexpression
@@ -79,10 +79,10 @@
     #define pure
 #endif
 
-// FLCONST is even stricter than FLPURE. The function cannot access memory at all (except for
+// CONST is even stricter than PURE. The function cannot access memory at all (except for
 // reading immutable values like constants.) The return value can only depend on the parameters.
 //
-// Calling an FLCONST function with the same arguments must _always_ return the same result.
+// Calling a CONST function with the same arguments must _always_ return the same result.
 //
 // "Calls to functions whose return value is not affected by changes to the observable state of the
 //  program and that have no observable effects on such state other than to return a value may lend
@@ -100,16 +100,6 @@
 #else
     #define CONST
 #endif
-
-
-// `constexpr17` is for uses of `constexpr` that are valid in C++17 but not earlier.
-#ifdef __cplusplus
-    #if __cplusplus >= 201700L || _MSVC_LANG >= 201700L
-        #define constexpr17 constexpr
-    #else
-        #define constexpr17
-    #endif
-#endif // __cplusplus
 
 
 // `__unused` suppresses a warning if a variable/function is not used.

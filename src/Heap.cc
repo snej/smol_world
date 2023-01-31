@@ -5,10 +5,7 @@
 //
 
 #include "Heap.hh"
-#include "Block.hh"
-#include "Val.hh"
-#include "Collections.hh"
-#include "SymbolTable.hh"
+#include "smol_world.hh"
 #include <deque>
 #include <iostream>
 
@@ -146,7 +143,7 @@ Value Heap::posToValue(heappos pos) const {
     return Value((Block*)at(pos));
 }
 
-heappos Heap::valueToPos(Value const& obj) const {
+heappos Heap::valueToPos(Value obj) const {
     return obj.isObject() ? pos(obj.block()) : nullpos;
 }
 
@@ -154,7 +151,7 @@ heappos Heap::valueToPos(Value const& obj) const {
 Maybe<Object> Heap::root() const                {return posToValue(header().root).maybeAs<Object>();}
 void Heap::setRoot(Maybe<Object> root)          {header().root = valueToPos(root);}
 Value Heap::symbolTableArray() const            {return posToValue(header().symbols);}
-void Heap::setSymbolTableArray(Value const& v)  {header().symbols = valueToPos(v);}
+void Heap::setSymbolTableArray(Value v)         {header().symbols = valueToPos(v);}
 
 
 Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
@@ -172,6 +169,18 @@ SymbolTable& Heap::symbolTable() {
         //FIXME: What if this fails?
     }
     return *_symbolTable;
+}
+
+
+void* Heap::rawAlloc(heapsize size) {
+    byte *result = _cur;
+    byte *newCur = result + size;
+    if (_likely(newCur <= _end)) {
+        _cur = newCur;
+        return result;
+    } else {
+        return rawAllocFailed(size); // handle heap-full
+    }
 }
 
 
@@ -207,9 +216,26 @@ void* Heap::rawAllocFailed(heapsize size) {
 
 
 void* Heap::alloc(heapsize size) {
-    // As a general-purpose allocator we just allocate a raw Block and return its data.
-    auto blob = Block::alloc(size, Type::Blob, *this);
-    return blob ? blob->dataPtr() : nullptr;
+    if (Block *block = allocBlock(size, Type::Blob))
+        return block->dataPtr();
+    else
+        return nullptr;
+}
+
+
+Block* Heap::allocBlock(heapsize size, Type type) {
+    if (void* addr = rawAlloc(Block::sizeForData(size)))
+        return new (addr) Block(size, type);
+    else
+        return nullptr;
+}
+
+
+Block* Heap::allocBlock(heapsize size, Type type, slice<byte> contents) {
+    Block *block = allocBlock(size, type);
+    if (block)
+        block->fill(contents);
+    return block;
 }
 
 
@@ -240,7 +266,7 @@ void Heap::visitBlocks(BlockVisitor visitor) {
             b->setVisited();
             if (!visitor(*b))
                 return false;
-            if (Block::typeContainsPointers(b->type()) && b->dataSize() > 0)
+            if (Block::typeContainsVals(b->type()) && b->dataSize() > 0)
                 stack.push_back(b);
         }
         return true;
@@ -267,15 +293,79 @@ void Heap::visit(ObjectVisitor visitor) {
 }
 
 
-void Heap::registerExternalRoot(Value *ref) const {
-    assert(!ref->isObject() || contains(ref->asObject().rawBytes().begin()));
+void Heap::registerExternalRoot(Object *ref) const {
+    assert(ref->isNull() || contains(ref->block()));
     _externalRoots.push_back(ref);
 }
 
-void Heap::unregisterExternalRoot(Value* ref) const {
+void Heap::unregisterExternalRoot(Object* ref) const {
     auto i = std::find(_externalRoots.rbegin(), _externalRoots.rend(), ref);
     assert(i != _externalRoots.rend());
     _externalRoots.erase(std::prev(i.base()));
+}
+
+
+template <ObjectClass T>
+Maybe<T> newObject(typename T::Item const* items, size_t count, size_t capacity, Heap &heap) {
+    Block *block = heap.allocBlock(heapsize(capacity * sizeof(typename T::Item)),
+                                   T::Type,
+                                   slice<byte>((byte*)items, count * sizeof(typename T::Item)));
+    if (!block)
+        return nullptr;
+    Object obj(block);
+    return (Maybe<T>&)obj;
+}
+
+template <ObjectClass T>
+Maybe<T> newObject(typename T::Item const* items, size_t count, Heap &heap) {
+    return newObject<T>(items, count, count, heap);
+}
+
+template <ObjectClass T>
+Maybe<T> newObject(size_t capacity, Heap &heap) {
+    return newObject<T>(nullptr, 0, capacity, heap);
+}
+
+Maybe<String> newString(string_view str, Heap &heap) {
+    return newObject<String>(str.data(), str.size(), heap);
+}
+
+Maybe<Blob> newBlob(size_t capacity, Heap &heap) {
+    return newObject<Blob>(capacity, heap);
+}
+
+Maybe<Blob> newBlob(const void *data, size_t size, Heap &heap) {
+    return newObject<Blob>((const byte*)data, size, heap);
+}
+
+Maybe<Array> newArray(heapsize count, Heap &heap) {
+    return newObject<Array>(count, heap);
+}
+
+Maybe<Array> newArray(std::initializer_list<Val> vals, Heap &heap) {
+    return newObject<Array>(vals.begin(), vals.size(), heap);
+}
+
+Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap) {
+    return newObject<Array>(vals.begin(), vals.size(), capacity, heap);
+}
+
+Maybe<Dict> newDict(heapsize capacity, Heap &heap) {
+    return newObject<Dict>(capacity, heap);
+}
+
+Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, Heap &heap) {
+    return newDict(vals, heapsize(vals.size()), heap);
+}
+
+Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, heapsize capacity, Heap &heap) {
+    auto dict = newObject<Dict>(vals.begin(), vals.size(), capacity, heap);
+    if_let(d, dict) d.sort(vals.size());
+    return dict;
+}
+
+Value Symbol::create(string_view str, Heap &heap) {
+    return newObject<Symbol>(str.data(), str.size(), heap);
 }
 
 }

@@ -28,7 +28,7 @@ Object Val::asObject() const      {return Object(*this);}
 
 Val& Val::operator= (Val const& value) {
     if (value.isObject())
-        *this = value.block();
+        *this = value.block(); // converts to true pointer then back to relative
     else
         _val = value.rawBits();
     return *this;
@@ -36,39 +36,29 @@ Val& Val::operator= (Val const& value) {
 
 Val& Val::operator= (Value value) {
     if (value.isObject())
-        *this = value.block();
+        *this = value._block();
     else
-        _val = value.asValBase().rawBits();
+        _val = uintpos(value.rawBits());
     return *this;
-}
-
-
-bool operator==(Val const& val, Value const& value) {
-    if (val.isObject())
-        return value.isObject() && val.block() == value.block();
-    else
-        return !value.isObject() && val.rawBits() == value.asValBase().rawBits();
-}
-
-
-Type ValBase::_type() const {
-    if (isInt())
-        return Type::Int;
-    else if (isNull())
-        return Type::Null;
-    else if (isBool())
-        return Type::Bool;
-    else {
-        assert(!isObject());    // will fail
-        return Type::String;
-    }
 }
 
 
 Type Val::type() const {
     if (isInt())
         return Type::Int;
-    else if (_val > FalseVal)
+    else if (_val > TrueVal)
+        return _block()->type();
+    else if (isNull())
+        return Type::Null;
+    else
+        return Type::Bool;
+}
+
+
+Type Value::type() const {
+    if (isInt())
+        return Type::Int;
+    else if (_val > TrueVal)
         return _block()->type();
     else if (isNull())
         return Type::Null;
