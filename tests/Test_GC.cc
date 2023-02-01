@@ -39,7 +39,7 @@ TEST_CASE("GC", "[gc]") {
 
     CHECK(heap.used() == originalUsed);
 
-    Handle<Array> a = newArray(100, heap).value();
+    LocalHandle<Array> a = newArray(100, heap).value();
     heap.setRoot(a);
     for (int i = 0; i < 100; ++i)
         a[i] = newString("Hello smol world!", heap);
@@ -66,7 +66,7 @@ TEST_CASE("GC On Demand", "[gc]") {
         return heap->available() >= sizeNeeded;
     });
 
-    Handle<Array> a = newArray(500, heap).value();
+    LocalHandle<Array> a = newArray(500, heap).value();
     for (int i = 0; i < 500; ++i)
         CHECK(a[i] == nullval);
     heap.setRoot(a);

@@ -6,6 +6,7 @@
 
 #pragma once
 #include "Collections.hh"
+#include "Heap.hh"
 #include "function_ref.hh"
 
 namespace snej::smol {
@@ -19,7 +20,7 @@ public:
     explicit HashTable(Heap &heap, Array array)     :HashTable(heap, array, true) { }
 
     Heap& heap() const pure                         {return *_heap;}
-    void setHeap(Heap &heap)                        {_heap = &heap;}
+    void setHeap(Heap &heap)                        {_heap = &heap; _array.setHeap(heap);}
 
     Array array() const pure                        {return _array;}
     uint32_t count() const pure                     {return _count;}
@@ -74,7 +75,7 @@ private:
     bool grow();
 
     Heap*       _heap;
-    Array       _array;
+    Handle<Array> _array;
     uint32_t    _count;
     uint32_t    _sizeMask;
     uint32_t    _capacity;

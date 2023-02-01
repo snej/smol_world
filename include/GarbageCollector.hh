@@ -56,15 +56,4 @@ private:
     Heap &_fromHeap, &_toHeap;          // The source and destination heaps
 };
 
-
-/// A Handle is an object reference that is known to the Heap; during a garbage collection it
-/// will be updated to point to the new location of the object.
-template <ObjectClass OBJ>
-class Handle : public OBJ {
-public:
-    Handle()                        :OBJ()  {Heap::current()->registerExternalRoot(this);}
-    Handle(OBJ const& o)            :OBJ(o) {Heap::current()->registerExternalRoot(this);}
-    ~Handle()                       {Heap::current()->unregisterExternalRoot(this);}
-};
-
 }

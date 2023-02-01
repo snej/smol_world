@@ -173,8 +173,8 @@ private:
     byte*   _end;
     byte*   _cur;
     AllocFailureHandler _allocFailureHandler = nullptr;
-    std::unique_ptr<SymbolTable> _symbolTable;
     std::vector<Object*> mutable _externalRoots;
+    std::unique_ptr<SymbolTable> _symbolTable;
     bool    _malloced = false;
 };
 
@@ -190,6 +190,32 @@ public:
 private:
     Heap const* _heap;
     Heap const* _prev;
+};
+
+
+/// A Handle is an object reference that is known to the Heap; during a garbage collection it
+/// will be updated to point to the new location of the object.
+template <ObjectClass OBJ>
+class Handle : public OBJ {
+public:
+    Handle(Heap &heap)                        :OBJ(), _heap(&heap) {_heap->registerExternalRoot(this);}
+    Handle(OBJ const& o, Heap &heap)            :OBJ(o), _heap(&heap) {_heap->registerExternalRoot(this);}
+    ~Handle()                       {_heap->unregisterExternalRoot(this);}
+
+    void setHeap(Heap &heap)                    {_heap = &heap;}
+private:
+    Heap* _heap;
+};
+
+
+/// A Handle is an object reference that is known to the Heap; during a garbage collection it
+/// will be updated to point to the new location of the object.
+template <ObjectClass OBJ>
+class LocalHandle : public OBJ {
+public:
+    LocalHandle()                        :OBJ()  {Heap::current()->registerExternalRoot(this);}
+    LocalHandle(OBJ const& o)            :OBJ(o) {Heap::current()->registerExternalRoot(this);}
+    ~LocalHandle()                       {Heap::current()->unregisterExternalRoot(this);}
 };
 
 }

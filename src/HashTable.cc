@@ -30,6 +30,10 @@ namespace wy {
 
 using namespace std;
 
+/* HashTable ideas:
+    List of hashes followed by list of values, optionally followed by list of keys
+ */
+
 // Minimum size of table to create (must be a power of 2)
 static constexpr uint32_t kMinTableSize = 8;
 
@@ -59,7 +63,7 @@ unique_ptr<HashTable> HashTable::create(Heap &heap, uint32_t capacity) {
 
 HashTable::HashTable(Heap &heap, Array array, bool recount)
 :_heap(&heap)
-,_array(array)
+,_array(array, heap)
 {
     _sizeMask = uint32_t(_array.size() / 2 - 1);    // number of HashEntrys - 1
     _capacity = uint32_t(round(tableSize() * kMaxLoad));
