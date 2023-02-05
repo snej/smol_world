@@ -155,9 +155,10 @@ But when a value is stored in the heap, in an `Array` or `Dict`, it’s stored i
 `Val` has one tag bit. If the LSB is 1, the other 31 bits hold an integer; if not, a smol pointer, except for special values for null, false and true:
 
 ```
-00000000000000000000000000000000 = null
-00000000000000000000000000000010 = false
-00000000000000000000000000000100 = true
+00000000000000000000000000000000 = null (aka JS `undefined`)
+00000000000000000000000000000010 = nullish (aka JSON `null`)
+00000000000000000000000000000100 = false
+00000000000000000000000000000110 = true
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0 = Pointer (except the values above)
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1 = Integer
 ```
