@@ -27,16 +27,16 @@
 
 ## What?
 
-**smol world** is an experimental memory manager and object model, which tries to keep everything as compact as possible. It provides:
+**smol world** is an experimental memory manager and object model, which tries to optimize for small data size. It provides:
 
 * A memory space called a “heap”, which internally uses 32-bit pointers
 * A super fast “bump” or “arena” memory allocator
-* Allocated blocks with only two bytes of overhead; they have a 3-bit type field, some GC-related flags, and the _exact_ size. [Disclaimer: blocks 1KB and larger have 4 bytes overhead.] For further space savings, blocks are **not** aligned.
-* A simple Cheney-style garbage collector that copies the live blocks to another heap
+* Allocated blocks with only two bytes of overhead, including a type tag and object size. For further space savings, blocks are byte-aligned.
+* A simple Cheney-style garbage collector that copies the live blocks to a new heap
 * Basic JSON-ish object types: strings, arrays and dictionaries/maps (plus binary blobs.) There’s also a JSON parser and generator.
 * Symbols, i.e. unique de-duplicated strings used as dictionary keys
 * A polymorphic 32-bit `Val` type that represents either an object pointer, a 31-bit integer, or null
-* Friendly C++ wrapper classes for type-safe and null-safe operations on values.
+* Friendly C++ wrapper classes for type-safe and null-safe operations on values
 
 The idea is that you can easily plug this into an interpreter of some kind and have a complete virtual machine.
 
@@ -50,7 +50,7 @@ The idea is that you can easily plug this into an interpreter of some kind and h
 
 ☠️ **Under construction: currently highly experimental!** ☠️
 
-There are only some limited unit tests. This hasn’t been used in any serious code yet. I’m changing stuff around and refactoring a lot.
+There are only some limited unit tests. This hasn’t been used in any serious code yet. I haven't benchmarked anything. I’m changing stuff around and refactoring a lot. Whee!
 
 # Manifesto: 32-bit is small now
 
@@ -60,11 +60,11 @@ A change in computing that I've been getting through my head lately is that **CP
 
 At the same time, our programs use 64-bit pointers. That’s eight bytes! For one pointer! As [Donald Knuth wrote](https://www-cs-faculty.stanford.edu/~knuth/news08.html) in 2008:
 
-> It is absolutely idiotic to have 64-bit pointers when I compile a program that uses less than 4 gigabytes of RAM. When such pointer values appear inside a struct, they not only waste half the memory, they effectively throw away half of the cache.
+> “It is absolutely idiotic to have 64-bit pointers when I compile a program that uses less than 4 gigabytes of RAM. When such pointer values appear inside a struct, they not only waste half the memory, they effectively throw away half of the cache.”
 
-There’s no law that says pointers have to be the size of your CPU address bus; if you use relative offsets instead of absolute addresses they can be as small as you want, it just constrains their reach. 32-bit offsets let you access 4GB of memory, which ought to be enough for ~~anyone~~ many purposes, such as virtual machines for interpreters. Even if you whittle away a bit or two for tags, that leaves a gigabyte or more.
+There’s no law that says pointers have to be the size of your CPU address bus. If you use relative offsets instead of absolute addresses they can be as small as you want, it just constrains their reach. 32-bit offsets let you access 4GB of memory, which ought to be enough for ~~anyone~~ many purposes, such as virtual machines for interpreters. Even if you whittle away a bit or two for tags, that leaves a gigabyte or more.
 
-I know I’m not the only one to think of this: the V8 JavaScript engine also uses 32-bit pointers.
+I know I’m not the only one to think of this: [the V8 JavaScript engine also uses 32-bit pointers](https://v8.dev/blog/pointer-compression).
 
 (Pointers could get even smaller! A few years ago I wrote a B-tree storage engine whose 4KB pages have little heaps inside them; the heaps use *12-bit* pointers. That’s getting too smol for general use ... but 24-bit pointers might be cool; you can do a lot in 16MB.)
 
