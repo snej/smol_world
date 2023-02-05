@@ -283,4 +283,21 @@ private:
     Heap* _heap;
 };
 
+// this variant registers an external Value variable as a root; keep using that variable.
+template <>
+class Handle<Value*> {
+public:
+    Handle(Value* o)                    :Handle(o, *Heap::current()) { }
+    Handle(Value* o, Heap &heap)        :_valp(o), _heap(&heap) {reg();}
+    ~Handle()                           {unreg();}
+private:
+    Handle(const Handle&) = delete;
+    Handle& operator=(Handle const&) = delete;
+    void reg()   {_heap->registerExternalRoot(_valp);}
+    void unreg() {_heap->unregisterExternalRoot(_valp);}
+
+    Value* _valp;
+    Heap* _heap;
+};
+
 }

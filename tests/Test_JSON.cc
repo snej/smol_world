@@ -48,7 +48,7 @@ TEST_CASE("JSON", "[object],[json]") {
     UsingHeap u(heap);
 
     string err;
-    Value v = newFromJSON(readFile(SMOL_TESTS_DIR "svg_menu.json"), heap, &err);
+    Handle<Value> v = newFromJSON(readFile(SMOL_TESTS_DIR "svg_menu.json"), heap, &err);
     REQUIRE(v);
     Dict dict = v.as<Dict>();
     heap.setRoot(dict);
@@ -71,4 +71,7 @@ TEST_CASE("JSON", "[object],[json]") {
     GarbageCollector::run(heap);
 
     heap.dump(cout);
+    json = toJSON(v);
+    cout << "As JSON: " << json << endl;
+    cout << "Heap space used is " << heap.used() << " bytes; JSON is " << json.size() << ".\n";
 }

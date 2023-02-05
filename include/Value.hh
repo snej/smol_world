@@ -150,7 +150,7 @@ protected:
 
     Object() = default; // allows Maybe<> to hold a null; otherwise an illegal state
     template <ValueClass T> T _as() const pure      {return *(T*)this;}
-    void relocate(Block* newBlock)                  {_data.moveTo((byte*)newBlock->dataPtr());}
+    void relocate(Block* newBlock)                  {_data = newBlock->data();}
 
 private:
     slice<byte> _data;

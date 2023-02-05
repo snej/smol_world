@@ -86,7 +86,7 @@ Maybe<Symbol> newSymbol(const char *str, size_t length, Heap &heap);
 /// A blob object ... just like a String but with `byte` instead of `char`.
 class Blob : public Collection<byte, Type::Blob> {
 public:
-    slice<byte> bytes()             {return items();}
+    slice<byte> bytes() const                   {return items();}
 };
 
 Maybe<Blob> newBlob(size_t capacity, Heap &heap);
@@ -106,6 +106,7 @@ public:
 };
 
 Maybe<Array> newArray(heapsize count, Heap &heap);
+Maybe<Array> newArray(heapsize count, Value initialValue, Heap &heap);
 Maybe<Array> newArray(std::initializer_list<Val> vals, Heap &heap);
 Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap);
 

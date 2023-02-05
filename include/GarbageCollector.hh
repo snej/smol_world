@@ -49,7 +49,7 @@ public:
     ~GarbageCollector();
 
 private:
-    void scanRoot();
+    void scanRoots();
     Block* move(Block*);
 
     std::unique_ptr<Heap> _tempHeap;    // Owns temporary heap, if there is one

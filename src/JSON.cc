@@ -93,21 +93,12 @@ private:
         } else {
             Object obj = _stack.back();
             if_let (array, obj.maybeAs<Array>()) {
-                if (!array.append(val)) {
-                    unless(newArray, _heap.grow(array, grow(array.capacity()))) {return false;}
-                    newArray.append(val);
-                    _stack.back() = newArray;
-                }
+                return append(array, val);
             } else {
                 assert(!_keys.empty());
                 auto key = _keys.back();
                 _keys.pop_back();
-                if (Dict dict = obj.as<Dict>(); !dict.insert(key, val)) {
-                    unless(newDict, _heap.grow(dict, grow(dict.capacity()))) {return false;}
-                    if (!newDict.insert(key, val))
-                        return false;
-                    _stack.back() = newDict;
-                }
+                return add(obj.as<Dict>(), key, val);
             }
         }
         return true;
@@ -116,6 +107,29 @@ private:
     bool addNumber(int64_t num) {
         if (num < Int::Min || num > Int::Max) return false;
         return addValue(smol::Int(int(num)));
+    }
+
+    bool append(Array array, Value val) {
+        if (!array.append(val)) {
+            Handle valHandle(&val);   // in case grow() triggers GC
+            unless(newArray, _heap.grow(array, grow(array.capacity()))) {return false;}
+            __unused bool ok = newArray.append(val);
+            assert(ok);
+            _stack.back() = newArray;
+        }
+        return true;
+    }
+
+    bool add(Dict dict, Value key, Value val) {
+        if (!dict.insert(key, val)) {
+            Handle keyHandle(&key);   // in case grow() triggers GC
+            Handle valHandle(&val);
+            unless(newDict, _heap.grow(dict, grow(dict.capacity()))) {return false;}
+            if (!newDict.insert(key, val))
+                return false;
+            _stack.back() = newDict;
+        }
+        return true;
     }
 
     Heap& _heap;

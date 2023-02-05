@@ -5,6 +5,7 @@
 //
 
 #pragma once
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 
@@ -31,6 +32,13 @@ struct slice {
     T& back() const pure                {assert(!empty()); return end()[-1];}
 
     T& operator[] (uint32_t i) const pure  {assert(i < _size); return _begin[i];}
+
+    slice<T> operator() (uint32_t i, uint32_t size) const {
+        assert(i <= _size && size <= _size - i);
+        return {_begin + i, size};
+    }
+
+    slice<T> upTo(uint32_t i)           {return {_begin, std::min(i, _size)};}
 
     void moveTo(T* addr)                {assert(addr); _begin = addr;}
 

@@ -81,7 +81,12 @@ Maybe<Array> HashTable::createArray(Heap &heap, uint32_t capacity, bool withValu
     uint32_t size = kMinTableSize;
     while (size < targetSize)
         size *= 2;
-    return newArray(size * (withValues ? 3 : 2), heap);
+    size *= (withValues ? 3 : 2);
+    auto maybeArray = newArray(size, heap);
+    if_let(array, maybeArray) {
+        array[size - 1] = nullishvalue;  // keep array from being truncated on GC
+    }
+    return maybeArray;
 }
 
 
@@ -100,7 +105,7 @@ HashTable::HashTable(Heap &heap, Array array, bool hasValues, bool recount)
     uint32_t count = 0;
     if (recount) {
         for (auto &key : keys()) {
-            if (key != nullval)
+            if (key != nullval && key != nullishval)
                 ++count;
         }
     }
@@ -151,7 +156,9 @@ bool HashTable::insert(Value key, int32_t hashCode, Val* entry, Value value) {
 
 bool HashTable::grow() {
 //    std::cout << "=== Growing HashTable to " << 2*_size << " buckets ===\n";
-    unless(array, newArray(2 * _array.size(), *_heap)) { return false; }
+    uint32_t newSize = 2 * _array.size();
+    unless(array, newArray(newSize, *_heap)) { return false; }
+    array[newSize - 1] = nullishvalue;  // keep array from being truncated on GC
     HashTable newTable(*_heap, array, _hasValues, false);
     // Scan the old table, inserting each entry into the new table:
     for (Val &hashVal : hashes()) {
@@ -174,7 +181,7 @@ bool HashTable::grow() {
 bool HashTable::visit(Visitor visitor) const {
     Value value;
     for (Val &key : keys()) {
-        if(key != nullval) {
+        if (key != nullval && key != nullishval) {
             if (_hasValues)
                 value = (&key)[_size];
             if (!visitor(key, value))

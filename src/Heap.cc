@@ -304,6 +304,7 @@ void Heap::visitBlocks(BlockVisitor visitor) {
     std::deque<Block*> stack;
 
     auto processBlock = [&](Block *b) -> bool {
+        assert(contains(b) && (void*)b >= &header()+1);
         if (!b->isVisited()) {
             b->setVisited();
             if (!visitor(*b))
@@ -385,7 +386,7 @@ void Heap::visit(ObjectVisitor visitor) {
 
 template <class T> static inline void _registerRoot(Heap const* self, std::vector<T*> &roots, T *ref) {
     std::cerr << "register root " << (void*)ref << std::endl;
-    assert(ref->isNull() || self->contains(ref->block()));
+    assert(ref->block() == nullptr || self->contains(ref->block()));
     roots.push_back(ref);
 }
 template <class T> static inline void _unregisterRoot(std::vector<T*> &roots, T *ref) {
@@ -445,6 +446,14 @@ Maybe<Blob> newBlob(const void *data, size_t size, Heap &heap) {
 
 Maybe<Array> newArray(heapsize count, Heap &heap) {
     return newObject<Array>(count, heap);
+}
+Maybe<Array> newArray(heapsize count, Value initialValue, Heap &heap) {
+    auto ma = newObject<Array>(count, heap);
+    if_let(array, ma) {
+        for (Val& item : array.items())
+            item = initialValue;
+    }
+    return ma;
 }
 Maybe<Array> newArray(std::initializer_list<Val> vals, Heap &heap) {
     return newObject<Array>(vals.begin(), vals.size(), heap);

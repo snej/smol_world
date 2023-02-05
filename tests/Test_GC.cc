@@ -63,12 +63,13 @@ TEST_CASE("GC On Demand", "[gc]") {
     heap.setAllocFailureHandler([](Heap* heap, heapsize sizeNeeded) {
         cout << "** GC **\n";
         GarbageCollector::run(*heap);
+        heap->dump(cout); //TEMP
         return heap->available() >= sizeNeeded;
     });
 
-    Handle<Array> a = newArray(500, heap).value();
+    Handle<Array> a = newArray(500, nullishval, heap).value();
     for (int i = 0; i < 500; ++i)
-        CHECK(a[i] == nullval);
+        CHECK(a[i] == nullishval);
     heap.setRoot(a);
     for (int i = 0; i < 500; ++i) {
         //cout << "Blob #" << i << " -- used " << heap.used() << " free " << heap.available() << endl;
@@ -76,7 +77,7 @@ TEST_CASE("GC On Demand", "[gc]") {
         REQUIRE(blob);
         (a)[i] = blob;
         if (i >= 50)
-            a[i-50] = nullptr;
+            a[i-50] = nullishval;
     }
     cout << "End -- used " << heap.used() << " free " << heap.available() << endl;
 }

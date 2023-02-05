@@ -28,14 +28,14 @@ GarbageCollector::GarbageCollector(Heap &heap)
 ,_fromHeap(heap)
 ,_toHeap(*_tempHeap)
 {
-    scanRoot();
+    scanRoots();
 }
 
 
 GarbageCollector::GarbageCollector(Heap &fromHeap, Heap &toHeap)
 :_fromHeap(fromHeap), _toHeap(toHeap)
 {
-    scanRoot();
+    scanRoots();
 }
 
 
@@ -47,7 +47,7 @@ GarbageCollector::~GarbageCollector() {
 
 
 
-void GarbageCollector::scanRoot() {
+void GarbageCollector::scanRoots() {
 #ifndef NDEBUG
     for (auto obj = _fromHeap.firstBlock(); obj; obj = _fromHeap.nextBlock(obj))
         assert(!obj->isForwarded());
@@ -117,6 +117,12 @@ Block* GarbageCollector::move(Block* src) {
     } else {
         Block *dst;
         if (src->containsVals()) {
+            slice<Val> vals = src->vals();
+            if_let(dict, Value(src).maybeAs<Dict>()) {
+                vals = vals(0, 2 * dict.size());
+            } else if_let(array, Value(src).maybeAs<Array>()) {
+                vals = vals(0, array.count());
+            }
             // Ugh. We have to move a bunch of relative-pointers, which still need to resolve to
             // their original addresses until they get processed during the loop in scan().
             // But there's no guarantee toHeap is within 2GB of fromHeap, so they're not capable
@@ -124,17 +130,17 @@ Block* GarbageCollector::move(Block* src) {
             // The workaround is to transform each pointer-based value into a pointer to the
             // equivalent heap offset. So if the original Val pointed to fromHeap+3F8, the copied
             // Val points to toHeap+3F8. This isn't a useable Val, but scan() can undo this.
-            dst = _toHeap.allocBlock(src->dataSize(), src->type());
+            dst = _toHeap.allocBlock(vals.size() * sizeof(Val), src->type());
             auto dstVal = (Val*)dst->dataPtr();
-            for (Val const& srcVal : src->vals()) {
+            for (Val const& srcVal : vals) {
                 if (srcVal.isObject())
                     *dstVal++ = (Block*)_toHeap._at(_fromHeap.pos(srcVal._block()));
                 else
                     *dstVal++ = srcVal;
             }
+            assert(dstVal == dst->vals().end());
         } else {
             auto size = src->blockSize();
-            assert(size < 2000);//TEMP
             dst = (Block*)_toHeap.rawAlloc(size);
             ::memcpy(dst, src, size);
         }
