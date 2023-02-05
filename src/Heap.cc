@@ -7,7 +7,9 @@
 #include "Heap.hh"
 #include "smol_world.hh"
 #include <deque>
+#include <iomanip>
 #include <iostream>
+#include <unordered_set>
 
 namespace snej::smol {
 
@@ -62,7 +64,8 @@ Heap& Heap::operator=(Heap&& h) noexcept {
     _allocFailureHandler = h._allocFailureHandler;
     _symbolTable = std::move(h._symbolTable);
     if (_symbolTable) _symbolTable->setHeap(*this);    // <- this is the only non-default bit
-    _externalRoots = std::move(h._externalRoots);
+    _externalRootObjs = std::move(h._externalRootObjs);
+    _externalRootVals = std::move(h._externalRootVals);
     return *this;
 }
 
@@ -239,6 +242,28 @@ Block* Heap::allocBlock(heapsize size, Type type, slice<byte> contents) {
 }
 
 
+Block* Heap::growBlock(Block* block, heapsize newDataSize) {
+    auto data = block->data();
+    if (newDataSize == data.size())
+        return block;
+    assert(newDataSize > data.size()); //TODO: Implement shrinking
+    auto newBlock = allocBlock(newDataSize, block->type());
+    if (!newBlock)
+        return nullptr;
+    if (auto vals = block->vals()) {
+        // Vals are relative ptrs so they have to be copied specially:
+        auto dst = (Val*)newBlock->data().begin();
+        for (Val &src : vals)
+            *dst++ = src;
+    } else {
+        newBlock->fill(data);
+    }
+    ::memset(&newBlock->data()[data.size()], 0, newDataSize - data.size());
+    return newBlock;
+}
+
+
+
 Block* Heap::firstBlock() {
     return (Block*)(_base + sizeof(Header));
 }
@@ -246,6 +271,23 @@ Block* Heap::firstBlock() {
 Block* Heap::nextBlock(Block *b) {
     b = b->nextBlock();
     return (byte*)b < _cur ? b : nullptr;
+}
+
+
+void Heap::visitRoots(BlockVisitor const& visitor) {
+    auto &header = this->header();
+    if (header.root != nullpos)
+        if (!visitor(*(Block*)at(header.root))) return;
+    if (header.symbols != nullpos)
+        if (!visitor(*(Block*)at(header.symbols))) return;
+    for (Object *refp : _externalRootObjs) {
+        if (auto block = refp->block())
+            if (!visitor(*block)) return;
+    }
+    for (Value *refp : _externalRootVals) {
+        if (auto block = refp->block())
+            if (!visitor(*block)) return;
+    }
 }
 
 
@@ -272,10 +314,9 @@ void Heap::visitBlocks(BlockVisitor visitor) {
         return true;
     };
 
-    if_let(rootObj, root()) {
-        if (!processBlock(rootObj.block()))
-            return;
-    }
+    visitRoots([&](Block const& block) {
+        return processBlock(const_cast<Block*>(&block));
+    });
 
     while (!stack.empty()) {
         Block *b = stack.front();
@@ -288,21 +329,76 @@ void Heap::visitBlocks(BlockVisitor visitor) {
 }
 
 
+void Heap::dump(std::ostream &out) {
+    auto writeAddr = [&](const void *addr) -> std::ostream& {
+        return out << addr << std::showpos << std::setw(8) << intpos(pos(addr))
+        << std::noshowpos << " | ";
+    };
+
+    // First walk the object graph to set the "visited" flag on live objects:
+    visitBlocks([&](Block const&) { return true; });
+
+    Block const* rootBlock = nullptr;
+    Block const* symBlock = nullptr;
+    auto &header = this->header();
+    if (header.root != nullpos)
+        rootBlock = (Block*)at(header.root);
+    if (header.symbols != nullpos)
+        symBlock = (Block*)at(header.symbols);
+    std::unordered_set<Block const*> externalRoots;
+    visitRoots([&](Block const& block) {
+        externalRoots.insert(&block);
+        return true;
+    });
+
+
+    writeAddr(_base) << "--- HEAP BASE ---\n";
+    visitAll([&](Block const& block) {
+        writeAddr(&block);
+        out << std::setw(4) << block.dataSize() << " bytes : ";
+        Value val(&block);
+        switch (val.type()) {
+            case Type::Array:   out << "Array[" << val.as<Array>().count() << " / " << val.as<Array>().capacity() << "]"; break;
+            case Type::Dict:    out << "Dict[" << val.as<Dict>().size() << " / " << val.as<Dict>().capacity() << "]"; break;
+            default:            out << val; break;
+        }
+        if (&block == rootBlock)
+            out << "  <==ROOT";
+        if (&block == symBlock)
+            out << "  <--SymbolTable";
+        if (externalRoots.find(&block) != externalRoots.end())
+            out << "  <--root";
+        if (!block.isVisited())
+            out << "  🞮";
+        out << std::endl;
+        return true;
+    });
+    writeAddr(_cur) << "--- cur ---\n";
+    writeAddr(_end) << "--- HEAP END ---\n";
+}
+
+
 void Heap::visit(ObjectVisitor visitor) {
     visitBlocks([&](Block const& block) { return visitor(Object(&block)); });
 }
 
 
-void Heap::registerExternalRoot(Object *ref) const {
-    assert(ref->isNull() || contains(ref->block()));
-    _externalRoots.push_back(ref);
+template <class T> static inline void _registerRoot(Heap const* self, std::vector<T*> &roots, T *ref) {
+    std::cerr << "register root " << (void*)ref << std::endl;
+    assert(ref->isNull() || self->contains(ref->block()));
+    roots.push_back(ref);
+}
+template <class T> static inline void _unregisterRoot(std::vector<T*> &roots, T *ref) {
+    std::cerr << "UNregister root " << (void*)ref << std::endl;
+    auto i = std::find(roots.rbegin(), roots.rend(), ref);
+    assert(i != roots.rend());
+    roots.erase(std::prev(i.base()));
 }
 
-void Heap::unregisterExternalRoot(Object* ref) const {
-    auto i = std::find(_externalRoots.rbegin(), _externalRoots.rend(), ref);
-    assert(i != _externalRoots.rend());
-    _externalRoots.erase(std::prev(i.base()));
-}
+void Heap::registerExternalRoot(Value *ref) const    {_registerRoot(this, _externalRootVals, ref);}
+void Heap::unregisterExternalRoot(Value* ref) const  {_unregisterRoot(_externalRootVals, ref);}
+void Heap::registerExternalRoot(Object *ref) const   {_registerRoot(this, _externalRootObjs, ref);}
+void Heap::unregisterExternalRoot(Object* ref) const {_unregisterRoot(_externalRootObjs, ref);}
 
 
 template <ObjectClass T>
@@ -327,13 +423,22 @@ Maybe<T> newObject(size_t capacity, Heap &heap) {
 }
 
 Maybe<String> newString(string_view str, Heap &heap) {
-    return newObject<String>(str.data(), str.size(), heap);
+    return newString(str.data(), str.size(), heap);
+}
+Maybe<String> newString(const char *str, size_t length, Heap &heap) {
+    return newObject<String>(str, length, heap);
+}
+
+Maybe<Symbol> newSymbol(string_view str, Heap &heap) {
+    return heap.symbolTable().create(str);
+}
+Maybe<Symbol> newSymbol(const char *str, size_t length, Heap &heap) {
+    return newSymbol(string_view(str, length), heap);
 }
 
 Maybe<Blob> newBlob(size_t capacity, Heap &heap) {
     return newObject<Blob>(capacity, heap);
 }
-
 Maybe<Blob> newBlob(const void *data, size_t size, Heap &heap) {
     return newObject<Blob>((const byte*)data, size, heap);
 }
@@ -341,11 +446,9 @@ Maybe<Blob> newBlob(const void *data, size_t size, Heap &heap) {
 Maybe<Array> newArray(heapsize count, Heap &heap) {
     return newObject<Array>(count, heap);
 }
-
 Maybe<Array> newArray(std::initializer_list<Val> vals, Heap &heap) {
     return newObject<Array>(vals.begin(), vals.size(), heap);
 }
-
 Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap) {
     return newObject<Array>(vals.begin(), vals.size(), capacity, heap);
 }
@@ -353,11 +456,9 @@ Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap) {
 Maybe<Dict> newDict(heapsize capacity, Heap &heap) {
     return newObject<Dict>(capacity, heap);
 }
-
 Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, Heap &heap) {
     return newDict(vals, heapsize(vals.size()), heap);
 }
-
 Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, heapsize capacity, Heap &heap) {
     auto dict = newObject<Dict>(vals.begin(), vals.size(), capacity, heap);
     if_let(d, dict) d.sort(vals.size());

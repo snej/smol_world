@@ -41,12 +41,12 @@ using namespace std;
  implement Robin Hood hashing.
  */
 
-// Initial size of hash table (number of entries.)
-static constexpr heapsize kInitialNumberOfEntries   = 128;
+// Initial capacity of hash table (number of symbols it can hold before growing.)
+static constexpr heapsize kInitialCapacity = 32;
 
 
 std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap) {
-    if_let(table, newArray(2 * kInitialNumberOfEntries, *heap))
+    if_let(table, newArray(2 * kInitialCapacity, *heap))
     return std::make_unique<SymbolTable>(heap, table);
     else
         return nullptr;
@@ -66,7 +66,7 @@ Maybe<Symbol> SymbolTable::create(string_view str) {
 
 
 bool SymbolTable::visit(Visitor visitor) const {
-    return _table.visit([&](Value val, int32_t) {return visitor(val.as<Symbol>());});
+    return _table.visit([&](Value key, Value) {return visitor(key.as<Symbol>());});
 }
 
 }

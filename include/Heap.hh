@@ -80,6 +80,19 @@ public:
     /// Allocates a Block and copies the data in `contents` into it, filling the rest with 0.
     Block* allocBlock(heapsize dataSize, Type, slice<byte> contents);
 
+    /// Copies a block, creating a new block with a larger size. The extra bytes are zeroed.
+    /// @returns The new block; or the original if the new size is the same as the old;
+    ///          or nullptr if the allocation failed.
+    Block* growBlock(Block* block, heapsize newDataSize);
+
+    template <ObjectClass OBJ>
+    Maybe<OBJ> grow(OBJ const& obj, heapsize newCapacity) {
+        Block* b = growBlock(obj.block(), newCapacity * sizeof(typename OBJ::Item));
+        if (!b)
+            return nullvalue;
+        return Object(b).as<OBJ>();
+    }
+
     /// A callback that's invoked when the Heap doesn't have enough space for an allocation.
     /// It should attempt to increase the free space, then return true.
     /// If it can't do anything, it must return false.
@@ -105,7 +118,7 @@ public:
     const void* at(heappos off) const   {assert(validPos(off)); return _base + uintpos(off);}
 
     /// Translates a real address to a `heappos` offset.
-    heappos pos(const void *ptr) const {assert(ptr >= _base && ptr < _end); return _pos(ptr);}
+    heappos pos(const void *ptr) const {assert(ptr >= _base && ptr <= _end); return _pos(ptr);}
 
     bool contains(const void *ptr) const     {return ptr >= _base && ptr < _cur;}
     bool contains(Object) const;
@@ -124,9 +137,17 @@ public:
     void visitBlocks(BlockVisitor);
     void visit(ObjectVisitor);
 
-    /// Calls the Visitor callback once for each object, even if it's unreachable garbage.
+    /// Calls the Visitor callback once for each object, even if it's unreachable (garbage).
     void visitAll(BlockVisitor const&);
 
+    /// Calls the Visitor callback once for each known garbage-collection root.
+    /// This includes the heap's root, its SymbolTable's array, and any registered external roots.
+    void visitRoots(BlockVisitor const&);
+
+    void dump(std::ostream&);
+
+    void registerExternalRoot(Value*) const;
+    void unregisterExternalRoot(Value*) const;
     void registerExternalRoot(Object*) const;
     void unregisterExternalRoot(Object*) const;
 
@@ -173,7 +194,8 @@ private:
     byte*   _end;
     byte*   _cur;
     AllocFailureHandler _allocFailureHandler = nullptr;
-    std::vector<Object*> mutable _externalRoots;
+    std::vector<Value*> mutable _externalRootVals;
+    std::vector<Object*> mutable _externalRootObjs;
     std::unique_ptr<SymbolTable> _symbolTable;
     bool    _malloced = false;
 };
@@ -195,27 +217,70 @@ private:
 
 /// A Handle is an object reference that is known to the Heap; during a garbage collection it
 /// will be updated to point to the new location of the object.
-template <ObjectClass OBJ>
+template <class OBJ>
 class Handle : public OBJ {
 public:
-    Handle(Heap &heap)                        :OBJ(), _heap(&heap) {_heap->registerExternalRoot(this);}
-    Handle(OBJ const& o, Heap &heap)            :OBJ(o), _heap(&heap) {_heap->registerExternalRoot(this);}
-    ~Handle()                       {_heap->unregisterExternalRoot(this);}
+    Handle()                            :Handle(*Heap::current()) { }
+    Handle(Heap &heap)                  :OBJ(),  _heap(&heap) {reg();}
+    Handle(OBJ const& o)                :Handle(o, *Heap::current()) { }
+    Handle(OBJ const& o, Heap &heap)    :OBJ(o), _heap(&heap) {reg();}
+    ~Handle()                           {unreg();}
 
-    void setHeap(Heap &heap)                    {_heap = &heap;}
+    Handle(Handle const& h)             :Handle(h, *h._heap) { }
+    Handle& operator=(Handle const& h)  {unreg(); OBJ::operator=(h); _heap = h._heap; reg(); return *this;}
+
+    Handle& operator=(Object o)         {Object::operator=(o); return *this;}
+
+    void setHeap(Heap &heap)            {_heap = &heap;}
 private:
+    void reg() {_heap->registerExternalRoot(this);}
+    void unreg() {_heap->unregisterExternalRoot(this);}
     Heap* _heap;
 };
 
 
-/// A Handle is an object reference that is known to the Heap; during a garbage collection it
-/// will be updated to point to the new location of the object.
-template <ObjectClass OBJ>
-class LocalHandle : public OBJ {
+template <>
+class Handle<Value> : public Value {
 public:
-    LocalHandle()                        :OBJ()  {Heap::current()->registerExternalRoot(this);}
-    LocalHandle(OBJ const& o)            :OBJ(o) {Heap::current()->registerExternalRoot(this);}
-    ~LocalHandle()                       {Heap::current()->unregisterExternalRoot(this);}
+    Handle()                            :Handle(*Heap::current()) { }
+    Handle(Heap &heap)                  :Value(),  _heap(&heap) {reg();}
+    Handle(Value const& o)              :Handle(o, *Heap::current()) { }
+    Handle(Value const& o, Heap &heap)  :Value(o), _heap(&heap) {reg();}
+    ~Handle()                           {unreg();}
+
+    Handle(Handle const& h)             :Handle(h, *h._heap) { }
+    Handle& operator=(Handle const& h)  {unreg(); Value::operator=(h); _heap = h._heap; reg(); return *this;}
+
+    Handle& operator=(Value v)          {Value::operator=(v); return *this;}
+
+    void setHeap(Heap &heap)            {_heap = &heap;}
+private:
+    void reg() {_heap->registerExternalRoot(this);}
+    void unreg() {_heap->unregisterExternalRoot(this);}
+    Heap* _heap;
+};
+
+
+template <class OBJ>
+class Handle<Maybe<OBJ>> : public Maybe<OBJ> {
+public:
+    Handle()                            :Handle(*Heap::current()) { }
+    Handle(Heap &heap)                  :Maybe<OBJ>(),  _heap(&heap) {reg();}
+    Handle(OBJ const& o)                :Handle(o, *Heap::current()) { }
+    Handle(OBJ const& o, Heap &heap)    :Maybe<OBJ>(o), _heap(&heap) {reg();}
+    ~Handle()                           {unreg();}
+
+    Handle(Handle const& h)             :Handle(h, *h._heap) { }
+    Handle& operator=(Handle const& h)  {unreg(); OBJ::operator=(h); _heap = h._heap; reg(); return *this;}
+
+    Handle& operator=(OBJ o)            {Maybe<OBJ>::operator=(o); return *this;}
+    Handle& operator=(Maybe<OBJ> const&m) {Maybe<OBJ>::operator=(m); return *this;}
+
+    void setHeap(Heap &heap)            {_heap = &heap;}
+private:
+    void reg() {_heap->registerExternalRoot(&this->_obj);}
+    void unreg() {_heap->unregisterExternalRoot(&this->_obj);}
+    Heap* _heap;
 };
 
 }

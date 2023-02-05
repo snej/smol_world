@@ -21,6 +21,10 @@ using uintpos = uint32_t;
 
 using heapsize = uintpos;      ///< Like `size_t` for Heaps.
 
+static inline heapsize shorten(size_t size) {
+    assert(size < UINT32_MAX);
+    return heapsize(size);
+}
 
 enum class heappos : uintpos { };      ///< A position in a Heap, relative to its base.
 

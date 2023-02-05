@@ -26,11 +26,18 @@ using namespace std;
 using namespace snej::smol;
 
 
+template <ObjectClass OBJ>
+static OBJ mustHave(Maybe<OBJ> const& m) {
+    REQUIRE(m);
+    return m.value();
+}
+
+
 static void checkTypes(Value v, Type t, string_view asString) {
-    INFO("checking type " << t);
+    INFO("checking type " << t << " value " << asString);
     CHECK(v.type() == t);
-    CHECK(bool(v) == (t != Type::Null));
-    CHECK(v.isNull() == (t == Type::Null));
+    CHECK(bool(v) == (v != nullvalue));
+    CHECK((v.isNull() || v.isNullish()) == (t == Type::Null));
     CHECK(v.isBool() == (t == Type::Bool));
     CHECK(v.isInt() == (t == Type::Int));
     CHECK(v.isObject() == (t < Type::Null));
@@ -54,6 +61,8 @@ TEST_CASE("Primitive Values", "[object]") {
 
     checkTypes(Null(), Type::Null, "null");
     CHECK(Null() == nullvalue);
+
+    checkTypes(nullishvalue, Type::Null, "nullish");
 
     checkTypes(Bool(false), Type::Bool, "false");
     checkTypes(Bool(true), Type::Bool, "true");
@@ -146,12 +155,16 @@ TEST_CASE("Arrays", "[object]") {
 
         CHECK(obj.capacity() == len);
         CHECK(obj.size() == len);
+        CHECK(obj.count() == 0);
+        CHECK(obj.full() == (len == 0));
         CHECK(obj.empty() == (len == 0));
 
-        for (int i = 0; i < len; ++i)
+        for (int i = 0; i < len; ++i) {
             obj[i] = strs[i];
+            CHECK(obj.count() == i + 1);
+        }
         for (int i = 0; i < len; ++i)
-            CHECK(obj[i].as<String>() == strs[i]);
+            CHECK(obj[i].maybeAs<String>() == strs[i]);
     }
 }
 
@@ -205,7 +218,7 @@ TEST_CASE("Dicts", "[object]") {
                 CHECK(dict.replace(key, -i));
 
                 for (int j = 0; j < 10; ++j)
-                    CHECK(dict.get(strs[j]) == ((j <= i) ? Value(-j) : nullvalue));
+                    CHECK(dict.get(strs[j]) == ((j <= i) ? Value(-j) : Value()));
 
             } else {
                 CHECK(!dict.set(key, i));
@@ -231,14 +244,68 @@ TEST_CASE("Dicts", "[object]") {
 }
 
 
-TEST_CASE("Symbols", "[object]") {
+TEST_CASE("HashMap", "[object],[hash]") {
+    Heap heap(10000);
+    UsingHeap u(heap);
+    Handle<Array> hashArray = mustHave( HashMap::createArray(heap, 50) );
+    HashMap table(heap, hashArray);
+
+    CHECK(&table.heap() == &heap);
+    CHECK(table.array() == hashArray);
+    CHECK(table.count() == 0);
+    CHECK(table.capacity() >= 50);
+
+    Handle<String> foo = mustHave( newString("foo", heap) );
+    Handle<String> bar = mustHave( newString("bar", heap) );
+
+    CHECK(table.get(foo) == nullptr);
+    table.put(foo, 0xF00);
+    CHECK(table.count() == 1);
+    CHECK(table.get(foo) == 0xF00);
+
+    CHECK(table.get(bar) == nullptr);
+    table.put(bar, 0xBA4);
+    CHECK(table.count() == 2);
+    CHECK(table.get(bar) == 0xBA4);
+    CHECK(table.get(foo) == 0xF00);
+
+    table.dump(cout);
+/*
+    constexpr size_t NumSymbols = 100;
+    Maybe<Symbol> syms[NumSymbols];
+    for (size_t i = 0; i < NumSymbols; ++i) {
+        string name = "Symbol #" + std::to_string(i * i);
+        cerr << "Creating #" << i << ": " << name << endl;
+        CHECK(table.find(name) == nullptr);
+        unless(sym, table.create(name)) {FAIL("Failed to alloc sym");}
+        syms[i] = sym;
+        CHECK(sym.str() == name);
+        CHECK(table.find(name) == sym);
+        CHECK(table.size() == 3 + i);
+    }
+    for (size_t i = 0; i < NumSymbols; ++i) {
+        string name = "Symbol #" + std::to_string(i * i);
+        CHECK(table.find(name) == syms[i]);
+    }
+
+    size_t i = 0;
+    table.visit([&](Symbol) {
+        ++i;
+        return true;
+    });
+    cerr << endl;
+    CHECK(i == 2 + NumSymbols);*/
+}
+
+
+TEST_CASE("Symbols", "[object],[hash]") {
     Heap heap(10000);
     SymbolTable& table = heap.symbolTable();
     SymbolTable& tableAgain = heap.symbolTable();
     CHECK(&table == &tableAgain);
     CHECK(table.size() == 0);
 
-    CHECK(table.find("foo") == nullptr);
+    CHECK(table.find("foo") == nullval);
 
     if_let (foo, table.create("foo")) {
         CHECK(foo.str() == "foo");
@@ -257,7 +324,7 @@ TEST_CASE("Symbols", "[object]") {
     for (size_t i = 0; i < NumSymbols; ++i) {
         string name = "Symbol #" + std::to_string(i * i);
         cerr << "Creating #" << i << ": " << name << endl;
-        CHECK(table.find(name) == nullptr);
+        CHECK(table.find(name) == nullval);
         unless(sym, table.create(name)) {FAIL("Failed to alloc sym");}
         syms[i] = sym;
         CHECK(sym.str() == name);

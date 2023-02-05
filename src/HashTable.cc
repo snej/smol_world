@@ -30,9 +30,12 @@ namespace wy {
 
 using namespace std;
 
-/* HashTable ideas:
-    List of hashes followed by list of values, optionally followed by list of keys
- */
+/*  A hash table is represented as an Array of size 2*n or 3*n, where n is the number of table
+    entries. n must be a power of 2.
+    - The first n items are hash codes (Ints). An empty entry has null.
+    - The next n items are the keys associated with those hash codes (Symbols or Strings.)
+    - (HashMap only) The next n items are the corresponding values.
+*/
 
 // Minimum size of table to create (must be a power of 2)
 static constexpr uint32_t kMinTableSize = 8;
@@ -44,33 +47,60 @@ static constexpr unsigned kHashSeed = 0xFE152280;
 //TODO: choosing different seed for each Heap would protect against some DoS attacks
 
 
+static string_view keyString(Value v) {
+    switch (v.type()) {
+        case Type::String:  return v.as<String>().str();
+        case Type::Symbol:  return v.as<Symbol>().str();
+        default:            assert(false); abort();
+    }
+}
+
+
 // hash function for keys: WyHash64.
 // `Val` can only store 31-bit signed ints, so reinterpret hash as int32, then shift right 1 bit.
 int32_t HashTable::computeHash(string_view str) {
     return int32_t(wy::wyhash32(str.data(), str.size(), kHashSeed)) >> 1 ;
 }
 
+int32_t HashTable::computeHash(Value key) {
+    return HashTable::computeHash(keyString(key));
+}
 
-unique_ptr<HashTable> HashTable::create(Heap &heap, uint32_t capacity) {
+bool HashTable::keysMatch(Value key1, Value key2) {
+    return key1 == key2 || keyString(key1) == keyString(key2);
+}
+
+bool HashTable::keysMatch(string_view key1, Value key2) {
+    return key1 == keyString(key2);
+}
+
+
+
+Maybe<Array> HashTable::createArray(Heap &heap, uint32_t capacity, bool withValues) {
     uint32_t targetSize = uint32_t(capacity / kMaxLoad);
     uint32_t size = kMinTableSize;
     while (size < targetSize)
         size *= 2;
-    unless(array, newArray(2 * size, heap)) {return nullptr;}
-    return unique_ptr<HashTable>(new HashTable(heap, array, false));
+    return newArray(size * (withValues ? 3 : 2), heap);
 }
 
 
-HashTable::HashTable(Heap &heap, Array array, bool recount)
+HashTable::HashTable(Heap &heap, Array array, bool hasValues, bool recount)
 :_heap(&heap)
 ,_array(array, heap)
+,_hasValues(hasValues)
 {
-    _sizeMask = uint32_t(_array.size() / 2 - 1);    // number of HashEntrys - 1
-    _capacity = uint32_t(round(tableSize() * kMaxLoad));
+    int arraySize = _array.size();
+    int itemsPerEntry = _hasValues ? 3 : 2;
+    assert(arraySize % itemsPerEntry == 0);
+    _size = uint32_t(_array.size() / itemsPerEntry);    // each entry has 2 or 3 array items
+    assert((_size & (_size - 1)) == 0);                 // size must be a power of 2
+    _capacity = uint32_t(round(_size * kMaxLoad));
+
     uint32_t count = 0;
     if (recount) {
-        for (auto i = begin(); i < end(); i++) {
-            if (i->symbol != nullval)
+        for (auto &key : keys()) {
+            if (key != nullval)
                 ++count;
         }
     }
@@ -78,55 +108,60 @@ HashTable::HashTable(Heap &heap, Array array, bool recount)
 }
 
 
-std::pair<HashTable::HashEntry*,Value>
-HashTable::search(string_view str, int32_t hashCode) const {
+template <typename KEY>
+std::pair<Val*,bool>
+HashTable::search(KEY key, int32_t hashCode) const {
     Val hashVal(hashCode);
-    HashEntry *entry = begin() + (uint32_t(hashCode) & _sizeMask);
+    slice<Val> hashes = this->hashes();
+    Val *entry = &hashes[uint32_t(hashCode) & (_size - 1)];
     while (true) {
-        if (entry->hash == hashVal) {
-            Value sym = entry->symbol;
-            if (recoverKey(sym) == str)
-                return {entry, sym};
-        } else if (entry->hash == nullval) {
-            return {entry, {}};
+        if (entry[0] == hashVal) {
+            if (keysMatch(key, entry[_size]))
+                return {entry, true};
+        } else if (entry[0] == nullval) {
+            return {entry, false};
         }
-        if (++entry == end())
-            entry = begin();
+        if (++entry == hashes.end())
+            entry = hashes.begin();
     }
 }
 
 
-bool HashTable::insert(string_view str, Value symbol) {
-    int32_t hashCode = computeHash(str);
-    auto [entry, existing] = search(str, hashCode);
-    return !existing && insert(str, hashCode, entry, symbol);
+bool HashTable::insert(Value key, int32_t hashCode, Value value) {
+    auto [entry, found] = search(key, hashCode);
+    return !found && insert(key, hashCode, entry, value);
 }
 
-bool HashTable::insert(string_view str, int32_t hashCode, HashEntry* entry, Value newSymbol) {
+
+bool HashTable::insert(Value key, int32_t hashCode, Val* entry, Value value) {
     if (_count >= _capacity) {
         if (!grow())
             return false;
-        entry = search(str, hashCode).first;
+        entry = search(key, hashCode).first;
     }
-    assert(entry->symbol == nullval);
-    entry->hash = hashCode;
-    entry->symbol = newSymbol;
+    assert(entry[0] == nullval);
+    entry[0] = hashCode;
+    entry[_size] = key;
+    if (_hasValues)
+        entry[2 * _size] = value;
     ++_count;
     return true;
 }
 
 
 bool HashTable::grow() {
-    //    std::cout << "=== Growing symbol table from " << _table.size
-    //              << " to " << 2*_table.size << " buckets ===\n";
-    unless(array, newArray(4 * tableSize(), *_heap)) { return false; }
-    HashTable newTable(*_heap, array, false);
+//    std::cout << "=== Growing HashTable to " << 2*_size << " buckets ===\n";
+    unless(array, newArray(2 * _array.size(), *_heap)) { return false; }
+    HashTable newTable(*_heap, array, _hasValues, false);
     // Scan the old table, inserting each entry into the new table:
-    for (auto e = begin(); e != end(); ++e) {
-        if (e->symbol != nullval) {
-            auto [newEntry, foundSym] = newTable.search(recoverKey(e->symbol), e->hash.asInt());
-            assert(!foundSym);
-            *newEntry = *e;
+    for (Val &hashVal : hashes()) {
+        if (hashVal != nullval) {
+            int32_t hash = (&hashVal)[0].asInt();
+            Value key = (&hashVal)[_size];
+            Value value;
+            if (_hasValues)
+                value = (&hashVal)[2*_size];
+            newTable.insert(key, hash, value);
         }
     }
     newTable._count = _count;
@@ -137,9 +172,12 @@ bool HashTable::grow() {
 
 
 bool HashTable::visit(Visitor visitor) const {
-    for (auto i = begin(); i != end(); ++i) {
-        if(i->symbol != nullval) {
-            if (!visitor(i->symbol, i->hash.asInt()))
+    Value value;
+    for (Val &key : keys()) {
+        if(key != nullval) {
+            if (_hasValues)
+                value = (&key)[_size];
+            if (!visitor(key, value))
                 return false;
         }
     }
@@ -147,27 +185,68 @@ bool HashTable::visit(Visitor visitor) const {
 }
 
 
-void HashTable::dump(std::ostream &out) const {
+void HashTable::dump(std::ostream &out, bool includeEmpty) const {
     uint32_t count = 0, probes = 0;
     uint32_t i = 0;
-    for (auto e = begin(); e != end(); ++e, ++i) {
-        out << setw(3) << i << ": ";
-        if (Value symbol = e->symbol; symbol != nullvalue) {
+    for (Val const* entry = hashes().begin(); entry != hashes().end(); ++entry) {
+        Value hash = entry[0];
+        if (hash != nullvalue) {
+            out << setw(3) << i << ": ";
             ++count;
-            uint32_t hashCode = uint32_t(e->hash.asInt());
-            uint32_t delta = i - (hashCode & _sizeMask);
+            uint32_t hashCode = hash.asInt();
+            uint32_t delta = i - (hashCode & (_size - 1));
             if (delta) {
                 out << '+' << setw(2) << delta << ' '; // distance from optimal position
             } else {
                 out << "    ";
             }
             probes += 1 + delta;
-            out << setw(8) << hex << hashCode << dec << ' ' << symbol;
+            Value key = entry[_size];
+            out << setw(8) << hex << hashCode << dec << ' ' << key;
+            if (_hasValues)
+                out << " --> " << entry[2*_size];
+            out << endl;
+        } else if (includeEmpty) {
+            out << setw(3) << i << ": \n";
         }
-        out << endl;
+        ++i;
     }
-    auto size = end() - begin();
-    out << count << " symbols in " << size << " buckets; " << (count/float(size)*100.0) << "% full. total #probes is " << probes << ", avg is " << (probes/float(count));
+    out << count << " symbols in " << _size << " buckets; " << (count/float(_size)*100.0) << "% full. total #probes is " << probes << ", avg is " << (probes/float(count));
+}
+
+
+#pragma mark - HASHMAP:
+
+
+Value HashMap::get(Value key) const {
+    if (auto [entry, found] = search(key, computeHash(key)); found)
+        return entry[2*_size];
+    else
+        return nullvalue;
+}
+
+bool HashMap::set(Value key, Value value, bool replace) {
+    int32_t hashCode = computeHash(key);
+    if (auto [entry, found] = search(key, hashCode); found) {
+        if (!replace)
+            return false;
+        entry[2*_size] = value;
+        return true;
+    } else {
+        return HashTable::insert(key, hashCode, entry, value);
+    }
+}
+
+
+
+#pragma mark - HASHSET:
+
+
+Value HashSet::find(string_view str) const {
+    if (auto [entry, found] = search(str, computeHash(str)); found)
+        return entry[_size];
+    else
+        return nullvalue;
 }
 
 

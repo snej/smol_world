@@ -63,22 +63,24 @@ public:
 };
 
 Maybe<String> newString(string_view str, Heap &heap);
+Maybe<String> newString(const char *str, size_t length, Heap &heap);
 
 
 
 /// A unique string: there is only one Symbol in a Heap with any specific string value.
-/// Use SymbolTable to create and look up Symbols.
+/// The SymbolTable class manages Symbols.
 class Symbol : public Collection<char, Type::Symbol> {
 public:
     const char* data() const        {return begin();}
     string_view str() const         {auto i = items(); return {i.begin(), i.size()};}
 
 private:
-    friend class HashTable; //TEMP
     friend class SymbolTable;
     static Value create(string_view str, Heap &heap);
 };
 
+Maybe<Symbol> newSymbol(string_view str, Heap &heap);
+Maybe<Symbol> newSymbol(const char *str, size_t length, Heap &heap);
 
 
 /// A blob object ... just like a String but with `byte` instead of `char`.
@@ -96,6 +98,11 @@ class Array : public Collection<Val, Type::Array> {
 public:
     Val& operator[] (heapsize i)                {return items()[i];}
     Val const&  operator[] (heapsize i) const   {return items()[i];}
+
+    heapsize count() const pure;
+    bool full() const                           {return capacity() == 0 || end()[-1] != nullval;}
+    bool insert(Value, heapsize pos);
+    bool append(Value);
 };
 
 Maybe<Array> newArray(heapsize count, Heap &heap);

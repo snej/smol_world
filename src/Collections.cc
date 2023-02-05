@@ -22,6 +22,53 @@
 
 namespace snej::smol {
 
+
+#pragma mark - ARRAY:
+
+
+heapsize Array::count() const {
+    const_iterator i;
+    for (i = end() - 1; i >= begin(); --i)
+        if (*i != nullval)
+            break;
+    return heapsize(i + 1 - begin());
+}
+
+bool Array::insert(Value val, heapsize pos) {
+    assert(pos < size());
+    iterator i = begin() + pos;
+    if (*i) {
+        // Already an item here. Is there room to insert?
+        if (full())
+            return false;
+        // Then slide existing items up to make room:
+        Value cur = *i, next;
+        auto j = i;
+        do {
+            next = *++j;
+            *j = cur;
+        } while (next);
+    } else {
+        assert(pos == 0 || i[-1]); // can't insert after the end
+        // No item, just past end; can simply store it:
+    }
+    *i = val;
+    return true;
+}
+
+bool Array::append(Value val) {
+    if (auto c = count(); c < size()) {
+        (*this)[c] = val;
+        return true;
+    } else {
+        return false;
+    }
+}
+
+
+#pragma mark - DICT:
+
+
 static bool keyCmp(DictEntry const& a, DictEntry const& b) {
     return a.key.block() > b.key.block();   // reverse order
 }
@@ -126,9 +173,11 @@ bool Dict::remove(Value key) {
 }
 
 
+#pragma mark - I/O:
 
-std::ostream& operator<<(std::ostream& out, Null const&) {
-    return out << "null";
+
+std::ostream& operator<<(std::ostream& out, Null const& val) {
+    return out << (val.isNull() ? "null" : "nullish");
 }
 
 std::ostream& operator<<(std::ostream& out, Int const& val) {

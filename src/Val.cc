@@ -48,7 +48,7 @@ Type Val::type() const {
         return Type::Int;
     else if (_val > TrueVal)
         return _block()->type();
-    else if (isNull())
+    else if (isNull() || isNullish())
         return Type::Null;
     else
         return Type::Bool;
@@ -60,7 +60,7 @@ Type Value::type() const {
         return Type::Int;
     else if (_val > TrueVal)
         return _block()->type();
-    else if (isNull())
+    else if (isNull() || isNullish())
         return Type::Null;
     else
         return Type::Bool;
@@ -82,12 +82,13 @@ std::ostream& operator<<(std::ostream& out, Type t) {return out << TypeName(t);}
 
 std::ostream& operator<<(std::ostream& out, Val const& val) {
     switch (val.type()) {
-        case Type::Null:    out << "null"; break;
+        case Type::Null:    out << (val.isNull() ? "null" : "nullish"); break;
         case Type::Bool:    out << (val.asBool() ? "true" : "false"); break;
         case Type::Int:     out << val.asInt(); break;
         default:            out << TypeName(val.type()) << "@" << (void*)val.block(); break;
     }
     return out;
 }
+
 
 }

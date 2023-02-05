@@ -35,7 +35,7 @@ public:
     bool visit(Visitor visitor) const;
 
     friend std::ostream& operator<<(std::ostream& out, SymbolTable const &st) {
-        st._table.dump(out); return out;
+        st._table.dump(out, true); return out;
     }
 
 protected:
@@ -45,7 +45,7 @@ protected:
 private:
     bool grow();
 
-    HashTable   _table;
+    HashSet   _table;
 };
 
 }

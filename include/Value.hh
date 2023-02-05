@@ -31,7 +31,6 @@ public:
     explicit Value(Block const* block)              {setBlock(block);}
 
     Type type() const pure;
-    explicit operator bool() const pure             {return !isNull();}
 
     inline Object asObject() const pure;
 
@@ -46,19 +45,17 @@ public:
     template <typename FN> bool visit(FN fn) const;
 
     friend bool operator== (Value const& a, Value const& b) pure     {return a._val == b._val;}
-    friend bool operator!= (Value const& a, Value const& b) pure     {return a._val != b._val;}
 
     static Value fromValue(Value v) pure            {return v;}
 
 private:
     friend class Val;
     friend class Object;
-    
+
+    constexpr explicit Value(magic m)       :ValBase(m) { }
     Block* _block() const pure              {assert(isObject()); return (Block*)(_val >> TagSize);}
     void setBlock(Block const* block)       {_val = uintptr_t(block) << TagSize;}
 };
-
-constexpr Value nullvalue;
 
 std::ostream& operator<< (std::ostream&, Value);
 
@@ -73,7 +70,15 @@ public:
     constexpr Null() = default;
     constexpr Null(nullptr_t)                     :Value() { }
     constexpr explicit Null(Value v)              :Value(v) {assert(v.isNull());}
+
+    static constexpr Null _nullish()       {return Null(NullishVal);}
+private:
+    constexpr explicit Null(magic m)       {_val = m;}
 };
+
+constexpr Null nullvalue;
+
+constexpr Null nullishvalue = Null::_nullish();
 
 
 /// The Value subclass representing the Bool type.
@@ -93,6 +98,9 @@ class Int : public Value {
 public:
     static constexpr Type Type = Type::Int;
     constexpr static bool HasType(enum Type t)            {return t == Type;}
+
+    static constexpr int Min = Val::MinInt;
+    static constexpr int Max = Val::MaxInt;
 
     constexpr Int(int i = 0)                              :Value(i) { }
     constexpr explicit Int(Value v)                       :Value(v) {assert(v.isInt());}
@@ -131,7 +139,6 @@ public:
     slice<byte> rawBytes() const pure               {return _data;}
 
     friend bool operator==(Object const& a, Object const& b) pure    {return a._data.begin() == b._data.begin();}
-    friend bool operator!=(Object const& a, Object const& b) pure    {return !(a == b);}
 
     static Object fromValue(Value v) pure           {return Object(v);}
 
@@ -170,25 +177,29 @@ class Maybe {
 public:
     Maybe() = default;
     Maybe(nullptr_t)                    :Maybe() { }
-    explicit Maybe(Value val)    {if (T::HasType(val.type())) _obj = Object(val);}
+    Maybe(Null)                         :Maybe() { }
+    explicit Maybe(Value val)           {if (T::HasType(val.type())) _obj = Object(val);}
     explicit Maybe(Block *block)        :_obj(block) {assert(_obj.type() == T::Type);}
     Maybe(T const& obj)                 :_obj(obj) { }
 
     explicit operator bool() const      {return !_obj.isNull();}
-    operator Value() const              {return _obj.isNull() ? nullvalue : Value(_obj);}
+    operator Value() const              {return _obj.isNull() ? Value(nullvalue) : Value(_obj);}
 
     T& value()                          {return *getp();}
-    T const& value() const              {return const_cast<Maybe*>(this)->get();}
+    T const& value() const              {return const_cast<Maybe*>(this)->value();}
 
     // do not call this directly! It's only for use by MAYBE()
     friend T _unsafeval_(Maybe<T> const& m)     {return reinterpret_cast<T const&>(m._obj);}
+    friend T& _unsafeval_(Maybe<T>& m)          {return reinterpret_cast<T&>(m._obj);}
 
-    friend std::ostream& operator<< (std::ostream& o, Maybe const& m) {return o << m._obj;}
+    friend std::ostream& operator<< (std::ostream& o, Maybe const& m) {
+        if (m) o << m._obj; else o << nullvalue; return o;
+    }
 
-    friend bool operator==(Maybe<T> const& a, Maybe<T> const& b) {return a._obj == b._obj;}
+    friend bool operator==(Maybe<T> const& a, Maybe<T> const& b)  {return a._obj == b._obj;}
+    friend bool operator==(Maybe<T> const& a, Value b)  {return Value(a) == b;}
     friend bool operator==(Maybe<T> const& a, T const& b) {return a._obj == b;}
-    friend bool operator==(T const& a, Maybe<T> const& b) {return b._obj == a;}
-private:
+protected:
     T* getp()                           {assert(!_obj.isNull()); return reinterpret_cast<T*>(&_obj);}
 
     Object _obj;

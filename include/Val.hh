@@ -56,6 +56,7 @@ public:
     constexpr explicit ValBase(int i)           :_val((i << TagSize) | IntTag) { }
 
     constexpr bool isNull() const               {return _val == NullVal;}
+    constexpr bool isNullish() const            {return _val == NullishVal;}
     constexpr bool isBool() const               {return _val == FalseVal || _val == TrueVal;}
     constexpr bool asBool() const               {return _val > FalseVal;}
     constexpr bool isInt() const                {return (_val & IntTag) != 0;}
@@ -64,23 +65,28 @@ public:
 
     constexpr RAWVAL rawBits() const            {return _val;}
 
+    explicit operator bool() const pure         {return !isNull();}
+
 protected:    
     enum TagBits : uint32_t {
         IntTag      = 0b001,
     };
 
-    static constexpr int      TagSize  = 1;
+    static constexpr int TagSize = 1;
 
-    static constexpr uint32_t NullVal  = 0;
-    static constexpr uint32_t FalseVal = 2;
-    static constexpr uint32_t TrueVal  = 4;
+    enum magic : uint32_t {
+        NullVal    = 0,
+        NullishVal = 2,
+        FalseVal   = 4,
+        TrueVal    = 6,
+    };
 
-    constexpr explicit ValBase(uint32_t val)               :_val(val) { }
+    constexpr explicit ValBase(magic m)         :_val(m) { }
 
     Type _type() const pure {
         if (isInt())
             return Type::Int;
-        else if (isNull())
+        else if (isNull() || isNullish())
             return Type::Null;
         else if (isBool())
             return Type::Bool;
@@ -131,6 +137,9 @@ public:
         assert(isObject());
         return (Block*)(intptr_t(this) + (int32_t(_val) >> TagSize));
     }
+
+protected:
+    constexpr explicit ValBase32(magic m)           :ValBase(m) { }
 };
 
 
@@ -162,7 +171,6 @@ public:
     template <ValueClass T> Maybe<T> maybeAs() const pure;
 
     friend bool operator== (Val const& a, Val const& b) pure     {return a._val == b._val;}
-    friend bool operator!= (Val const& a, Val const& b) pure     {return a._val != b._val;}
 
     friend std::ostream& operator<<(std::ostream&, Val const&);
 
@@ -172,8 +180,16 @@ public:
     // stack, since the stack may well be > 2GB away from the target address. That means Val cannot
     // be passed by value or returned from a function or used as a local variable.
     Val(Val const&) = delete;
+
+    static constexpr Val _nullish()                             {return Val(ValBase32::NullishVal);}
+
+private:
+    constexpr explicit Val(magic m)                             :ValBase32(m) { }
 };
 
 static constexpr Val nullval;
+
+/// A Val whose type is Null but isn't the same as nullval. Used for JSON `null`.
+static constexpr Val nullishval = Val::_nullish();
 
 }

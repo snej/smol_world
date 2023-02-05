@@ -12,3 +12,4 @@
 #include "Collections.hh"
 #include "SymbolTable.hh"
 #include "GarbageCollector.hh"
+#include "JSON.hh"
