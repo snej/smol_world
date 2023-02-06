@@ -30,12 +30,12 @@ public:
     bool empty() const              {return size() == 0;}
 
     using iterator = Item*;
-    using const_iterator = const Item*;
-
-    const_iterator begin() const    {return items().begin();}
-    const_iterator end() const      {return items().end();}
     iterator begin()                {return items().begin();}
     iterator end()                  {return items().end();}
+
+    using const_iterator = const Item*;
+    const_iterator begin() const    {return items().begin();}
+    const_iterator end() const      {return items().end();}
 
 protected:
     Collection() = default;
@@ -69,10 +69,10 @@ Maybe<String> newString(const char *str, size_t length, Heap &heap);
 
 /// A unique string: there is only one Symbol in a Heap with any specific string value.
 /// The SymbolTable class manages Symbols.
-class Symbol : public Collection<char, Type::Symbol> {
+class Symbol : public String {
 public:
-    const char* data() const        {return begin();}
-    string_view str() const         {auto i = items(); return {i.begin(), i.size()};}
+    static constexpr enum Type Type = Type::Symbol;
+    static bool HasType(enum Type t) {return t == Type;}
 
 private:
     friend class SymbolTable;
@@ -93,22 +93,40 @@ Maybe<Blob> newBlob(size_t capacity, Heap &heap);
 Maybe<Blob> newBlob(const void *data, size_t size, Heap &heap);
 
 
-/// An array of `Val`s.
+/// A fixed-size array of `Val`s.
 class Array : public Collection<Val, Type::Array> {
 public:
     Val& operator[] (heapsize i)                {return items()[i];}
     Val const&  operator[] (heapsize i) const   {return items()[i];}
-
-    heapsize count() const pure;
-    bool full() const                           {return capacity() == 0 || end()[-1] != nullval;}
-    bool insert(Value, heapsize pos);
-    bool append(Value);
 };
 
-Maybe<Array> newArray(heapsize count, Heap &heap);
-Maybe<Array> newArray(heapsize count, Value initialValue, Heap &heap);
-Maybe<Array> newArray(std::initializer_list<Val> vals, Heap &heap);
+Maybe<Array> newArray(heapsize size, Heap &heap);
+Maybe<Array> newArray(heapsize size, Value initialValue, Heap &heap);
 Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap);
+
+
+
+/// A variable-size array of `Val`s. The size is not stored explicitly; instead, the array is
+/// padded with nulls, and the size is the number of non-null elements.
+/// Consequently, a Vector may not contain `nullvalue`. (`nullishvalue` is OK!)
+class Vector : public Collection<Val, Type::Vector> {
+public:
+    slice<Val> items() const                    {return {(Val*)begin(), size()};}
+    Val& operator[] (heapsize i)                {assert(allItems()[i]); return allItems()[i];}
+    Val const&  operator[] (heapsize i) const   {assert(allItems()[i]); return allItems()[i];}
+
+    heapsize size() const pure;                 // "overridden"
+    bool full() const                           {return capacity() == 0 || endAll()[-1] != nullval;}
+    bool insert(Value, heapsize pos);
+    bool append(Value);
+
+private:
+    slice<Val> allItems() const                 {return Collection::items();}
+    const_iterator endAll() const               {return Collection::end();}
+};
+
+Maybe<Vector> newVector(heapsize capacity, Heap &heap);
+Maybe<Vector> newVector(slice<Val> vals, size_t capacity, Heap &heap);
 
 
 struct DictEntry {
@@ -164,8 +182,6 @@ private:
 };
 
 Maybe<Dict> newDict(heapsize capacity, Heap &heap);
-Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, Heap &heap);
-Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, heapsize capacity, Heap &heap);
 
 
 

@@ -57,12 +57,12 @@ public:
     }
 
     bool StartArray() {
-        unless(array, newArray(4, _heap)) {return false;}
+        unless(array, newVector(4, _heap)) {return false;}
         _stack.emplace_back(array);
         return true;
     }
     bool EndArray(rapidjson::SizeType /*elementCount*/) {
-        Handle<Array> array = _stack.back().as<Array>();
+        Handle<Vector> array = _stack.back().as<Vector>();
         _stack.pop_back();
         return addValue(array);
     }
@@ -92,7 +92,7 @@ private:
             _root = val;
         } else {
             Object obj = _stack.back();
-            if_let (array, obj.maybeAs<Array>()) {
+            if_let (array, obj.maybeAs<Vector>()) {
                 return append(array, val);
             } else {
                 assert(!_keys.empty());
@@ -109,13 +109,13 @@ private:
         return addValue(smol::Int(int(num)));
     }
 
-    bool append(Array array, Value val) {
+    bool append(Vector array, Value val) {
         if (!array.append(val)) {
             Handle valHandle(&val);   // in case grow() triggers GC
-            unless(newArray, _heap.grow(array, grow(array.capacity()))) {return false;}
-            __unused bool ok = newArray.append(val);
+            unless(newVector, _heap.grow(array, grow(array.capacity()))) {return false;}
+            __unused bool ok = newVector.append(val);
             assert(ok);
-            _stack.back() = newArray;
+            _stack.back() = newVector;
         }
         return true;
     }
@@ -174,6 +174,15 @@ static bool writeVal(Value val, rapidjson::Writer<rapidjson::StringBuffer> &writ
         case Type::Array: {
             if (!writer.StartArray()) return false;
             for (Value item : val.as<Array>().items()) {
+                if (!item)
+                    break; // array ends at first true null
+                if (!writeVal(item, writer)) return false;
+            }
+            return writer.EndArray();
+        }
+        case Type::Vector: {
+            if (!writer.StartArray()) return false;
+            for (Value item : val.as<Vector>().items()) {
                 if (!item)
                     break; // array ends at first true null
                 if (!writeVal(item, writer)) return false;

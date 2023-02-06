@@ -359,8 +359,11 @@ void Heap::dump(std::ostream &out) {
         out << std::setw(4) << block.dataSize() << " bytes : ";
         Value val(&block);
         switch (val.type()) {
-            case Type::Array:   out << "Array[" << val.as<Array>().count() << " / " << val.as<Array>().capacity() << "]"; break;
-            case Type::Dict:    out << "Dict[" << val.as<Dict>().size() << " / " << val.as<Dict>().capacity() << "]"; break;
+            case Type::Array:   out << "Array[" << val.as<Array>().size() << "]"; break;
+            case Type::Vector:  out << "Vector[" << val.as<Vector>().size()
+                                    << " / " << val.as<Vector>().capacity() << "]"; break;
+            case Type::Dict:    out << "Dict[" << val.as<Dict>().size() << " / "
+                                    << val.as<Dict>().capacity() << "]"; break;
             default:            out << val; break;
         }
         if (&block == rootBlock)
@@ -430,6 +433,10 @@ Maybe<String> newString(const char *str, size_t length, Heap &heap) {
     return newObject<String>(str, length, heap);
 }
 
+
+Value Symbol::create(string_view str, Heap &heap) {
+    return newObject<Symbol>(str.data(), str.size(), heap);
+}
 Maybe<Symbol> newSymbol(string_view str, Heap &heap) {
     return heap.symbolTable().create(str);
 }
@@ -437,12 +444,14 @@ Maybe<Symbol> newSymbol(const char *str, size_t length, Heap &heap) {
     return newSymbol(string_view(str, length), heap);
 }
 
+
 Maybe<Blob> newBlob(size_t capacity, Heap &heap) {
     return newObject<Blob>(capacity, heap);
 }
 Maybe<Blob> newBlob(const void *data, size_t size, Heap &heap) {
     return newObject<Blob>((const byte*)data, size, heap);
 }
+
 
 Maybe<Array> newArray(heapsize count, Heap &heap) {
     return newObject<Array>(count, heap);
@@ -462,20 +471,17 @@ Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap) {
     return newObject<Array>(vals.begin(), vals.size(), capacity, heap);
 }
 
-Maybe<Dict> newDict(heapsize capacity, Heap &heap) {
-    return newObject<Dict>(capacity, heap);
+
+Maybe<Vector> newVector(heapsize capacity, Heap &heap) {
+    return newObject<Vector>(capacity, heap);
 }
-Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, Heap &heap) {
-    return newDict(vals, heapsize(vals.size()), heap);
-}
-Maybe<Dict> newDict(std::initializer_list<DictEntry> vals, heapsize capacity, Heap &heap) {
-    auto dict = newObject<Dict>(vals.begin(), vals.size(), capacity, heap);
-    if_let(d, dict) d.sort(vals.size());
-    return dict;
+Maybe<Vector> newVector(slice<Val> vals, size_t capacity, Heap &heap) {
+    return newObject<Vector>(vals.begin(), vals.size(), capacity, heap);
 }
 
-Value Symbol::create(string_view str, Heap &heap) {
-    return newObject<Symbol>(str.data(), str.size(), heap);
+
+Maybe<Dict> newDict(heapsize capacity, Heap &heap) {
+    return newObject<Dict>(capacity, heap);
 }
 
 }

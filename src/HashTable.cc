@@ -105,7 +105,7 @@ HashTable::HashTable(Heap &heap, Array array, bool hasValues, bool recount)
     uint32_t count = 0;
     if (recount) {
         for (auto &key : keys()) {
-            if (key != nullval && key != nullishval)
+            if (key != nullval)
                 ++count;
         }
     }
@@ -158,7 +158,6 @@ bool HashTable::grow() {
 //    std::cout << "=== Growing HashTable to " << 2*_size << " buckets ===\n";
     uint32_t newSize = 2 * _array.size();
     unless(array, newArray(newSize, *_heap)) { return false; }
-    array[newSize - 1] = nullishvalue;  // keep array from being truncated on GC
     HashTable newTable(*_heap, array, _hasValues, false);
     // Scan the old table, inserting each entry into the new table:
     for (Val &hashVal : hashes()) {
@@ -181,7 +180,7 @@ bool HashTable::grow() {
 bool HashTable::visit(Visitor visitor) const {
     Value value;
     for (Val &key : keys()) {
-        if (key != nullval && key != nullishval) {
+        if (key != nullval) {
             if (_hasValues)
                 value = (&key)[_size];
             if (!visitor(key, value))

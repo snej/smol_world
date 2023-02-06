@@ -68,12 +68,14 @@ Type Value::type() const {
 
 
 const char* TypeName(Type t) {
-    static constexpr const char* kTypeNames[11] = {
-        "bignum", "string", "symbol", "blob",
-        "array", "dict", "?spare1?", "?spare2?",
+    static constexpr const char* kTypeNames[int(Type::Max)+1] = {
+        "float", "bigint", "string", "symbol", "blob",
+        "?5?", "?6?", "?7?",
+        "array", "vector", "dict",
+        "?11?", "?12?", "?13?", "?14?", "?15?",
         "null", "bool", "int"
     };
-    if (uint8_t(t) >= 11) return "!BAD_TYPE!";
+    if (t > Type::Max) return "!BAD_TYPE!";
     return kTypeNames[uint8_t(t)];
 }
 

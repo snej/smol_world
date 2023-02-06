@@ -85,19 +85,19 @@ TEST_CASE("Strings", "[object]") {
 
     for (int len = 0; len <= kString.size(); ++len) {
         INFO("len is " << len);
-        string_view str = kString.substr(0, len);
-        unless(obj, newString(str, heap)) {FAIL("Failed to alloc String");}
-        REQUIRE(obj.type() == Type::String);
-        REQUIRE(obj.is<String>());
-        Value val = obj;
+        string_view nativeStr = kString.substr(0, len);
+        unless(str, newString(nativeStr, heap)) {FAIL("Failed to alloc String");}
+        REQUIRE(str.type() == Type::String);
+        REQUIRE(str.is<String>());
+        Value val = str;
         CHECK(val.type() == Type::String);
-        CHECK(val.as<String>() == obj);
+        CHECK(val.as<String>() == str);
 
-        CHECK(obj.capacity() == len);
-        CHECK(obj.size() == len);
-        CHECK(obj.empty() == (len == 0));
-        CHECK(obj.str() == str);
-        CHECK(string(obj.begin(), obj.end()) == str);
+        CHECK(str.capacity() == len);
+        CHECK(str.size() == len);
+        CHECK(str.empty() == (len == 0));
+        CHECK(str.str() == nativeStr);
+        CHECK(string(str.begin(), str.end()) == nativeStr);
     }
 }
 
@@ -123,16 +123,16 @@ TEST_CASE("Blobs", "[object]") {
 
     for (int len = 0; len <= kBlob.size(); ++len) {
         INFO("len is " << len);
-        unless(obj, newBlob(kBlob.data(), len, heap)) {FAIL("Failed to alloc object");}
-        REQUIRE(obj.type() == Type::Blob);
-        REQUIRE(obj.is<Blob>());
-        Value val = obj;
-        CHECK(val.as<Blob>() == obj);
+        unless(blob, newBlob(kBlob.data(), len, heap)) {FAIL("Failed to alloc object");}
+        REQUIRE(blob.type() == Type::Blob);
+        REQUIRE(blob.is<Blob>());
+        Value val = blob;
+        CHECK(val.as<Blob>() == blob);
 
-        CHECK(obj.capacity() == len);
-        CHECK(obj.size() == len);
-        CHECK(obj.empty() == (len == 0));
-        CHECK(memcmp(kBlob.begin(), obj.begin(), len) == 0);
+        CHECK(blob.capacity() == len);
+        CHECK(blob.size() == len);
+        CHECK(blob.empty() == (len == 0));
+        CHECK(memcmp(kBlob.begin(), blob.begin(), len) == 0);
     }
 }
 
@@ -147,24 +147,53 @@ TEST_CASE("Arrays", "[object]") {
 
     for (int len = 0; len <= 10; ++len) {
         INFO("len is " << len);
-        unless(obj, newArray(len, heap)) {FAIL("Failed to alloc object");}
-        REQUIRE(obj.type() == Type::Array);
-        REQUIRE(obj.is<Array>());
-        Value val = obj;
-        CHECK(val.as<Array>() == obj);
+        unless(array, newArray(len, heap)) {FAIL("Failed to alloc object");}
+        REQUIRE(array.type() == Type::Array);
+        REQUIRE(array.is<Array>());
+        Value val = array;
+        CHECK(val.as<Array>() == array);
 
-        CHECK(obj.capacity() == len);
-        CHECK(obj.size() == len);
-        CHECK(obj.count() == 0);
-        CHECK(obj.full() == (len == 0));
-        CHECK(obj.empty() == (len == 0));
+        CHECK(array.capacity() == len);
+        CHECK(array.size() == len);
+
+        for (int i = 0; i < len; ++i)
+            array[i] = strs[i];
+        for (int i = 0; i < len; ++i)
+            CHECK(array[i].maybeAs<String>() == strs[i]);
+    }
+}
+
+
+TEST_CASE("Vectors", "[object]") {
+    Heap heap(1000);
+    UsingHeap u(heap);
+
+    Maybe<String> strs[10];
+    for (int i = 0; i < 10; ++i)
+        strs[i] = newString(std::to_string(i), heap);
+
+    for (int len = 0; len <= 10; ++len) {
+        INFO("len is " << len);
+        unless(vec, newVector(len, heap)) {FAIL("Failed to alloc object");}
+        REQUIRE(vec.type() == Type::Vector);
+        REQUIRE(vec.is<Vector>());
+        Value val = vec;
+        CHECK(val.as<Vector>() == vec);
+
+        CHECK(vec.capacity() == len);
+        CHECK(vec.size() == 0);
+        CHECK(vec.full() == (len == 0));
+        CHECK(vec.empty() == (len == 0));
 
         for (int i = 0; i < len; ++i) {
-            obj[i] = strs[i];
-            CHECK(obj.count() == i + 1);
+            vec.append(strs[i]);
+            CHECK(vec[i] == strs[i]);
+            CHECK(vec.size() == i + 1);
+            CHECK(!vec.empty());
+            CHECK(vec.full() == (i == (len-1)));
         }
         for (int i = 0; i < len; ++i)
-            CHECK(obj[i].maybeAs<String>() == strs[i]);
+            CHECK(vec[i].maybeAs<String>() == strs[i]);
     }
 }
 

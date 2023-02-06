@@ -13,6 +13,7 @@
 namespace snej::smol {
 
 /// A heap block; always created inside a Heap.
+/// The smol pointers in Vals/Values point to Blocks.
 /// Contains the metadata that gives its data size in bytes, its Type, and a few flags for GC.
 class Block {
 public:
@@ -43,9 +44,9 @@ public:
 
     //---- Data & size:
 
-    static constexpr heapsize TagBits = 6;
-    static constexpr heapsize MaxSize = (1 << (32 - TagBits)) - 1;
-    static constexpr heapsize LargeSize = 1 << (16 - TagBits);
+    static constexpr heapsize TagBits = 7;                          //   Number of bits of tags
+    static constexpr heapsize MaxSize = (1 << (32 - TagBits)) - 1;  ///< Maximum block size in bytes
+    static constexpr heapsize LargeSize = 1 << (16 - TagBits);      //   Size that needs more header
 
     heapsize blockSize() const                  {return ((_tags & Large) ? 4 : 2) + dataSize();}
 
@@ -87,7 +88,7 @@ public:
     }
 
     static constexpr bool typeContainsVals(Type type) {
-        return type >= Type::Array && type <= Type::Dict;
+        return type >= Type::FirstContainerType && type <= Type::LastContainerType;
     }
 
     bool containsVals() const pure              {return typeContainsVals(type());}
@@ -99,7 +100,7 @@ public:
     //---- Data type:
 
     Type type() const pure                      {assert(!isForwarded());
-                                                 return Type((_tags & TypeMask) >> 1);}
+                                                 return Type((_tags & TypeMask) >> TypeShift);}
 
     //---- Stuff used by Heap and GC:
 
@@ -128,13 +129,15 @@ private:
     // Tag bits stored in an Block's meta word, alongsize its size.
     enum Tags : uint8_t {
         Fwd          = 0b00000001,    // If set, all 31 remaining bits are the forwarding address
-        TypeMask     = 0b00001110,          // type tags; encodes Type values 0..7
-        Large        = 0b00010000,          // If set, size is 32-bit not 16-bit
-        Visited      = 0b00100000,          // Marker used by Heap::visit()
+        Large        = 0b00000010,          // If set, size is 32-bit not 16-bit
+        Visited      = 0b00000100,          // Marker used by Heap::visit()
+        TypeMask     = 0b01111000,          // type tags; encodes Type values 0..15
         TagsMask     = (1 << TagBits) - 1,  // all tags
     };
 
-    static constexpr Tags typeTag(Type t)       {return Tags(uint8_t(t) << 1);}
+    static constexpr heapsize TypeShift = 3; // How far over the TypeMask is
+
+    static constexpr Tags typeTag(Type t)       {return Tags(uint8_t(t) << TypeShift);}
     Tags tags() const pure                      {return Tags(_tags & TagsMask);}
 
     uint32_t& bigMeta() const pure              {return *(uint32_t*)this;}

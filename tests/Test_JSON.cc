@@ -59,8 +59,8 @@ TEST_CASE("JSON", "[object],[json]") {
     auto menu = dict.get(newSymbol("menu", heap));
     REQUIRE(menu.type() == Type::Dict);
     auto items = menu.as<Dict>().get(newSymbol("items", heap));
-    REQUIRE(items.type() == Type::Array);
-    CHECK(items.as<Array>().count() == 22);
+    REQUIRE(items.type() == Type::Vector);
+    CHECK(items.as<Vector>().size() == 22);
 
     string json = toJSON(v);
     cout << "As JSON: " << json << endl;

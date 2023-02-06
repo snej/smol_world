@@ -11,15 +11,6 @@
 
 namespace snej::smol {
 
-enum class ValType : uint8_t {
-    Null,
-    Bool,
-    Int,
-    String,
-    Array,
-    Dict,
-};
-
 class Block;
 class Object;
 class Value;
@@ -27,20 +18,29 @@ class Value;
 
 /** Value types. */
 enum class Type : uint8_t {
-    // Object types:  (these come from Block type tags, 0..7)
-    BigNumber,
+    // Object types:  (these come from Block type tags, 0..15)
+    Float = 0,
+    BigInt,
     String,
     Symbol,
     Blob,
-    Array,
+    // (3 spares)
+
+    Array = 8,
+    Vector = 9,
     Dict,
-    _spare1,
-    _spare2,
+    // (5 spares)
+
     // Primitives:  (these are stored inline in a Val without any pointers)
-    Null,
+    Null = 0x10,
     Bool,
     Int,
-};
+
+    FirstContainerType = Array,
+    LastContainerType = Dict,
+    FirstScalarType = Null,
+    Max = Int,
+}; // Note: If you change this you must update kTypeNames[] in Val.cc
 
 const char* TypeName(Type t);
 std::ostream& operator<<(std::ostream& out, Type);

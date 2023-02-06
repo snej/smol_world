@@ -120,8 +120,8 @@ Block* GarbageCollector::move(Block* src) {
             slice<Val> vals = src->vals();
             if_let(dict, Value(src).maybeAs<Dict>()) {
                 vals = vals(0, 2 * dict.size());
-            } else if_let(array, Value(src).maybeAs<Array>()) {
-                vals = vals(0, array.count());
+            } else if_let(vector, Value(src).maybeAs<Vector>()) {
+                vals = vals(0, vector.size());
             }
             // Ugh. We have to move a bunch of relative-pointers, which still need to resolve to
             // their original addresses until they get processed during the loop in scan().

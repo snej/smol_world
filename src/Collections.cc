@@ -23,10 +23,10 @@
 namespace snej::smol {
 
 
-#pragma mark - ARRAY:
+#pragma mark - VECTOR:
 
 
-heapsize Array::count() const {
+heapsize Vector::size() const {
     const_iterator i;
     for (i = end() - 1; i >= begin(); --i)
         if (*i != nullval)
@@ -34,8 +34,8 @@ heapsize Array::count() const {
     return heapsize(i + 1 - begin());
 }
 
-bool Array::insert(Value val, heapsize pos) {
-    assert(pos < size());
+bool Vector::insert(Value val, heapsize pos) {
+    assert(pos < capacity());
     iterator i = begin() + pos;
     if (*i) {
         // Already an item here. Is there room to insert?
@@ -56,12 +56,12 @@ bool Array::insert(Value val, heapsize pos) {
     return true;
 }
 
-bool Array::append(Value val) {
-    if (auto c = count(); c < size()) {
-        (*this)[c] = val;
-        return true;
-    } else {
+bool Vector::append(Value val) {
+    if (full()) {
         return false;
+    } else {
+        allItems()[size()] = val;
+        return true;
     }
 }
 
