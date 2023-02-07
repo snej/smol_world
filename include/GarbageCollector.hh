@@ -50,7 +50,7 @@ public:
 
 private:
     void scanRoots();
-    Block* move(Block*);
+    Block* moveBlock(Block*);
 
     std::unique_ptr<Heap> _tempHeap;    // Owns temporary heap, if there is one
     Heap &_fromHeap, &_toHeap;          // The source and destination heaps

@@ -27,7 +27,7 @@ using namespace std;
 using namespace snej::smol;
 
 
-#define SMOL_TESTS_DIR "/Users/snej/Projects/JSIN/vendor/sajson/testdata/"
+#define JSON_TEST_DATA_DIR "./tests/data/"
 
 static string readFile(const char *path) {
     INFO("Reading " << path);
@@ -48,7 +48,7 @@ TEST_CASE("JSON", "[object],[json]") {
     UsingHeap u(heap);
 
     string err;
-    Handle<Value> v = newFromJSON(readFile(SMOL_TESTS_DIR "svg_menu.json"), heap, &err);
+    Handle<Value> v = newFromJSON(readFile(JSON_TEST_DATA_DIR "svg_menu.json"), heap, &err);
     REQUIRE(v);
     Dict dict = v.as<Dict>();
     heap.setRoot(dict);

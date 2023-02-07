@@ -79,6 +79,8 @@
 		272AF612298C7CAE008943C3 /* pointer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = pointer.h; sourceTree = "<group>"; };
 		272AF614298C7CAE008943C3 /* inttypes.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = inttypes.h; sourceTree = "<group>"; };
 		272AF615298C7CAE008943C3 /* stdint.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = stdint.h; sourceTree = "<group>"; };
+		272AF6172992F5EE008943C3 /* svg_menu.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = svg_menu.json; sourceTree = "<group>"; };
+		272AF6182992F619008943C3 /* twitter.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = twitter.json; sourceTree = "<group>"; };
 		2770B1AB297F1E7A00E2C126 /* Block.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Block.hh; sourceTree = "<group>"; };
 		2770B1AC297F1EDD00E2C126 /* slice.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = slice.hh; sourceTree = "<group>"; };
 		2770B1AE2980776400E2C126 /* GarbageCollector.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = GarbageCollector.hh; sourceTree = "<group>"; };
@@ -160,6 +162,7 @@
 				2770B1B129807E5C00E2C126 /* Test_GC.cc */,
 				272AF5E7298C4375008943C3 /* Test_JSON.cc */,
 				2705301F2978B556003D4C93 /* TestsMain.cc */,
+				272AF6162992F5DB008943C3 /* data */,
 			);
 			path = tests;
 			sourceTree = "<group>";
@@ -247,6 +250,15 @@
 				272AF615298C7CAE008943C3 /* stdint.h */,
 			);
 			path = msinttypes;
+			sourceTree = "<group>";
+		};
+		272AF6162992F5DB008943C3 /* data */ = {
+			isa = PBXGroup;
+			children = (
+				272AF6172992F5EE008943C3 /* svg_menu.json */,
+				272AF6182992F619008943C3 /* twitter.json */,
+			);
+			path = data;
 			sourceTree = "<group>";
 		};
 		27733D05297B51E200EDA2E9 /* wyhash */ = {

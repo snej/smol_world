@@ -18,14 +18,13 @@ class Value : public ValBase<uintptr_t> {
 public:
     constexpr Value()                               = default;
     constexpr Value(nullptr_t)                      :ValBase() { }
-    constexpr explicit Value(bool b)                :ValBase(b) { }
     constexpr Value(int i)                          :ValBase(i) { }
 
     Value(Val const& val) {
         if (Block *block = val.block())
             setBlock(block);
         else
-            _val = val.rawBits();
+            _val = val._val;
     }
 
     explicit Value(Block const* block)              {setBlock(block);}
@@ -55,7 +54,7 @@ public:
 
     static Value fromValue(Value v) pure            {return v;}
 
-private:
+protected:
     friend class Val;
     friend class Object;
 
@@ -72,7 +71,7 @@ std::ostream& operator<< (std::ostream&, Value);
 class Null : public Value {
 public:
     static constexpr Type Type = Type::Null;
-    constexpr static bool HasType(enum Type t)    {return t == Type;}
+    constexpr static bool HasType(enum Type t)      {return t == Type;}
 
     constexpr Null() = default;
     constexpr Null(nullptr_t)                       :Value() { }
@@ -88,13 +87,14 @@ constexpr Null nullvalue;
 constexpr Null nullishvalue = Null::_nullish();
 
 
+
 /// The Value subclass representing the Bool type.
 class Bool : public Value {
 public:
     static constexpr Type Type = Type::Bool;
     constexpr static bool HasType(enum Type t)    {return t == Type;}
 
-    constexpr explicit Bool(bool b = false)       :Value(b) { }
+    constexpr explicit Bool(bool b = false)       :Value(b ? TrueVal : FalseVal) { }
     constexpr explicit Bool(Value v)              :Value(v) {assert(v.isBool());}
     constexpr explicit operator bool() const      {return asBool();}
 };
@@ -113,10 +113,11 @@ public:
     constexpr explicit Int(Value v)                       :Value(v) {assert(v.isInt());}
     constexpr operator int() const                        {return asInt();}
 
-    friend constexpr bool operator==(Int const& a, int b) {return a.asInt() == b;}
-    friend constexpr bool operator==(int a, Int const& b) {return a == b.asInt();}
+    friend constexpr bool operator==(Int const& a, int b) {return (Value&)a == b;} // disambiguation
 };
 
+
+#pragma mark - OBJECT:
 
 
 /// A reference to a heap object -- any type except Null, Bool or Int.
@@ -126,7 +127,7 @@ public:
 
     explicit Object(Block const* block)             :_data(block->data()) { }
     explicit Object(Val const& val)                 :Object(val._block()) { }
-    explicit Object(Value val)               :Object(val._block()) { }
+    explicit Object(Value val)                      :Object(val._block()) { }
 
     operator Value() const pure                     {return Value(block());}
 
@@ -149,7 +150,9 @@ public:
 
     slice<byte> rawBytes() const pure               {return _data;}
 
-    friend bool operator==(Object const& a, Object const& b) pure    {return a._data.begin() == b._data.begin();}
+    friend bool operator==(Object const& a, Object const& b) pure {
+        return a._data.begin() == b._data.begin();
+    }
 
     static Object fromValue(Value v) pure           {return Object(v);}
 
@@ -164,7 +167,7 @@ protected:
     void relocate(Block* newBlock)                  {_data = newBlock->data();}
 
 private:
-    slice<byte> _data;
+    slice<byte> _data;      // The heap block's data, just past its header
 };
 
 
@@ -176,6 +179,7 @@ public:
     constexpr static bool HasType(enum Type t)      {return t == Type;}
 
     int64_t asInt() const {
+        // Interpret 1-8 bytes as a little-endian signed int. Bigger ints TBD
         slice<byte> bytes = rawBytes();
         assert(bytes.size() > 0 && bytes.size() <= sizeof(int64_t));
         int64_t result = (uint8_t(bytes.back()) & 0x80) ? -1 : 0;   // sign-extend it
@@ -189,7 +193,7 @@ public:
 /// Creates a new BigInt object.
 Maybe<BigInt> newBigInt(int64_t, Heap&);
 
-/// Returns a (non-object) Int if possible, else creates a BigInt.
+/// Returns an inline Int if possible, else creates a BigInt object.
 Value newInt(int64_t i, Heap &heap);
 
 
@@ -208,6 +212,7 @@ public:
 
 private:
     template <typename F> F getValue() const {
+        // Data is a 4- or 8-byte little-endian IEEE floating point number.
         if (rawBytes().size() == sizeof(float))
             return *(float*)rawBytes().begin();
         else {
@@ -228,7 +233,9 @@ Maybe<Float> newFloat(double, Heap&);
 Value newNumber(double, Heap&);
 
 
-    
+#pragma mark - MAYBE:
+
+
 /// A `std::optional`-like type for Object classes.
 template <ObjectClass T>
 class Maybe {
@@ -263,14 +270,21 @@ protected:
     Object _obj;
 };
 
-
+/// Modeled on Swift's `if let`, this unwraps a Maybe:
+///     if_let(str, newString("hello", heap)) { return str.size(); }
 #define if_let(VAR, EXPR)  if (auto VAR = _unsafeval_(EXPR); !VAR.isNull())
+
+/// Modeled on Swift's `guard let`, this unwraps a Maybe in the enclosing scope; if the Maybe
+/// is empty, it instead calls the following block, which must exit the scope (not enforced!)
+///     unless(str, newString("hello", heap) {throw std::bad_alloc();}
+///     return str.size();
 #define unless(VAR, EXPR)  auto VAR = _unsafeval_(EXPR); if (VAR.isNull())
 
 
+#pragma mark - IMPLEMENTATION GUNK:
+
+
 inline Object Value::asObject() const                         {return Object(*this);}
-
-
 
 template <Numeric NUM> NUM Val::asNumber() const {
     return Value(*this).asNumber<NUM>();

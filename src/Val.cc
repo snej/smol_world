@@ -22,48 +22,66 @@
 
 namespace snej::smol {
 
-Val::Val(Object const& obj)     :Val(obj.block()) { }
+Object Val::asObject() const {
+    return Object(*this);
+}
 
-Object Val::asObject() const      {return Object(*this);}
 
-Val& Val::operator= (Val const& value) {
-    if (value.isObject())
-        *this = value.block(); // converts to true pointer then back to relative
-    else
-        _val = value.rawBits();
+Val& Val::operator= (Block const* dst) {
+    if (dst) {
+        // Convert real pointer to offset:
+        intptr_t off = intptr_t(dst) - intptr_t(this);
+        assert(off <= INT32_MAX && off >= INT32_MIN); // receiver must be within 2GB of dst!
+        _val = uintpos(off) << TagSize;
+        assert(isObject()); // offsets of 0,1,2,3 conflict with values null,nullish,false,true
+    } else {
+        _val = NullVal;
+    }
     return *this;
 }
+
+
+Val& Val::operator= (Val const& val) {
+    if (val.isObject())
+        *this = val._block(); // converts to true pointer then back to relative
+    else
+        _val = val._val;
+    return *this;
+}
+
 
 Val& Val::operator= (Value value) {
     if (value.isObject())
         *this = value._block();
     else
-        _val = uintpos(value.rawBits());
+        _val = uintpos(value._val);
     return *this;
 }
 
 
 Type Val::type() const {
-    if (isInt())
+    if (isInt()) {
         return Type::Int;
-    else if (_val > TrueVal)
-        return _block()->type();
-    else if (isNull() || isNullish())
-        return Type::Null;
-    else
-        return Type::Bool;
+    } else switch(_val) {
+        case NullVal:
+        case NullishVal:    return Type::Null;
+        case FalseVal:
+        case TrueVal:       return Type::Bool;
+        default:            return _block()->type();
+    }
 }
 
 
 Type Value::type() const {
-    if (isInt())
+    if (isInt()) {
         return Type::Int;
-    else if (_val > TrueVal)
-        return _block()->type();
-    else if (isNull() || isNullish())
-        return Type::Null;
-    else
-        return Type::Bool;
+    } else switch(_val) {
+        case NullVal:
+        case NullishVal:    return Type::Null;
+        case FalseVal:
+        case TrueVal:       return Type::Bool;
+        default:            return _block()->type();
+    }
 }
 
 

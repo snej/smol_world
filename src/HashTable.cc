@@ -116,11 +116,10 @@ HashTable::HashTable(Heap &heap, Array array, bool hasValues, bool recount)
 template <typename KEY>
 std::pair<Val*,bool>
 HashTable::search(KEY key, int32_t hashCode) const {
-    Val hashVal(hashCode);
     slice<Val> hashes = this->hashes();
     Val *entry = &hashes[uint32_t(hashCode) & (_size - 1)];
     while (true) {
-        if (entry[0] == hashVal) {
+        if (entry[0] == hashCode) {
             if (keysMatch(key, entry[_size]))
                 return {entry, true};
         } else if (entry[0] == nullval) {

@@ -388,12 +388,10 @@ void Heap::visit(ObjectVisitor visitor) {
 
 
 template <class T> static inline void _registerRoot(Heap const* self, std::vector<T*> &roots, T *ref) {
-    std::cerr << "register root " << (void*)ref << std::endl;
     assert(ref->block() == nullptr || self->contains(ref->block()));
     roots.push_back(ref);
 }
 template <class T> static inline void _unregisterRoot(std::vector<T*> &roots, T *ref) {
-    std::cerr << "UNregister root " << (void*)ref << std::endl;
     auto i = std::find(roots.rbegin(), roots.rend(), ref);
     assert(i != roots.rend());
     roots.erase(std::prev(i.base()));

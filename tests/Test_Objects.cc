@@ -257,7 +257,7 @@ TEST_CASE("Dicts", "[object]") {
 
         CHECK(dict.capacity() == len);
         CHECK(dict.empty());
-        dict.dump(cout);
+        //dict.dump(cout);
 
         for (int i = 0; i <= len; ++i) {
             INFO("i = " << i);
@@ -269,7 +269,7 @@ TEST_CASE("Dicts", "[object]") {
             if (i < len) {
                 cerr << "----i is " << i << ", adding " << (void*)strs[i].value().block() << endl;
                 CHECK(dict.set(key, i));
-                dict.dump(cout);
+                //dict.dump(cout);
                 CHECK(!dict.empty());
                 CHECK(dict.contains(key));
                 CHECK(dict.get(key) == i);
@@ -329,31 +329,6 @@ TEST_CASE("HashMap", "[object],[hash]") {
     CHECK(table.get(foo) == 0xF00);
 
     table.dump(cout);
-/*
-    constexpr size_t NumSymbols = 100;
-    Maybe<Symbol> syms[NumSymbols];
-    for (size_t i = 0; i < NumSymbols; ++i) {
-        string name = "Symbol #" + std::to_string(i * i);
-        cerr << "Creating #" << i << ": " << name << endl;
-        CHECK(table.find(name) == nullptr);
-        unless(sym, table.create(name)) {FAIL("Failed to alloc sym");}
-        syms[i] = sym;
-        CHECK(sym.str() == name);
-        CHECK(table.find(name) == sym);
-        CHECK(table.size() == 3 + i);
-    }
-    for (size_t i = 0; i < NumSymbols; ++i) {
-        string name = "Symbol #" + std::to_string(i * i);
-        CHECK(table.find(name) == syms[i]);
-    }
-
-    size_t i = 0;
-    table.visit([&](Symbol) {
-        ++i;
-        return true;
-    });
-    cerr << endl;
-    CHECK(i == 2 + NumSymbols);*/
 }
 
 

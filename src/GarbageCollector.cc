@@ -58,7 +58,8 @@ void GarbageCollector::scanRoots() {
         update(*refp);
     for (Value *refp : _fromHeap._externalRootVals)
         update(*refp);
-    _toHeap.setSymbolTableArray(scan(_fromHeap.symbolTableArray())); // TODO: Scan buckets as weak references to Symbols
+    _toHeap.setSymbolTableArray(scan(_fromHeap.symbolTableArray()));
+    // TODO: remove any unmarked Symbols from the table instead of copying them
 }
 
 
@@ -86,7 +87,7 @@ void GarbageCollector::update(Object& obj) {
 // On completion, the `src` block and any blocks it transitively references are fully moved.
 Block* GarbageCollector::scan(Block *src) {
     Block *toScan = (Block*)_toHeap._cur;
-    Block *dst = move(src);
+    Block *dst = moveBlock(src);
     while (toScan < (Block*)_toHeap._cur) {
         // Scan & update the contents of the Object in `toScan`:
         for (Val &v : toScan->vals()) {
@@ -94,7 +95,7 @@ Block* GarbageCollector::scan(Block *src) {
                 // Note: v is in toHeap, but was memcpy'd from fromHeap,
                 // so any address in it is still relative to fromHeap.
                 block = (Block*)_fromHeap.at(_toHeap._pos(block));   // translate it back to fromHeap
-                v = Val(move(block));
+                v = moveBlock(block);
             }
         }
         // Some types need cleanup after this:
@@ -111,7 +112,7 @@ Block* GarbageCollector::scan(Block *src) {
 // Moves a Block from _fromHeap to _toHeap, without altering its contents.
 // - If the Block has already been moved, just returns the new location.
 // - Otherwise copies (appends) it to _toHeap, then overwrites it with the forwarding address.
-Block* GarbageCollector::move(Block* src) {
+Block* GarbageCollector::moveBlock(Block* src) {
     if (src->isForwarded()) {
         return (Block*)_toHeap.at(src->forwardingAddress());
     } else {
@@ -140,6 +141,7 @@ Block* GarbageCollector::move(Block* src) {
             }
             assert(dstVal == dst->vals().end());
         } else {
+            // Moving a block of non-Vals is easy:
             auto size = src->blockSize();
             dst = (Block*)_toHeap.rawAlloc(size);
             ::memcpy(dst, src, size);

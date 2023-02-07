@@ -224,7 +224,7 @@ class Handle : public OBJ {
 public:
     Handle()                            :Handle(*Heap::current()) { }
     explicit Handle(Heap &heap)         :OBJ(),  _heap(&heap) {reg();}
-    Handle(OBJ const& o)       :Handle(o, *Heap::current()) { }
+    Handle(OBJ const& o)                :Handle(o, *Heap::current()) { }
     Handle(OBJ const& o, Heap &heap)    :OBJ(o), _heap(&heap) {reg();}
     ~Handle()                           {unreg();}
 
