@@ -87,14 +87,22 @@ public:
         ::memset(bytes.begin() + contents.size(), 0, bytes.size() - contents.size());
     }
 
-    static constexpr bool typeContainsVals(Type type) {
-        return type >= Type::FirstContainerType && type <= Type::LastContainerType;
-    }
-
-    bool containsVals() const pure              {return typeContainsVals(type());}
+    bool containsVals() const pure              {return TypeIs(type(), TypeSet::Container);}
     
     slice<Val> vals() const pure {
         return containsVals() ? slice_cast<Val>(data()) : slice<Val>();
+    }
+
+    void fill(slice<Val> contents) {
+        assert(containsVals());
+        auto vals = slice_cast<Val>(data());
+        assert(contents.size() <= vals.size());
+        if (contents) {
+            Val *dst = vals.begin();
+            for (Val &src : contents)
+                *dst++ = src;
+        }
+        ::memset(vals.begin() + contents.size(), 0, (vals.size() - contents.size()) * sizeof(Val));
     }
 
     //---- Data type:

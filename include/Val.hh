@@ -24,26 +24,34 @@ enum class Type : uint8_t {
     String,
     Symbol,
     Blob,
-    // (3 spares)
-
-    Array = 8,
-    Vector = 9,
+    Array,
+    Vector,
     Dict,
-    // (5 spares)
+    // (8 spares)
 
     // Primitives:  (these are stored inline in a Val without any pointers)
     Null = 0x10,
     Bool,
     Int,
 
-    FirstContainerType = Array,
-    LastContainerType = Dict,
-    FirstScalarType = Null,
     Max = Int,
-}; // Note: If you change this you must update kTypeNames[] in Val.cc
+}; // Note: If you change this you must update TypeSet::All below and kTypeNames[] in Val.cc
 
 const char* TypeName(Type t);
+
 std::ostream& operator<<(std::ostream& out, Type);
+
+constexpr uint32_t _mask(Type t) {return uint32_t(1) << uint8_t(t);}
+
+enum class TypeSet : uint32_t {
+    Object      = 0b00000000011111111,
+    Inline      = _mask(Type::Null)  | _mask(Type::Bool)   | _mask(Type::Int),
+    Numeric     = _mask(Type::Int)   | _mask(Type::BigInt) | _mask(Type::Float),
+    Container   = _mask(Type::Array) | _mask(Type::Vector) | _mask(Type::Dict),
+    Valid       = uint32_t(Object) | uint32_t(Inline),
+};
+
+constexpr bool TypeIs(Type t, TypeSet set) {return (_mask(t) & uint32_t(set)) != 0;}
 
 
 // template class with common functionality between Val and Value. Don't use directly.
@@ -65,6 +73,7 @@ public:
 
     constexpr RAWVAL rawBits() const            {return _val;}
 
+    /// A Val/Value is "truthy" if it is not `null`. (Yes, `nullish` is truthy.)
     explicit operator bool() const pure         {return !isNull();}
 
 protected:    
@@ -99,9 +108,6 @@ protected:
     RAWVAL _val;
 };
 
-
-
-enum class relpos : int32_t { Null = 0 };
 
 
 // base class of Val that lacks the prohibition on copying. Don't use directly.
@@ -163,6 +169,12 @@ public:
 
     Type type() const pure;
 
+    /// True if the value has a numeric type (Int, BigInt or Float.)
+    bool isNumber() const pure                          {return TypeIs(type(), TypeSet::Numeric);}
+    /// Returns the value as a number. Unlike `asInt` this supports types other than Int;
+    /// it supports Bool, Int, BigInt and Float, and otherwise returns 0.
+    template <Numeric NUM> NUM asNumber() const pure;
+
     Object asObject() const pure;
 
     template <ValueClass T> bool is() const pure                 {return T::HasType(type());}
@@ -171,8 +183,6 @@ public:
     template <ValueClass T> Maybe<T> maybeAs() const pure;
 
     friend bool operator== (Val const& a, Val const& b) pure     {return a._val == b._val;}
-
-    friend std::ostream& operator<<(std::ostream&, Val const&);
 
     friend void swap(Val const&, Val const&);
 

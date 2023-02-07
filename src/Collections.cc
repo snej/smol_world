@@ -26,41 +26,33 @@ namespace snej::smol {
 #pragma mark - VECTOR:
 
 
-heapsize Vector::size() const {
-    const_iterator i;
-    for (i = end() - 1; i >= begin(); --i)
-        if (*i != nullval)
-            break;
-    return heapsize(i + 1 - begin());
+void Vector::_setSize(heapsize sz) {
+    assert(sz <= capacity());
+    *Collection::begin() = int(sz);
 }
 
 bool Vector::insert(Value val, heapsize pos) {
-    assert(pos < capacity());
-    iterator i = begin() + pos;
-    if (*i) {
-        // Already an item here. Is there room to insert?
-        if (full())
-            return false;
-        // Then slide existing items up to make room:
-        Value cur = *i, next;
-        auto j = i;
-        do {
-            next = *++j;
-            *j = cur;
-        } while (next);
-    } else {
-        assert(pos == 0 || i[-1]); // can't insert after the end
-        // No item, just past end; can simply store it:
-    }
-    *i = val;
+    heapsize sz = size();
+    assert(pos <= sz);
+    if (sz >= capacity())
+        return false;
+    // Move items up:
+    auto items = this->items();
+    iterator dst = &items[pos];
+    for (iterator i = items.end(); i > dst; --i)
+        i[0] = i[-1];
+    // Store the value:
+    *dst = val;
+    _setSize(sz + 1);
     return true;
 }
 
 bool Vector::append(Value val) {
-    if (full()) {
+    if (auto sz = size(); sz >= capacity()) {
         return false;
     } else {
-        allItems()[size()] = val;
+        allItems()[sz + 1] = val;
+        _setSize(sz + 1);
         return true;
     }
 }
@@ -95,7 +87,7 @@ static DictEntry* _findEntry(slice<DictEntry> entries, Block const* key) {
 
 
 void Dict::dump(std::ostream& out) const {
-    string_view prefix = "\t[";
+    std::string_view prefix = "\t[";
     for (auto &entry : allItems()) {
         out << prefix << std::setw(10) << (void*)entry.key.block() << " " << entry.key
         << " = " << entry.value;
@@ -121,20 +113,20 @@ slice<DictEntry> Dict::items() const {
 }
 
 
-Val* Dict::find(Value key) {
+Val* Dict::find(Symbol key) {
     slice<DictEntry> all = allItems();
-    if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == key)
+    if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == Value(key))
         return &ep->value;
     else
         return nullptr;
 }
 
 
-bool Dict::set(Value key, Value value, bool insertOnly) {
+bool Dict::set(Symbol key, Value value, bool insertOnly) {
     slice<DictEntry> all = allItems();
     if (DictEntry *ep = _findEntry(all, key.block()); ep == all.end()) {
         return false;   // not found, and would go after last item (so dict must be full)
-    } else if (ep->key == key) {
+    } else if (ep->key == Value(key)) {
         if (insertOnly) return false;
         ep->value = value;
         return true;
@@ -150,7 +142,7 @@ bool Dict::set(Value key, Value value, bool insertOnly) {
 }
 
 
-bool Dict::replace(Value key, Value newValue) {
+bool Dict::replace(Symbol key, Value newValue) {
     if (Val *valp = find(key)) {
         *valp = newValue;
         return true;
@@ -160,9 +152,9 @@ bool Dict::replace(Value key, Value newValue) {
 }
 
 
-bool Dict::remove(Value key) {
+bool Dict::remove(Symbol key) {
     slice<DictEntry> all = allItems();
-    if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == key) {
+    if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == Value(key)) {
         for (auto p = ep + 1; p < all.end(); ++p) // can't use memmove bc of damned relative ptrs
             p[-1] = std::move(p[0]);
         new (&all.back()) DictEntry {};
@@ -180,12 +172,23 @@ std::ostream& operator<<(std::ostream& out, Null const& val) {
     return out << (val.isNull() ? "null" : "nullish");
 }
 
+std::ostream& operator<<(std::ostream& out, Bool const& val) {
+    return out << (val ? "true" : "false");
+}
+
 std::ostream& operator<<(std::ostream& out, Int const& val) {
     return out << val.asInt();
 }
 
-std::ostream& operator<<(std::ostream& out, Bool const& val) {
-    return out << (val ? "true" : "false");
+std::ostream& operator<<(std::ostream& out, BigInt const& val) {
+    return out << val.asInt();
+}
+
+std::ostream& operator<<(std::ostream& out, Float const& val) {
+    if (val.isDouble())
+        return out << val.asDouble();
+    else
+        return out << val.asFloat();
 }
 
 std::ostream& operator<<(std::ostream& out, String const& str) {
@@ -215,6 +218,19 @@ std::ostream& operator<<(std::ostream& out, Array const& arr) {
         out << ": ";
         int n = 0;
         for (Val const& val : arr) {
+            if (n++) out << ", ";
+            out << val;
+        }
+    }
+    return out << "]";
+}
+
+std::ostream& operator<<(std::ostream& out, Vector const& vec) {
+    out << "Vector[" << vec.size();
+    if (!vec.empty()) {
+        out << ": ";
+        int n = 0;
+        for (Val const& val : vec) {
             if (n++) out << ", ";
             out << val;
         }

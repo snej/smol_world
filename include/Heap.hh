@@ -215,14 +215,16 @@ private:
 };
 
 
+
 /// A Handle is an object reference that is known to the Heap; during a garbage collection it
 /// will be updated to point to the new location of the object.
+/// `OBJ` may be `Object` or any subclass, or `Value`.
 template <class OBJ>
 class Handle : public OBJ {
 public:
     Handle()                            :Handle(*Heap::current()) { }
-    Handle(Heap &heap)                  :OBJ(),  _heap(&heap) {reg();}
-    Handle(OBJ const& o)                :Handle(o, *Heap::current()) { }
+    explicit Handle(Heap &heap)         :OBJ(),  _heap(&heap) {reg();}
+    Handle(OBJ const& o)       :Handle(o, *Heap::current()) { }
     Handle(OBJ const& o, Heap &heap)    :OBJ(o), _heap(&heap) {reg();}
     ~Handle()                           {unreg();}
 
@@ -233,41 +235,20 @@ public:
 
     void setHeap(Heap &heap)            {_heap = &heap;}
 private:
-    void reg() {_heap->registerExternalRoot(this);}
-    void unreg() {_heap->unregisterExternalRoot(this);}
+    void reg()                          {_heap->registerExternalRoot(this);}
+    void unreg()                        {_heap->unregisterExternalRoot(this);}
     Heap* _heap;
 };
 
 
-template <>
-class Handle<Value> : public Value {
-public:
-    Handle()                            :Handle(*Heap::current()) { }
-    Handle(Heap &heap)                  :Value(),  _heap(&heap) {reg();}
-    Handle(Value const& o)              :Handle(o, *Heap::current()) { }
-    Handle(Value const& o, Heap &heap)  :Value(o), _heap(&heap) {reg();}
-    ~Handle()                           {unreg();}
-
-    Handle(Handle const& h)             :Handle(h, *h._heap) { }
-    Handle& operator=(Handle const& h)  {unreg(); Value::operator=(h); _heap = h._heap; reg(); return *this;}
-
-    Handle& operator=(Value v)          {Value::operator=(v); return *this;}
-
-    void setHeap(Heap &heap)            {_heap = &heap;}
-private:
-    void reg() {_heap->registerExternalRoot(this);}
-    void unreg() {_heap->unregisterExternalRoot(this);}
-    Heap* _heap;
-};
-
-
+/// Specialization of Handle for `Maybe<>` types.
 template <class OBJ>
 class Handle<Maybe<OBJ>> : public Maybe<OBJ> {
 public:
     Handle()                            :Handle(*Heap::current()) { }
-    Handle(Heap &heap)                  :Maybe<OBJ>(),  _heap(&heap) {reg();}
-    Handle(OBJ const& o)                :Handle(o, *Heap::current()) { }
-    Handle(OBJ const& o, Heap &heap)    :Maybe<OBJ>(o), _heap(&heap) {reg();}
+    explicit Handle(Heap &heap)         :Maybe<OBJ>(),  _heap(&heap) {reg();}
+    Handle(Maybe<OBJ> const& m)         :Handle(m, *Heap::current()) { }
+    Handle(Maybe<OBJ> const& m, Heap &h):Maybe<OBJ>(m), _heap(&h) {reg();}
     ~Handle()                           {unreg();}
 
     Handle(Handle const& h)             :Handle(h, *h._heap) { }
@@ -278,25 +259,31 @@ public:
 
     void setHeap(Heap &heap)            {_heap = &heap;}
 private:
-    void reg() {_heap->registerExternalRoot(&this->_obj);}
-    void unreg() {_heap->unregisterExternalRoot(&this->_obj);}
+    void reg()                          {_heap->registerExternalRoot(&this->_obj);}
+    void unreg()                        {_heap->unregisterExternalRoot(&this->_obj);}
     Heap* _heap;
 };
 
-// this variant registers an external Value variable as a root; keep using that variable.
-template <>
-class Handle<Value*> {
+
+/// A variant form of Handle that registers a _separate_ Object or Value variable as a root;
+/// keep using that variable. Example:
+///     String str = newString("foo", heap);
+///     Handle h(&str);
+///     GarbageCollector::run(heap);  // the Handle will update str
+///     auto s = str.str();           // doesn't crash!
+template <class OBJ>
+class Handle<OBJ*> {
 public:
-    Handle(Value* o)                    :Handle(o, *Heap::current()) { }
-    Handle(Value* o, Heap &heap)        :_valp(o), _heap(&heap) {reg();}
+    explicit Handle(OBJ* o)             :Handle(o, *Heap::current()) { }
+    Handle(OBJ* o, Heap &heap)          :_objp(o), _heap(&heap) {reg();}
     ~Handle()                           {unreg();}
 private:
     Handle(const Handle&) = delete;
     Handle& operator=(Handle const&) = delete;
-    void reg()   {_heap->registerExternalRoot(_valp);}
-    void unreg() {_heap->unregisterExternalRoot(_valp);}
+    void reg()   {_heap->registerExternalRoot(_objp);}
+    void unreg() {_heap->unregisterExternalRoot(_objp);}
 
-    Value* _valp;
+    OBJ*  _objp;
     Heap* _heap;
 };
 

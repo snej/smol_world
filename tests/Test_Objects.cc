@@ -78,6 +78,36 @@ TEST_CASE("Primitive Values", "[object]") {
     }
 }
 
+
+TEST_CASE("Numbers", "[object]") {
+    Heap heap(1000);
+    UsingHeap u(heap);
+
+    CHECK_FALSE(Bool(1).isNumber());
+    CHECK(Int(1).isNumber());
+    CHECK(Int(1).asNumber<float>() == 1.0f);
+
+    BigInt i = newBigInt(1234567890123, heap).value();
+    checkTypes(i, Type::BigInt, "1234567890123");
+    CHECK(i.isNumber());
+    CHECK(i.asInt() == 1234567890123);
+    CHECK(i.asNumber<int32_t>() == INT32_MAX);
+    CHECK(i.asNumber<uint64_t>() == 1234567890123u);
+
+    i = newBigInt(-1234567890123, heap).value();
+    CHECK(i.isNumber());
+    CHECK(i.asInt() == -1234567890123);
+    CHECK(i.asNumber<int32_t>() == INT32_MIN);
+    CHECK(i.asNumber<uint64_t>() == 0);
+
+    Float f = newFloat(3.14159, heap).value();
+    checkTypes(f, Type::Float, "3.14159");
+    CHECK(f.isNumber());
+    CHECK(f.asDouble() == 3.14159);
+    CHECK(f.asFloat() == 3.14159f);
+}
+
+
 TEST_CASE("Strings", "[object]") {
     constexpr string_view kString = "Hello, smol world!";
     Heap heap(1000);
@@ -172,27 +202,27 @@ TEST_CASE("Vectors", "[object]") {
     for (int i = 0; i < 10; ++i)
         strs[i] = newString(std::to_string(i), heap);
 
-    for (int len = 0; len <= 10; ++len) {
-        INFO("len is " << len);
-        unless(vec, newVector(len, heap)) {FAIL("Failed to alloc object");}
+    for (int capacity = 0; capacity <= 10; ++capacity) {
+        INFO("capacity is " << capacity);
+        unless(vec, newVector(capacity, heap)) {FAIL("Failed to alloc object");}
         REQUIRE(vec.type() == Type::Vector);
         REQUIRE(vec.is<Vector>());
         Value val = vec;
         CHECK(val.as<Vector>() == vec);
 
-        CHECK(vec.capacity() == len);
+        CHECK(vec.capacity() == capacity);
         CHECK(vec.size() == 0);
-        CHECK(vec.full() == (len == 0));
-        CHECK(vec.empty() == (len == 0));
+        CHECK(vec.empty());
+        CHECK(vec.full() == (capacity == 0));
 
-        for (int i = 0; i < len; ++i) {
+        for (int i = 0; i < capacity; ++i) {
             vec.append(strs[i]);
             CHECK(vec[i] == strs[i]);
             CHECK(vec.size() == i + 1);
             CHECK(!vec.empty());
-            CHECK(vec.full() == (i == (len-1)));
+            CHECK(vec.full() == (i == (capacity-1)));
         }
-        for (int i = 0; i < len; ++i)
+        for (int i = 0; i < capacity; ++i)
             CHECK(vec[i].maybeAs<String>() == strs[i]);
     }
 }
@@ -211,9 +241,9 @@ TEST_CASE("Dicts", "[object]") {
     UsingHeap u(heap);
     srandomdev();
 
-    Maybe<String> strs[11];
+    Maybe<Symbol> strs[11];
     for (int i = 0; i < 11; ++i)
-        strs[i] = newString(std::to_string(i), heap);
+        strs[i] = newSymbol(std::to_string(i), heap);
     shuffle(strs+0, strs+11);
 
     for (int len = 0; len <= 10; ++len) {
@@ -231,7 +261,7 @@ TEST_CASE("Dicts", "[object]") {
 
         for (int i = 0; i <= len; ++i) {
             INFO("i = " << i);
-            Value key = strs[i];
+            Symbol key = strs[i].value();
             CHECK(dict.size() == i);
             CHECK(dict.full() == (i == len));
             CHECK(!dict.contains(key));
@@ -247,7 +277,7 @@ TEST_CASE("Dicts", "[object]") {
                 CHECK(dict.replace(key, -i));
 
                 for (int j = 0; j < 10; ++j)
-                    CHECK(dict.get(strs[j]) == ((j <= i) ? Value(-j) : Value()));
+                    CHECK(dict.get(strs[j].value()) == ((j <= i) ? Value(-j) : Value()));
 
             } else {
                 CHECK(!dict.set(key, i));
@@ -259,7 +289,7 @@ TEST_CASE("Dicts", "[object]") {
         cout << ".... checking\n";
         shuffle(strs+0, strs+len);
         for (int i = 0; i < len; ++i) {
-            Value key = strs[i];
+            Symbol key = strs[i].value();
             INFO("i = " << i << ", key = " << (void*)key.block());
             CHECK(dict.size() == len-i);
             CHECK(dict.full() == (i == 0));

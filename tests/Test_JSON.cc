@@ -56,9 +56,9 @@ TEST_CASE("JSON", "[object],[json]") {
     heap.dump(cout);
 
     CHECK(dict.size() == 1);
-    auto menu = dict.get(newSymbol("menu", heap));
+    auto menu = dict.get(newSymbol("menu", heap).value());
     REQUIRE(menu.type() == Type::Dict);
-    auto items = menu.as<Dict>().get(newSymbol("items", heap));
+    auto items = menu.as<Dict>().get(newSymbol("items", heap).value());
     REQUIRE(items.type() == Type::Vector);
     CHECK(items.as<Vector>().size() == 22);
 

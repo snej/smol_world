@@ -309,7 +309,7 @@ void Heap::visitBlocks(BlockVisitor visitor) {
             b->setVisited();
             if (!visitor(*b))
                 return false;
-            if (Block::typeContainsVals(b->type()) && b->dataSize() > 0)
+            if (TypeIs(b->type(), TypeSet::Container) && b->dataSize() > 0)
                 stack.push_back(b);
         }
         return true;
@@ -405,43 +405,93 @@ void Heap::registerExternalRoot(Object *ref) const   {_registerRoot(this, _exter
 void Heap::unregisterExternalRoot(Object* ref) const {_unregisterRoot(_externalRootObjs, ref);}
 
 
+#pragma mark - CREATING OBJECTS:
+
+
 template <ObjectClass T>
-Maybe<T> newObject(typename T::Item const* items, size_t count, size_t capacity, Heap &heap) {
-    Block *block = heap.allocBlock(heapsize(capacity * sizeof(typename T::Item)),
-                                   T::Type,
-                                   slice<byte>((byte*)items, count * sizeof(typename T::Item)));
+static Maybe<T> newObject(slice<typename T::Item> items, size_t capacity, Heap &heap) {
+    Block *block = heap.allocBlock(heapsize(capacity * sizeof(typename T::Item)), T::Type);
     if (!block)
         return nullptr;
+    if constexpr (std::is_same<typename T::Item, Val>::value)
+        block->fill(items);
+    else
+        block->fill(slice_cast<byte>(items));
     Object obj(block);
     return (Maybe<T>&)obj;
 }
 
 template <ObjectClass T>
-Maybe<T> newObject(typename T::Item const* items, size_t count, Heap &heap) {
-    return newObject<T>(items, count, count, heap);
+static Maybe<T> newObject(slice<typename T::Item> items, Heap &heap) {
+    return newObject<T>(items, items.size(), heap);
 }
 
 template <ObjectClass T>
-Maybe<T> newObject(size_t capacity, Heap &heap) {
-    return newObject<T>(nullptr, 0, capacity, heap);
+static Maybe<T> newObject(size_t capacity, Heap &heap) {
+    return newObject<T>({}, capacity, heap);
 }
 
-Maybe<String> newString(string_view str, Heap &heap) {
+
+Maybe<BigInt> newBigInt(int64_t i, Heap &heap) {
+    //TODO: Use fewer bytes if possible
+    Block *block = heap.allocBlock(sizeof(int64_t), Type::BigInt);
+    if (!block)
+        return nullptr;
+    *(int64_t*)block->dataPtr() = i;
+    Object obj(block);
+    return (Maybe<BigInt>&)obj;
+}
+
+Value newInt(int64_t i, Heap &heap) {
+    if (i >= Int::Min && i <= Int::Max)
+        return Int(int(i));
+    else
+        return newBigInt(i, heap);
+}
+
+
+template <typename F>
+static Maybe<Float> _newFloat(F f, Heap &heap) {
+    Block *block = heap.allocBlock(sizeof(F), Type::Float);
+    if (!block)
+        return nullptr;
+    *(F*)block->dataPtr() = f;
+    Object obj(block);
+    return (Maybe<Float>&)obj;
+}
+
+Maybe<Float> newFloat(float f, Heap &heap)  {return _newFloat(f, heap);}
+
+Maybe<Float> newFloat(double d, Heap &heap) {
+    if (float f = float(d); f == d)
+        return _newFloat(f, heap);
+    else
+        return _newFloat(d, heap);
+}
+
+Value newNumber(double d, Heap &heap) {
+    if (auto i = int64_t(d); i == d)
+        return newInt(i, heap);
+    else
+        return newFloat(d, heap);
+}
+
+Maybe<String> newString(std::string_view str, Heap &heap) {
     return newString(str.data(), str.size(), heap);
 }
 Maybe<String> newString(const char *str, size_t length, Heap &heap) {
-    return newObject<String>(str, length, heap);
+    return newObject<String>({(char*)str, length}, heap);
 }
 
 
-Value Symbol::create(string_view str, Heap &heap) {
-    return newObject<Symbol>(str.data(), str.size(), heap);
+Value Symbol::create(std::string_view str, Heap &heap) {
+    return newObject<Symbol>({(char*)str.data(), str.size()}, heap);
 }
-Maybe<Symbol> newSymbol(string_view str, Heap &heap) {
+Maybe<Symbol> newSymbol(std::string_view str, Heap &heap) {
     return heap.symbolTable().create(str);
 }
 Maybe<Symbol> newSymbol(const char *str, size_t length, Heap &heap) {
-    return newSymbol(string_view(str, length), heap);
+    return newSymbol(std::string_view(str, length), heap);
 }
 
 
@@ -449,7 +499,7 @@ Maybe<Blob> newBlob(size_t capacity, Heap &heap) {
     return newObject<Blob>(capacity, heap);
 }
 Maybe<Blob> newBlob(const void *data, size_t size, Heap &heap) {
-    return newObject<Blob>((const byte*)data, size, heap);
+    return newObject<Blob>({(byte*)data, size}, heap);
 }
 
 
@@ -464,19 +514,18 @@ Maybe<Array> newArray(heapsize count, Value initialValue, Heap &heap) {
     }
     return ma;
 }
-Maybe<Array> newArray(std::initializer_list<Val> vals, Heap &heap) {
-    return newObject<Array>(vals.begin(), vals.size(), heap);
-}
 Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap) {
-    return newObject<Array>(vals.begin(), vals.size(), capacity, heap);
+    return newObject<Array>(vals, capacity, heap);
 }
 
 
 Maybe<Vector> newVector(heapsize capacity, Heap &heap) {
-    return newObject<Vector>(capacity, heap);
+    auto v = newObject<Vector>(capacity + 1, heap);
+    if_let(vv, v) {vv.clear();}
+    return v;
 }
 Maybe<Vector> newVector(slice<Val> vals, size_t capacity, Heap &heap) {
-    return newObject<Vector>(vals.begin(), vals.size(), capacity, heap);
+    return newObject<Vector>(vals, capacity + 1, heap);
 }
 
 

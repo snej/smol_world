@@ -36,6 +36,28 @@ static inline std::strong_ordering operator<=> (heappos p, size_t i) {return uin
 static inline std::strong_ordering operator<=> (heappos p, intpos i) {return int64_t(p) <=> int64_t(i);}
 
 
+template <typename NUM>
+    concept Numeric = requires { std::integral<NUM> || std::floating_point<NUM>; };
+
+/// Converts between two numeric types, pinning out-of-range values to the nearest limit.
+template <Numeric TO, Numeric FROM>
+    constexpr TO pinning_cast(FROM n) {
+        if constexpr (std::numeric_limits<FROM>::is_signed && !std::numeric_limits<TO>::is_signed) {
+            if (n < 0)
+                return 0;
+        }
+        if (n < std::numeric_limits<TO>::lowest())
+            return std::numeric_limits<TO>::lowest();
+        else if (n > std::numeric_limits<TO>::max())
+            return std::numeric_limits<TO>::max();
+        else
+            return static_cast<TO>(n);
+    }
+
+template <Numeric FROM>
+    constexpr FROM pinning_cast(FROM n) {return n;}
+
+
 class Block;
 class Heap;
 class Object;

@@ -32,6 +32,13 @@ public:
 
     Type type() const pure;
 
+    /// True if the value has a numeric type (Int, BigInt or Float.)
+    bool isNumber() const pure                      {return TypeIs(type(), TypeSet::Numeric);}
+
+    /// Returns the value as a number. Unlike `asInt` this supports types other than Int;
+    /// it supports Bool, Int, BigInt and Float, and otherwise returns 0.
+    template <Numeric NUM> NUM asNumber() const pure;
+
     inline Object asObject() const pure;
 
     Block* block() const pure                       {return (isObject()) ? _block() : nullptr;}
@@ -68,12 +75,12 @@ public:
     constexpr static bool HasType(enum Type t)    {return t == Type;}
 
     constexpr Null() = default;
-    constexpr Null(nullptr_t)                     :Value() { }
-    constexpr explicit Null(Value v)              :Value(v) {assert(v.isNull());}
+    constexpr Null(nullptr_t)                       :Value() { }
+    constexpr explicit Null(Value v)                :Value(v) {assert(v.isNull());}
 
-    static constexpr Null _nullish()       {return Null(NullishVal);}
+    static constexpr Null _nullish()                {return Null(NullishVal);}
 private:
-    constexpr explicit Null(magic m)       {_val = m;}
+    constexpr explicit Null(magic m)                {_val = m;}
 };
 
 constexpr Null nullvalue;
@@ -124,6 +131,10 @@ public:
     operator Value() const pure                     {return Value(block());}
 
     bool isNull() const pure                        {return _data.isNull();}
+    bool isNumber() const pure                      {return TypeIs(type(), TypeSet::Numeric);}
+
+    /// Returns the object's numeric value if it's a BigInt or Float; else 0.
+    template <Numeric NUM> NUM asNumber() const pure {return Value(*this).asNumber<NUM>();}
 
     template <ObjectClass T> bool is() const pure   {return T::HasType(type());}
     template <ObjectClass T> T as() const pure      {assert(is<T>()); return *(T*)this;}
@@ -158,19 +169,66 @@ private:
 
 
 
-/// An Object subclass that implements a particular Type code.
-template <Type TYPE>
-class TypedObject : public Object {
+/// The Object subclass representing the BigInt type.
+class BigInt : public Object {
 public:
-    static constexpr Type Type = TYPE;
-    static bool HasType(enum Type t) {return t == Type;}
-protected:
-    explicit TypedObject(Block const* block)        :Object(block) { }
-    explicit TypedObject(Val const& val)            :Object(val) {assert(type() == TYPE);}
+    static constexpr Type Type = Type::BigInt;
+    constexpr static bool HasType(enum Type t)      {return t == Type;}
+
+    int64_t asInt() const {
+        slice<byte> bytes = rawBytes();
+        assert(bytes.size() > 0 && bytes.size() <= sizeof(int64_t));
+        int64_t result = (uint8_t(bytes.back()) & 0x80) ? -1 : 0;   // sign-extend it
+        memcpy(&result, rawBytes().begin(), rawBytes().size());
+        return result;
+    }
+
+    operator int64_t() const                        {return asInt();}
 };
 
+/// Creates a new BigInt object.
+Maybe<BigInt> newBigInt(int64_t, Heap&);
+
+/// Returns a (non-object) Int if possible, else creates a BigInt.
+Value newInt(int64_t i, Heap &heap);
 
 
+
+/// The Object subclass representing the Float type.
+class Float : public Object {
+public:
+    static constexpr Type Type = Type::Float;
+    constexpr static bool HasType(enum Type t)      {return t == Type;}
+
+    bool isDouble() const                           {return rawBytes().size() == sizeof(double);}
+    float asFloat() const                           {return getValue<float>();}
+    double asDouble() const                         {return getValue<double>();}
+    operator float() const                          {return getValue<float>();}
+    operator double() const                         {return getValue<double>();}
+
+private:
+    template <typename F> F getValue() const {
+        if (rawBytes().size() == sizeof(float))
+            return *(float*)rawBytes().begin();
+        else {
+            assert(rawBytes().size() == sizeof(double));
+            return *(double*)rawBytes().begin();
+        }
+    }
+};
+
+/// Creates a new 4-byte Float object.
+Maybe<Float> newFloat(float, Heap&);
+/// Creates a new 8-byte Float object, or 4 bytes if possible without losing accuracy.
+Maybe<Float> newFloat(double, Heap&);
+
+/// Returns a (non-object) Int value if possible;
+/// else creates a BigInt if the value is integral;
+/// else creates a Float.
+Value newNumber(double, Heap&);
+
+
+    
 /// A `std::optional`-like type for Object classes.
 template <ObjectClass T>
 class Maybe {
@@ -211,5 +269,22 @@ protected:
 
 
 inline Object Value::asObject() const                         {return Object(*this);}
+
+
+
+template <Numeric NUM> NUM Val::asNumber() const {
+    return Value(*this).asNumber<NUM>();
+}
+
+template <Numeric NUM> NUM Value::asNumber() const {
+    switch (type()) {
+        case Type::Bool:    return NUM(asBool());
+        case Type::Int:     return pinning_cast<NUM>(asInt());
+        case Type::BigInt:  return pinning_cast<NUM>(as<BigInt>().asInt());
+        case Type::Float:   return pinning_cast<NUM>(as<Float>().asDouble());
+        default:            return 0;
+    }
+    // TODO: Pin result to limit of type
+}
 
 }

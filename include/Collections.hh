@@ -11,22 +11,22 @@
 
 namespace snej::smol {
 
-using string_view = std::string_view;
-
 
 /// Abstract base of String, Symbol, Blob, Array, Dict
 template <typename ITEM, Type TYPE>
-class Collection : public TypedObject<TYPE> {
+class Collection : public Object {
 public:
     using Item = ITEM;
+    static constexpr Type Type = TYPE;
+    static bool HasType(enum Type t) {return t == Type;}
 
     static constexpr heapsize MaxCount = (Block::MaxSize / sizeof(Item)) - 1;
 
-    slice<Item> items()             {return slice_cast<Item>(this->rawBytes());}
-    slice<Item> items() const       {return slice_cast<Item>(this->rawBytes());}
+    slice<Item> items()             {return slice_cast<Item>(this->rawBytes());}// Vector & Dict
+    slice<Item> items() const       {return slice_cast<Item>(this->rawBytes());}// "override" these
 
     heapsize capacity() const       {return items().size();}
-    heapsize size() const           {return capacity();}        // Dict "overrides" this
+    heapsize size() const           {return capacity();}        // Vector & Dict "override" this
     bool empty() const              {return size() == 0;}
 
     using iterator = Item*;
@@ -37,20 +37,7 @@ public:
     const_iterator begin() const    {return items().begin();}
     const_iterator end() const      {return items().end();}
 
-protected:
-    Collection() = default;
-
-    Collection(Val const& val)      :TypedObject<TYPE>(val) { }
-
-    Collection(Block *block, size_t capacity, const Item* items, size_t count)
-    :TypedObject<TYPE>(block)
-    {
-        if (items)
-            ::memcpy(begin(), items, count * sizeof(Item));
-        else
-            count = 0;
-        ::memset(begin() + count, 0, (capacity - count) * sizeof(Item));
-    }
+    Collection() = delete; // (these aren't constructed. See newObject() in Heap.cc)
 };
 
 
@@ -59,10 +46,10 @@ protected:
 class String : public Collection<char, Type::String> {
 public:
     const char* data() const        {return begin();}
-    string_view str() const         {return {begin(), size()};}
+    std::string_view str() const    {return {begin(), size()};}
 };
 
-Maybe<String> newString(string_view str, Heap &heap);
+Maybe<String> newString(std::string_view str, Heap &heap);
 Maybe<String> newString(const char *str, size_t length, Heap &heap);
 
 
@@ -76,10 +63,10 @@ public:
 
 private:
     friend class SymbolTable;
-    static Value create(string_view str, Heap &heap);
+    static Value create(std::string_view str, Heap &heap);
 };
 
-Maybe<Symbol> newSymbol(string_view str, Heap &heap);
+Maybe<Symbol> newSymbol(std::string_view str, Heap &heap);
 Maybe<Symbol> newSymbol(const char *str, size_t length, Heap &heap);
 
 
@@ -106,23 +93,30 @@ Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap);
 
 
 
-/// A variable-size array of `Val`s. The size is not stored explicitly; instead, the array is
-/// padded with nulls, and the size is the number of non-null elements.
-/// Consequently, a Vector may not contain `nullvalue`. (`nullishvalue` is OK!)
+/// A variable-size array of `Val`s. Uses an additional slot to store the current size.
 class Vector : public Collection<Val, Type::Vector> {
 public:
-    slice<Val> items() const                    {return {(Val*)begin(), size()};}
-    Val& operator[] (heapsize i)                {assert(allItems()[i]); return allItems()[i];}
-    Val const&  operator[] (heapsize i) const   {assert(allItems()[i]); return allItems()[i];}
+    heapsize capacity() const pure              {return Collection::capacity() - 1;}
+    heapsize size() const pure                  {return Collection::begin()->asInt();}
+    bool empty() const                          {return size() == 0;}
+    bool full() const                           {return size() == capacity();}
 
-    heapsize size() const pure;                 // "overridden"
-    bool full() const                           {return capacity() == 0 || endAll()[-1] != nullval;}
+    iterator begin()                            {return Collection::begin() + 1;}
+    iterator end()                              {return Collection::end();}
+    const_iterator begin() const                {return Collection::begin() + 1;}
+    const_iterator end() const                  {return Collection::end();}
+
+    slice<Val> items() const                    {return {(Val*)begin(), size()};}
+    Val& operator[] (heapsize i)                {return Collection::items()[i + 1];}
+    Val const&  operator[] (heapsize i) const   {return Collection::items()[i + 1];}
+
     bool insert(Value, heapsize pos);
     bool append(Value);
-
+    void clear()                                {_setSize(0);}
+    
 private:
     slice<Val> allItems() const                 {return Collection::items();}
-    const_iterator endAll() const               {return Collection::end();}
+    void _setSize(heapsize);
 };
 
 Maybe<Vector> newVector(heapsize capacity, Heap &heap);
@@ -130,7 +124,7 @@ Maybe<Vector> newVector(slice<Val> vals, size_t capacity, Heap &heap);
 
 
 struct DictEntry {
-    Val const key;
+    Val const key;      // always a Symbol. Immutable.
     Val       value;
 
     DictEntry() { };
@@ -149,17 +143,17 @@ public:
     bool empty() const                  {return capacity() == 0 || begin()->key == nullval;}
     heapsize size() const               {return heapsize(items().size());} // "overridden"
 
-    Val* find(Value key);
-    const Val* find(Value key) const    {return const_cast<Dict*>(this)->find(key);}
-    Value get(Value key) const          {auto v = find(key); return v ? Value(*v) : nullptr;}
-    bool contains(Value key) const      {return find(key) != nullptr;}
+    Val* find(Symbol key);
+    const Val* find(Symbol key) const    {return const_cast<Dict*>(this)->find(key);}
+    Value get(Symbol key) const          {auto v = find(key); return v ? Value(*v) : nullptr;}
+    bool contains(Symbol key) const      {return find(key) != nullptr;}
 
-    bool set(Value key, Value newValue)     {return set(key, newValue, false);}
-    bool insert(Value key, Value newValue)  {return set(key, newValue, true);}
-    bool replace(Value key, Value newValue);
-    bool remove(Value key);
+    bool set(Symbol key, Value newValue)     {return set(key, newValue, false);}
+    bool insert(Symbol key, Value newValue)  {return set(key, newValue, true);}
+    bool replace(Symbol key, Value newValue);
+    bool remove(Symbol key);
 
-    Value operator[] (Value key) const  {return get(key);}
+    Value operator[] (Symbol key) const  {return get(key);}
 
     slice<DictEntry> items() const;
 
@@ -178,7 +172,7 @@ public:
 private:
     slice<DictEntry> allItems() const               {return Collection::items();}
     const_iterator endAll() const                   {return begin() + capacity();}
-    bool set(Value key, Value value, bool insertOnly);
+    bool set(Symbol key, Value value, bool insertOnly);
 };
 
 Maybe<Dict> newDict(heapsize capacity, Heap &heap);
@@ -195,10 +189,13 @@ bool Value::visit(FN fn) const {
         case Type::Null:    fn(as<Null>()); break;
         case Type::Bool:    fn(as<Bool>()); break;
         case Type::Int:     fn(as<Int>()); break;
+        case Type::BigInt:  fn(as<BigInt>()); break;
+        case Type::Float:   fn(as<Float>()); break;
         case Type::String:  fn(as<String>()); break;
         case Type::Symbol:  fn(as<Symbol>()); break;
         case Type::Blob:    fn(as<Blob>()); break;
         case Type::Array:   fn(as<Array>()); break;
+        case Type::Vector:  fn(as<Vector>()); break;
         case Type::Dict:    fn(as<Dict>()); break;
         default:            assert(false); return false;
     }

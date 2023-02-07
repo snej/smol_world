@@ -82,15 +82,4 @@ const char* TypeName(Type t) {
 std::ostream& operator<<(std::ostream& out, Type t) {return out << TypeName(t);}
 
 
-std::ostream& operator<<(std::ostream& out, Val const& val) {
-    switch (val.type()) {
-        case Type::Null:    out << (val.isNull() ? "null" : "nullish"); break;
-        case Type::Bool:    out << (val.asBool() ? "true" : "false"); break;
-        case Type::Int:     out << val.asInt(); break;
-        default:            out << TypeName(val.type()) << "@" << (void*)val.block(); break;
-    }
-    return out;
-}
-
-
 }

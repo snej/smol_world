@@ -14,7 +14,6 @@
 		2770B1B02980776400E2C126 /* GarbageCollector.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2770B1AF2980776400E2C126 /* GarbageCollector.cc */; };
 		2770B1B229807E5C00E2C126 /* Test_GC.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2770B1B129807E5C00E2C126 /* Test_GC.cc */; };
 		2770B1BA2989AC8200E2C126 /* HashTable.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2770B1B92989AC8200E2C126 /* HashTable.cc */; };
-		27733D02297B38CB00EDA2E9 /* oldmain.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27F22970833900BF17A5 /* oldmain.cpp */; };
 		27733D04297B39D300EDA2E9 /* Test_Objects.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27733D03297B39D300EDA2E9 /* Test_Objects.cc */; };
 		27733D0D297C6E1100EDA2E9 /* SymbolTable.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27733D0C297C6E1100EDA2E9 /* SymbolTable.cc */; };
 		27AA27FB2970835E00BF17A5 /* Heap.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27FA2970835E00BF17A5 /* Heap.cc */; };
@@ -86,7 +85,6 @@
 		2770B1AF2980776400E2C126 /* GarbageCollector.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = GarbageCollector.cc; sourceTree = "<group>"; };
 		2770B1B129807E5C00E2C126 /* Test_GC.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_GC.cc; sourceTree = "<group>"; };
 		2770B1B32982F0E000E2C126 /* function_ref.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = function_ref.hh; sourceTree = "<group>"; };
-		2770B1B429846D7300E2C126 /* Test_RelPtr.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_RelPtr.cc; sourceTree = "<group>"; };
 		2770B1B62985AA9300E2C126 /* Base.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Base.hh; sourceTree = "<group>"; };
 		2770B1B72986102700E2C126 /* Base.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Base.h; sourceTree = "<group>"; };
 		2770B1B82989AC1600E2C126 /* HashTable.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = HashTable.hh; sourceTree = "<group>"; };
@@ -100,7 +98,6 @@
 		27733D0B297C6E1100EDA2E9 /* SymbolTable.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = SymbolTable.hh; sourceTree = "<group>"; };
 		27733D0C297C6E1100EDA2E9 /* SymbolTable.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = SymbolTable.cc; sourceTree = "<group>"; };
 		27AA27EF2970833900BF17A5 /* Tests */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Tests; sourceTree = BUILT_PRODUCTS_DIR; };
-		27AA27F22970833900BF17A5 /* oldmain.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = oldmain.cpp; sourceTree = "<group>"; };
 		27AA27F92970835E00BF17A5 /* Heap.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Heap.hh; sourceTree = "<group>"; };
 		27AA27FA2970835E00BF17A5 /* Heap.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Heap.cc; sourceTree = "<group>"; };
 		27AA27FC2970BFF300BF17A5 /* Val.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Val.hh; sourceTree = "<group>"; };
@@ -162,9 +159,7 @@
 				27733D03297B39D300EDA2E9 /* Test_Objects.cc */,
 				2770B1B129807E5C00E2C126 /* Test_GC.cc */,
 				272AF5E7298C4375008943C3 /* Test_JSON.cc */,
-				2770B1B429846D7300E2C126 /* Test_RelPtr.cc */,
 				2705301F2978B556003D4C93 /* TestsMain.cc */,
-				27AA27F22970833900BF17A5 /* oldmain.cpp */,
 			);
 			path = tests;
 			sourceTree = "<group>";
@@ -373,7 +368,6 @@
 				27733D04297B39D300EDA2E9 /* Test_Objects.cc in Sources */,
 				2770B1B229807E5C00E2C126 /* Test_GC.cc in Sources */,
 				272AF5E8298C4375008943C3 /* Test_JSON.cc in Sources */,
-				27733D02297B38CB00EDA2E9 /* oldmain.cpp in Sources */,
 				270530202978B556003D4C93 /* TestsMain.cc in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

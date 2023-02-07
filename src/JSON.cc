@@ -28,6 +28,9 @@ namespace snej::smol {
 using namespace std;
 
 
+#pragma mark - PARSING JSON:
+
+
 static inline heapsize grow(heapsize size) {
     return size + (size >> 1); // x 1.5
 }
@@ -40,15 +43,16 @@ public:
     ,_root(h)
     { }
 
-    Value root() {return _root;}
+    Value root()            {return _root;}
 
-    bool Null() { return addValue(nullishvalue); }
-    bool Bool(bool b) { return addValue(smol::Bool(b)); }
-    bool Int(int i) { return addNumber(i); }
-    bool Uint(unsigned u) { return addNumber(u); }
-    bool Int64(int64_t i) { return addNumber(i); }
-    bool Uint64(uint64_t u) { return addNumber(u); }
-    bool Double(double d) { return addNumber(d); }
+    bool Null()             { return addValue(nullishvalue); }
+    bool Bool(bool b)       { return addValue(smol::Bool(b)); }
+    bool Int(int i)         { return addInt(i); }
+    bool Uint(unsigned u)   { return addInt(u); }
+    bool Int64(int64_t i)   { return addInt(i); }
+    bool Uint64(uint64_t u) { return u < INT64_MAX ? addInt(u) : addNumber(double(u)); }
+    bool Double(double d)   { return addNumber(d); }
+
     bool RawNumber(const char*, rapidjson::SizeType, bool /*copy*/) {return false;}
 
     bool String(const char* str, rapidjson::SizeType length, bool /*copy*/) {
@@ -87,13 +91,15 @@ public:
 
 private:
     bool addValue(Value val) {
-        if (_stack.empty()) {
+        if (!val) {
+            return false;
+        } else if (_stack.empty()) {
             assert(!_root);
             _root = val;
         } else {
             Object obj = _stack.back();
-            if_let (array, obj.maybeAs<Vector>()) {
-                return append(array, val);
+            if_let (vec, obj.maybeAs<Vector>()) {
+                return append(vec, val);
             } else {
                 assert(!_keys.empty());
                 auto key = _keys.back();
@@ -104,10 +110,8 @@ private:
         return true;
     }
 
-    bool addNumber(int64_t num) {
-        if (num < Int::Min || num > Int::Max) return false;
-        return addValue(smol::Int(int(num)));
-    }
+    bool addInt(int64_t num)    {return addValue(newInt(num, _heap));}
+    bool addNumber(double num)  {return addValue(newNumber(num, _heap));}
 
     bool append(Vector array, Value val) {
         if (!array.append(val)) {
@@ -120,7 +124,7 @@ private:
         return true;
     }
 
-    bool add(Dict dict, Value key, Value val) {
+    bool add(Dict dict, Symbol key, Value val) {
         if (!dict.insert(key, val)) {
             Handle keyHandle(&key);   // in case grow() triggers GC
             Handle valHandle(&val);
@@ -158,11 +162,17 @@ Value newFromJSON(string_view json, Heap &heap, string* outError) {
 }
 
 
+#pragma mark - CONVERTING TO JSON:
+
+
 static bool writeVal(Value val, rapidjson::Writer<rapidjson::StringBuffer> &writer) {
     switch (val.type()) {
         case Type::Null:    return writer.Null();
         case Type::Bool:    return writer.Bool(val.asBool());
         case Type::Int:     return writer.Int(val.asInt());
+        case Type::BigInt:  return writer.Int64(val.as<BigInt>().asInt());
+        case Type::Float:   return writer.Double(val.as<Float>().asDouble());
+
         case Type::String: {
             string_view str = val.as<String>().str();
             return writer.String(str.data(), uint32_t(str.size()));

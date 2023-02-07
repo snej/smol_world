@@ -32,7 +32,7 @@ public:
 
 protected:
     static bool keysMatch(Value key1, Value key2) pure;
-    static bool keysMatch(string_view key1, Value key2) pure;
+    static bool keysMatch(std::string_view key1, Value key2) pure;
     static Maybe<Array> createArray(Heap &heap, uint32_t capacity, bool withValues);
 
     HashTable(Heap &heap, Array array, bool hasValues, bool recount);
@@ -103,13 +103,13 @@ public:
     explicit HashSet(Heap &heap, Array array)     :HashSet(heap, array, true) { }
 
     /// Returns the existing value for this key, if any.
-    Value find(string_view str) const;
+    Value find(std::string_view str) const;
 
     /// Returns the existing vlue for this key; else calls the `creator` function,
     /// which should return `Value`, and adds the resulting value.
     /// Returns null if the creator function returned null, or if growing the table failed.
     template <typename FN>
-    Value findOrInsert(string_view str, FN creator) {
+    Value findOrInsert(std::string_view str, FN creator) {
         int32_t hashCode = computeHash(str);
         if (auto [entry, found] = search(str, hashCode); found) {
             return entry[_size];

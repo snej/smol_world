@@ -54,11 +54,11 @@ void GarbageCollector::scanRoots() {
 #endif
     _toHeap.reset();
     _toHeap.setRoot(scan(_fromHeap.root()).maybeAs<Object>());
-    _toHeap.setSymbolTableArray(scan(_fromHeap.symbolTableArray())); // TODO: Scan buckets as weak references to Symbols
     for (Object *refp : _fromHeap._externalRootObjs)
         update(*refp);
     for (Value *refp : _fromHeap._externalRootVals)
         update(*refp);
+    _toHeap.setSymbolTableArray(scan(_fromHeap.symbolTableArray())); // TODO: Scan buckets as weak references to Symbols
 }
 
 
@@ -119,9 +119,9 @@ Block* GarbageCollector::move(Block* src) {
         if (src->containsVals()) {
             slice<Val> vals = src->vals();
             if_let(dict, Value(src).maybeAs<Dict>()) {
-                vals = vals(0, 2 * dict.size());
+                vals = vals(0, 2 * dict.size());        // only write the used portion of a Dict
             } else if_let(vector, Value(src).maybeAs<Vector>()) {
-                vals = vals(0, vector.size());
+                vals = vals(0, vector.size() + 1);      // only write the used portion of a Vector
             }
             // Ugh. We have to move a bunch of relative-pointers, which still need to resolve to
             // their original addresses until they get processed during the loop in scan().
