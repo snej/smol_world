@@ -265,7 +265,8 @@ Block* Heap::growBlock(Block* block, heapsize newDataSize) {
 
 
 Block* Heap::firstBlock() {
-    return (Block*)(_base + sizeof(Header));
+    auto b = (Block*)(_base + sizeof(Header));
+    return (byte*)b < _cur ? b : nullptr;
 }
 
 Block* Heap::nextBlock(Block *b) {

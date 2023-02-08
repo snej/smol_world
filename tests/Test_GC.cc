@@ -25,33 +25,45 @@ using namespace snej::smol;
 
 
 TEST_CASE("GC", "[gc]") {
-    Heap heap(10000);
+    Heap heap(1000);
     UsingHeap u(heap);
+    constexpr int kNumStrings = 5;
+
+    auto gc = [&] {
+        cout << "__________ BEFORE GC __________\n";
+        heap.dump(cout);
+        GarbageCollector::run(heap);
+        cout << "__________ AFTER GC __________\n";
+        heap.dump(cout);
+    };
 
     auto originalUsed = heap.used();
     cout << "Original heap used: " << originalUsed << endl;
 
-    for (int i = 0; i < 100; ++i)
+    for (int i = 0; i < kNumStrings; ++i)
         newString("Hello smol world!", heap);
     CHECK(heap.used() > originalUsed);
 
-    GarbageCollector::run(heap);
+    gc();
 
     CHECK(heap.used() == originalUsed);
 
-    Handle<Array> a = newArray(100, heap).value();
+    Handle<Array> a = newArray(kNumStrings, heap).value();
     heap.setRoot(a);
-    for (int i = 0; i < 100; ++i)
+    for (int i = 0; i < kNumStrings; ++i)
         a[i] = newString("Hello smol world!", heap);
     auto laterUsed = heap.used();
     cout << "After allocating: " << laterUsed << endl;
 
-    GarbageCollector::run(heap);
+    gc();
+
     cout << "After GC: " << heap.used() << endl;
     CHECK(heap.used() == laterUsed);
 
-    a[10] = nullval;
-    GarbageCollector::run(heap);
+    a[kNumStrings - 1] = nullval;
+
+    gc();
+
     cout << "After GC: " << heap.used() << endl;
     CHECK(heap.used() < laterUsed);
 }
