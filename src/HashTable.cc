@@ -82,11 +82,7 @@ Maybe<Array> HashTable::createArray(Heap &heap, uint32_t capacity, bool withValu
     while (size < targetSize)
         size *= 2;
     size *= (withValues ? 3 : 2);
-    auto maybeArray = newArray(size, heap);
-    if_let(array, maybeArray) {
-        array[size - 1] = nullishvalue;  // keep array from being truncated on GC
-    }
-    return maybeArray;
+    return newArray(size, heap);
 }
 
 

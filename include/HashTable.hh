@@ -105,7 +105,7 @@ public:
     /// Returns the existing value for this key, if any.
     Value find(std::string_view str) const;
 
-    /// Returns the existing vlue for this key; else calls the `creator` function,
+    /// Returns the existing value for this key; else calls the `creator` function,
     /// which should return `Value`, and adds the resulting value.
     /// Returns null if the creator function returned null, or if growing the table failed.
     template <typename FN>
