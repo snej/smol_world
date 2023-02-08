@@ -44,11 +44,12 @@ static string readFile(const char *path) {
 
 
 TEST_CASE("JSON", "[object],[json]") {
-    Heap heap(2000);
+    Heap heap(3000);
     UsingHeap u(heap);
 
     string err;
     Handle<Value> v = newFromJSON(readFile(JSON_TEST_DATA_DIR "svg_menu.json"), heap, &err);
+    INFO("Error is " << err);
     REQUIRE(v);
     Dict dict = v.as<Dict>();
     CHECK(dict.size() == 1);

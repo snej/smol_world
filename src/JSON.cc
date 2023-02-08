@@ -17,6 +17,7 @@
 //
 
 #include "JSON.hh"
+#include "HashTable.hh"
 #include <deque>
 #include <iostream>
 #include "rapidjson/error/en.h"
@@ -38,37 +39,43 @@ static inline heapsize grow(heapsize size) {
 
 class JSONParseHandler {
 public:
+    static constexpr size_t kMaxStringDedupSize = 16;
+
     JSONParseHandler(Heap &h)
     :_heap(h)
     ,_root(h)
-    ,_emptyString(h)
     ,_emptyArray(h)
+    ,_strings(h, HashSet::createArray(h, 100).value())
     { }
+
+    ~JSONParseHandler() {
+        //std::cout << "JSONParseHandler created " << _strings.count() << " short strings, of " << _numShortStrings << " in the JSON. Total strings is " << _numStrings << "\n";
+    }
 
     Value root()            {return _root;}
 
     bool Null()             { return addValue(nullishvalue); }
     bool Bool(bool b)       { return addValue(smol::Bool(b)); }
-    bool Int(int i)         { return addInt(i); }
-    bool Uint(unsigned u)   { return addInt(u); }
-    bool Int64(int64_t i)   { return addInt(i); }
-    bool Uint64(uint64_t u) { return u < INT64_MAX ? addInt(u) : addNumber(double(u)); }
+    bool Int(int i)         { return addNumber(i); }
+    bool Uint(unsigned u)   { return addNumber(u); }
+    bool Int64(int64_t i)   { return addNumber(i); }
+    bool Uint64(uint64_t u) { return addNumber(u); }
     bool Double(double d)   { return addNumber(d); }
 
     bool RawNumber(const char*, rapidjson::SizeType, bool /*copy*/) {return false;}
 
     bool String(const char* str, rapidjson::SizeType length, bool /*copy*/) {
-        if (length > 0) {
-            unless(string, newString(str, length, _heap)) {return false;}
-            return addValue(string);
+        ++_numStrings;
+        Value string;
+        if (length <= kMaxStringDedupSize) {
+            ++_numShortStrings;
+            string = _strings.findOrInsert(string_view(str,length), [&](Heap& heap) {
+                return newString(str, length, heap);
+            });
         } else {
-            if (!_emptyString) {
-                _emptyString = newString("", 0, _heap);
-                if (!_emptyString)
-                    return false;
-            }
-            return addValue(_emptyString);
+            string = newString(str, length, _heap);
         }
+        return addValue(string);
     }
 
     bool StartArray() {
@@ -125,14 +132,15 @@ private:
                 assert(!_keys.empty());
                 auto key = _keys.back();
                 _keys.pop_back();
-                return add(obj.as<Dict>(), key, val);
+                return insert(obj.as<Dict>(), key, val);
             }
         }
         return true;
     }
 
-    bool addInt(int64_t num)    {return addValue(newInt(num, _heap));}
-    bool addNumber(double num)  {return addValue(newNumber(num, _heap));}
+    bool addNumber(auto num)  {
+        return addValue(newNumber(num, _heap));
+    }
 
     bool append(Vector vec, Value val) {
         if (!vec.append(val)) {
@@ -145,7 +153,7 @@ private:
         return true;
     }
 
-    bool add(Dict dict, Symbol key, Value val) {
+    bool insert(Dict dict, Symbol key, Value val) {
         if (!dict.insert(key, val)) {
             Handle keyHandle(&key);   // in case grow() triggers GC
             Handle valHandle(&val);
@@ -161,8 +169,9 @@ private:
     Handle<Value> _root;
     deque<Handle<Object>> _stack;
     deque<Handle<Symbol>> _keys;
-    Handle<Maybe<snej::smol::String>> _emptyString;
     Handle<Maybe<Array>> _emptyArray;
+    HashSet _strings;
+    unsigned _numStrings = 0, _numShortStrings = 0;
 };
 
 Value newFromJSON(string const& json, Heap &heap, string* outError) {
