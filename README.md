@@ -1,29 +1,20 @@
 # it’s a smol world
 
-    It's a world of laughter
-    a world of song
-    it's a world where pointers
-    are four bytes long
+    It's a world of laughter            It's a world of strings and
+    a world of song                     arrays for you
+    it's a world where pointers         dictionaries and ints
+    are four bytes long                 can be found here too
+                
+    There's only so much cache          Everything's quite compact
+    we must clean up our trash          there's nothing that we lack
+    It's a smol world after all!        it's a smol, smol world!
     
-    There's only so much cache
-    we must clean up our trash
-    It's a smol world after all!
-    
-    It's a world of strings and
-    arrays for you
-    dictionaries and ints
-    can be found here too
-    
-    Everything's quite compact
-    there's nothing that we lack
-    it's a smol, smol world!
-    
-    do {
-        It's a smol world after all...
-        It's a smol world after all...
-        It's a smol world after all...
-        It's a smol, smol world
-    } while(!insane);
+                do {
+                    It's a smol world after all...
+                    It's a smol world after all...
+                    It's a smol world after all...
+                    It's a smol, smol world
+                } while(!insane);
 
 ## What?
 
