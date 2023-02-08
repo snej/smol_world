@@ -90,11 +90,12 @@ Block* GarbageCollector::scan(Block *src) {
     Block *dst = moveBlock(src);
     while (toScan < (Block*)_toHeap._cur) {
         // Scan & update the contents of the Object in `toScan`:
+        //std::cerr << "**** Scanning block " << (void*)toScan << "\n";
         for (Val &v : toScan->vals()) {
-            if (Block *block = v.block()) {
+            if (v.isObject()) {
                 // Note: v is in toHeap, but was memcpy'd from fromHeap,
                 // so any address in it is still relative to fromHeap.
-                block = (Block*)_fromHeap.at(_toHeap._pos(block));   // translate it back to fromHeap
+                auto block = (Block*)_fromHeap.at(heappos((uintpos&)v >> 1));   // translate it back to fromHeap
                 v = moveBlock(block);
             }
         }
@@ -132,18 +133,20 @@ Block* GarbageCollector::moveBlock(Block* src) {
             // equivalent heap offset. So if the original Val pointed to fromHeap+3F8, the copied
             // Val points to toHeap+3F8. This isn't a useable Val, but scan() can undo this.
             dst = _toHeap.allocBlock(vals.size() * sizeof(Val), src->type());
-            auto dstVal = (Val*)dst->dataPtr();
+            //std::cerr << "**** Move block " << (void*)src << " to " << (void*)dst << " -- " << _toHeap._cur << "\n";
+            auto dstItem = (uintpos*)dst->dataPtr();
             for (Val const& srcVal : vals) {
                 if (srcVal.isObject())
-                    *dstVal++ = (Block*)_toHeap._at(_fromHeap.pos(srcVal._block()));
+                    *dstItem++ = uintpos(_fromHeap.pos(srcVal._block())) << 1;
                 else
-                    *dstVal++ = srcVal;
+                    *dstItem++ = (uintpos&)srcVal;
             }
-            assert(dstVal == dst->vals().end());
+            assert(dstItem == (void*)dst->vals().end());
         } else {
             // Moving a block of non-Vals is easy:
             auto size = src->blockSize();
             dst = (Block*)_toHeap.rawAlloc(size);
+            //std::cerr << "---- Move block " << (void*)src << " to " << (void*)dst << " -- " << _toHeap._cur << "\n";
             ::memcpy(dst, src, size);
         }
         src->setForwardingAddress(_toHeap.pos(dst));

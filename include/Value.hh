@@ -145,7 +145,7 @@ public:
     /// with this value cast to its runtime type.
     template <typename FN> bool visit(FN fn) const;
 
-    Block* block() const pure                       {return Block::fromData(rawBytes());}
+    Block* block() const pure                       {return _data ?Block::fromData(_data) :nullptr;}
     Type type() const pure                          {return block()->type();}
 
     slice<byte> rawBytes() const pure               {return _data;}

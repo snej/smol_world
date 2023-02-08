@@ -21,10 +21,8 @@ public:
 
     static heapsize sizeForData(heapsize dataSize) {
         assert(dataSize <= MaxSize);
-        heapsize blockSize = sizeof(Block) + dataSize;
-        if (blockSize < 4)
-            blockSize = 4;  // Block must allocate at least enough space to store forwarding pos
-        else if (dataSize >= LargeSize)
+        heapsize blockSize = std::max(heapsize(sizeof(Block) + dataSize), kMinBlockSize);
+        if (dataSize >= LargeSize)
             blockSize += 2;      // Add room for 32-bit dataSize
         return blockSize;
     }
@@ -48,7 +46,9 @@ public:
     static constexpr heapsize MaxSize = (1 << (32 - TagBits)) - 1;  ///< Maximum block size in bytes
     static constexpr heapsize LargeSize = 1 << (16 - TagBits);      //   Size that needs more header
 
-    heapsize blockSize() const                  {return ((_tags & Large) ? 4 : 2) + dataSize();}
+    heapsize blockSize() const                  {
+        return std::max(((_tags & Large) ? 4 : 2) + dataSize(), kMinBlockSize);
+    }
 
     /// Returns both the data pointer and size; slightly more efficient.
     slice<byte> data() const pure {
@@ -133,6 +133,8 @@ public:
 private:
     friend class Heap;
     friend class GarbageCollector;
+
+    static constexpr heapsize kMinBlockSize = sizeof(heappos); // Block must be able to store fwd ptr
 
     // Tag bits stored in an Block's meta word, alongsize its size.
     enum Tags : uint8_t {
