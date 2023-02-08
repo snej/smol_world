@@ -74,17 +74,23 @@ static void testReadJSON(const char *path) {
     heap.dump(cout);
 
     string json = toJSON(v);
-    cout << "As JSON: " << json << endl;
+    if (json.size() < 10000)
+        cout << "As JSON: " << json << endl;
 
-    cout << "Heap space used is " << heap.used() << " bytes; JSON is " << json.size() << ".\n";
+    cout << "Heap space used is " << heap.used() << " bytes; JSON is " << json.size()
+         << " ... " << (heap.used() / double(json.size()) * 100.0) << "%\n";
 
     cout << "\n..... garbage collection .....\n\n";
     GarbageCollector::run(heap);
 
     heap.dump(cout);
-    json = toJSON(v);
-    cout << "As JSON: " << json << endl;
-    cout << "Heap space used is " << heap.used() << " bytes; JSON is " << json.size() << ".\n";
+    string json2 = toJSON(v);
+    if (json2.size() < 10000)
+        cout << "As JSON: " << json2 << endl;
+    cout << "Heap space used is " << heap.used() << " bytes; JSON is " << json.size()
+         << " ... " << (heap.used() / double(json.size()) * 100.0) << "%\n";
+    REQUIRE(json2.size() == json.size());
+    // TODO: Compare equality; that will require canonical Dict ordering
 }
 
 

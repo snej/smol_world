@@ -360,6 +360,12 @@ void Heap::dump(std::ostream &out) {
         out << std::setw(4) << block.dataSize() << " bytes : ";
         Value val(&block);
         switch (val.type()) {
+            case Type::String: {
+                std::string_view str = val.as<String>().str();
+                out << "“" << str.substr(0, std::min(str.size(),size_t(50)))
+                    << (str.size() <= 50 ? "”" : "……");
+                break;
+            }
             case Type::Array:   out << "Array[" << val.as<Array>().size() << "]"; break;
             case Type::Vector:  out << "Vector[" << val.as<Vector>().size()
                                     << " / " << val.as<Vector>().capacity() << "]"; break;

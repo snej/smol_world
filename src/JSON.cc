@@ -41,6 +41,8 @@ public:
     JSONParseHandler(Heap &h)
     :_heap(h)
     ,_root(h)
+    ,_emptyString(h)
+    ,_emptyArray(h)
     { }
 
     Value root()            {return _root;}
@@ -56,19 +58,38 @@ public:
     bool RawNumber(const char*, rapidjson::SizeType, bool /*copy*/) {return false;}
 
     bool String(const char* str, rapidjson::SizeType length, bool /*copy*/) {
-        unless(string, newString(str, length, _heap)) {return false;}
-        return addValue(string);
+        if (length > 0) {
+            unless(string, newString(str, length, _heap)) {return false;}
+            return addValue(string);
+        } else {
+            if (!_emptyString) {
+                _emptyString = newString("", 0, _heap);
+                if (!_emptyString)
+                    return false;
+            }
+            return addValue(_emptyString);
+        }
     }
 
     bool StartArray() {
-        unless(array, newVector(4, _heap)) {return false;}
-        _stack.emplace_back(array);
+        unless(vec, newVector(4, _heap)) {return false;}
+        _stack.emplace_back(vec);
         return true;
     }
     bool EndArray(rapidjson::SizeType /*elementCount*/) {
-        Handle<Vector> array = _stack.back().as<Vector>();
+        Handle<Vector> vec = _stack.back().as<Vector>();
         _stack.pop_back();
-        return addValue(array);
+        if (vec.empty()) {
+            // Empty arrays are common in JS; use a singleton to save room.
+            if (!_emptyArray) {
+                _emptyArray = newArray(0, _heap);
+                if (!_emptyArray)
+                    return false;
+            }
+            return addValue(_emptyArray);
+        } else {
+            return addValue(vec);
+        }
     }
 
     bool StartObject() {
@@ -113,10 +134,10 @@ private:
     bool addInt(int64_t num)    {return addValue(newInt(num, _heap));}
     bool addNumber(double num)  {return addValue(newNumber(num, _heap));}
 
-    bool append(Vector array, Value val) {
-        if (!array.append(val)) {
+    bool append(Vector vec, Value val) {
+        if (!vec.append(val)) {
             Handle valHandle(&val);   // in case grow() triggers GC
-            unless(newVector, _heap.grow(array, grow(array.capacity()))) {return false;}
+            unless(newVector, _heap.grow(vec, grow(vec.capacity()))) {return false;}
             __unused bool ok = newVector.append(val);
             assert(ok);
             _stack.back() = newVector;
@@ -140,6 +161,8 @@ private:
     Handle<Value> _root;
     deque<Handle<Object>> _stack;
     deque<Handle<Symbol>> _keys;
+    Handle<Maybe<snej::smol::String>> _emptyString;
+    Handle<Maybe<Array>> _emptyArray;
 };
 
 Value newFromJSON(string const& json, Heap &heap, string* outError) {
@@ -185,18 +208,15 @@ static bool writeVal(Value val, rapidjson::Writer<rapidjson::StringBuffer> &writ
             if (!writer.StartArray()) return false;
             for (Value item : val.as<Array>().items()) {
                 if (!item)
-                    break; // array ends at first true null
+                    break; // stop at a true null (which can't be written anyway)
                 if (!writeVal(item, writer)) return false;
             }
             return writer.EndArray();
         }
         case Type::Vector: {
             if (!writer.StartArray()) return false;
-            for (Value item : val.as<Vector>().items()) {
-                if (!item)
-                    break; // array ends at first true null
-                if (!writeVal(item, writer)) return false;
-            }
+            for (Value item : val.as<Vector>().items())
+                if (!item || !writeVal(item, writer)) return false;
             return writer.EndArray();
         }
         case Type::Dict: {
