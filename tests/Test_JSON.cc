@@ -44,23 +44,34 @@ static string readFile(const char *path) {
 
 
 TEST_CASE("JSON", "[object],[json]") {
-    Heap heap(100000);
+    Heap heap(2000);
     UsingHeap u(heap);
 
     string err;
     Handle<Value> v = newFromJSON(readFile(JSON_TEST_DATA_DIR "svg_menu.json"), heap, &err);
     REQUIRE(v);
     Dict dict = v.as<Dict>();
-    heap.setRoot(dict);
-
-    heap.dump(cout);
-
     CHECK(dict.size() == 1);
     auto menu = dict.get(newSymbol("menu", heap).value());
     REQUIRE(menu.type() == Type::Dict);
     auto items = menu.as<Dict>().get(newSymbol("items", heap).value());
     REQUIRE(items.type() == Type::Vector);
     CHECK(items.as<Vector>().size() == 22);
+}
+
+
+static void testReadJSON(const char *path) {
+    Heap heap(1000000);
+    UsingHeap u(heap);
+
+    string err;
+    Handle<Value> v = newFromJSON(readFile(path), heap, &err);
+    INFO("Error is '" << err << "'");
+    REQUIRE(v);
+    Dict dict = v.as<Dict>();
+    heap.setRoot(dict);
+
+    heap.dump(cout);
 
     string json = toJSON(v);
     cout << "As JSON: " << json << endl;
@@ -74,4 +85,14 @@ TEST_CASE("JSON", "[object],[json]") {
     json = toJSON(v);
     cout << "As JSON: " << json << endl;
     cout << "Heap space used is " << heap.used() << " bytes; JSON is " << json.size() << ".\n";
+}
+
+
+TEST_CASE("Read Small JSON", "[object],[json]") {
+    testReadJSON(JSON_TEST_DATA_DIR "svg_menu.json");
+}
+
+
+TEST_CASE("Read Large JSON", "[object],[json]") {
+    testReadJSON(JSON_TEST_DATA_DIR "twitter.json");
 }
