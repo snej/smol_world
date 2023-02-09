@@ -9,6 +9,7 @@
 #include "slice.hh"
 #include "Val.hh"
 #include <algorithm>
+#include <string_view>
 
 namespace snej::smol {
 
@@ -118,6 +119,8 @@ public:
         return (Block*)( dat.begin() + std::max(dat.size(), heapsize(2)) );
     }
 
+    Block const* nextBlock() const pure         {return const_cast<Block*>(this)->nextBlock();}
+
     bool isVisited() const pure                 {return (_tags & Visited) != 0;}
     void setVisited()                           {_tags |= Visited;}
     void clearVisited()                         {_tags &= ~Visited;}
@@ -128,6 +131,41 @@ public:
     void setForwardingAddress(heappos addr) {
         assert(addr > 0 && !(uintpos(addr) & 0x80000000));
         bigMeta() = (uintpos(addr) << 1) | Fwd;
+    }
+
+    const char* validate() const {
+        if (isForwarded()) return "a block is forwarded";
+        //if (isVisited()) return "a block's temporary 'visited' flag is set";
+        auto size = dataSize();
+        if (size < LargeSize && (_tags & Large))
+            return "a small block's 'large' flag is set unnecessarily";
+        switch (Type t = type()) {
+            case Type::BigInt:
+                if (size < 1 || size > 8) return "a BigInt has an invalid size";
+                break;
+            case Type::Float:
+                if (size != 4 && size != 8) return "A Float has an invalid size";
+                break;
+            case Type::Array:
+                if (size & 0x3) return "An Array has an invalid size";
+                break;
+            case Type::Vector:
+                if ((size & 0x3) || size == 0) return "A Vector has an invalid size";
+                break;
+            case Type::Dict:
+                if (size & 0x7) return "A Dict has an invalid size";
+                break;
+            case Type::String:
+            case Type::Symbol:
+            case Type::Blob:
+                break;
+            default:
+                if (TypeIs(t, TypeSet::Valid))
+                    return "a block has a non-object type";
+                else
+                    return "a block has an invalid type";
+        }
+        return nullptr;
     }
 
 private:

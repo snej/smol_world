@@ -27,7 +27,9 @@ using namespace snej::smol;
 TEST_CASE("Empty Heap", "[heap]") {
     Heap heap(10000);
     // attributes:
-    CHECK(heap.valid());
+    CHECK(!heap.invalid());
+    CHECK(heap.validate());
+    CHECK(!heap.invalid());
     CHECK(heap.base() != nullptr);
     CHECK(heap.capacity() == 10000);
     CHECK(heap.used() == Heap::Overhead);
@@ -62,6 +64,7 @@ TEST_CASE("Alloc", "[heap]") {
 
     CHECK(heap.used() == Heap::Overhead + 2 + 123);
     CHECK(heap.available() == 10000 - Heap::Overhead - 2 - 123);
+    CHECK(heap.validate());
 
     int i = 0;
     heap.visitAll([&](const Block &block) {
@@ -83,6 +86,7 @@ TEST_CASE("Alloc", "[heap]") {
 
     CHECK(heap.used() == 10000);
     CHECK(heap.available() == 0);
+    CHECK(heap.validate());
 
     i = 0;
     heap.visitAll([&](const Block &block) {
@@ -124,6 +128,7 @@ static void testAllocRangeOfSizes(heapsize BaseSize, int NumBlocks) {
             CHECK(prev->dataSize() == size - 1);
         }
         dataSize += size;
+        CHECK(heap.validate());
     }
     cerr << "Allocated " << heap.used() << " bytes; overhead of "
     << (double(heap.used() - dataSize) / NumBlocks) << " bytes/block\n";

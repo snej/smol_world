@@ -32,9 +32,11 @@ TEST_CASE("GC", "[gc]") {
     auto gc = [&] {
         cout << "__________ BEFORE GC __________\n";
         heap.dump(cout);
+        CHECK(heap.validate());
         GarbageCollector::run(heap);
         cout << "__________ AFTER GC __________\n";
         heap.dump(cout);
+        CHECK(heap.validate());
     };
 
     auto originalUsed = heap.used();

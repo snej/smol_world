@@ -9,6 +9,7 @@
 #include <deque>
 #include <iomanip>
 #include <iostream>
+#include <set>
 #include <unordered_set>
 
 namespace snej::smol {
@@ -47,6 +48,7 @@ Heap::~Heap() {
 Heap::Heap()                                    :_base(nullptr), _end(nullptr), _cur(nullptr) { }
 Heap::Heap(void *base, size_t cap) noexcept     :Heap(base, cap, false) {reset();}
 Heap::Heap(size_t cap)                          :Heap(::malloc(cap), cap, true) {reset();}
+Heap::Heap(const char *error)                   {_error = error;}
 
 Heap::Heap(Heap&& h) noexcept {
     *this = std::move(h);
@@ -119,21 +121,21 @@ void Heap::reset() {
 
 
 Heap Heap::existing(slice<byte> contents, size_t capacity) {
-    assert(contents.size() > sizeof(Header));
-    assert(capacity >= contents.size());
+    if (contents.size() < sizeof(Header) || contents.size() > capacity)
+        return Heap("invalid size or capacity");
     Heap heap(contents.begin(), capacity, false);
     heap._cur = contents.end();
 
     auto header = heap.header();
-    if (header.magic != kMagic) {
-        std::cout << "Invalid Heap: wrong magic number\n";
-        return Heap();
+    if (header.magic != kMagic)
+        return Heap("wrong magic number");
+    if (header.root != nullpos) {
+        if (header.root < sizeof(Header) || header.root >= heap.used())
+            return Heap("bad root offset");
     }
-    if (heappos rootPos = header.root; rootPos != nullpos) {
-        if (rootPos < sizeof(Header) || rootPos >= heap.used()) {
-            std::cout << "Invalid Heap: bad root offset\n";
-            return Heap();
-        }
+    if (header.symbols != nullpos) {
+        if (header.symbols < sizeof(Header) || header.symbols >= heap.used())
+            return Heap("bad symbol table offset");
     }
     return heap;
 }
@@ -264,12 +266,12 @@ Block* Heap::growBlock(Block* block, heapsize newDataSize) {
 
 
 
-Block* Heap::firstBlock() {
-    auto b = (Block*)(_base + sizeof(Header));
+Block const* Heap::firstBlock() const{
+    auto b = (Block const*)(_base + sizeof(Header));
     return (byte*)b < _cur ? b : nullptr;
 }
 
-Block* Heap::nextBlock(Block *b) {
+Block const* Heap::nextBlock(Block const* b) const {
     b = b->nextBlock();
     return (byte*)b < _cur ? b : nullptr;
 }
@@ -299,8 +301,8 @@ void Heap::visitAll(BlockVisitor const& visitor) {
 }
 
 void Heap::visitBlocks(BlockVisitor visitor) {
-    for (auto obj = firstBlock(); obj; obj = nextBlock(obj))
-        obj->clearVisited();
+    for (auto b = firstBlock(); b; b = nextBlock(b))
+        const_cast<Block*>(b)->clearVisited();
 
     std::deque<Block*> stack;
 
@@ -331,6 +333,130 @@ void Heap::visitBlocks(BlockVisitor visitor) {
 }
 
 
+void Heap::visit(ObjectVisitor visitor) {
+    visitBlocks([&](Block const& block) { return visitor(Object(&block)); });
+}
+
+
+template <class T> static inline void _registerRoot(Heap const* self, std::vector<T*> &roots, T *ref) {
+    assert(ref->block() == nullptr || self->contains(ref->block()));
+    roots.push_back(ref);
+}
+template <class T> static inline void _unregisterRoot(std::vector<T*> &roots, T *ref) {
+    auto i = std::find(roots.rbegin(), roots.rend(), ref);
+    assert(i != roots.rend());
+    roots.erase(std::prev(i.base()));
+}
+
+void Heap::registerExternalRoot(Value *ref) const    {_registerRoot(this, _externalRootVals, ref);}
+void Heap::unregisterExternalRoot(Value* ref) const  {_unregisterRoot(_externalRootVals, ref);}
+void Heap::registerExternalRoot(Object *ref) const   {_registerRoot(this, _externalRootObjs, ref);}
+void Heap::unregisterExternalRoot(Object* ref) const {_unregisterRoot(_externalRootObjs, ref);}
+
+
+#pragma mark - HEAP VALIDATE & DUMP:
+
+
+const char* Heap::_validate() const {
+    if (capacity() < sizeof(Header) || capacity() < used())
+        return "Invalid size or used";
+    auto hdr = header();
+    if (hdr.magic != kMagic)
+        return "wrong magic number";
+    std::set<heappos> forwardRefs, backwardRefs;
+    unsigned maxForwards = 0, numBacks = 0;
+    if (hdr.root != nullpos) {
+        if (hdr.root < sizeof(Header) || hdr.root >= used())
+            return "invalid root offset";
+        forwardRefs.insert(hdr.root);
+    }
+    if (hdr.symbols != nullpos) {
+        if (hdr.symbols < sizeof(Header) || hdr.symbols >= used())
+            return "invalid symbol table offset";
+        forwardRefs.insert(hdr.symbols);
+    }
+
+    heappos nextFwdRef = forwardRefs.empty() ? _pos(_end) : *forwardRefs.begin();
+    Block const* first = firstBlock();
+    if (first) {
+        // Examine each block:
+        Block const* next;
+        for (auto block = first; block < (void*)_cur; block = next) {
+            // Validate block header:
+            if (const char* error = block->validate(); error)
+                return error;
+            // Validate size:
+            next = block->nextBlock();
+            if (next > (void*)_cur)
+                return "block overflows end of heap";
+
+            // See if this block resolves a forward ref:
+            if (auto blockPos = _pos(block); blockPos >= nextFwdRef) {
+                if (blockPos > nextFwdRef)
+                    return "there is an invalid (forward) pointer";
+                forwardRefs.erase(forwardRefs.begin());
+                nextFwdRef = forwardRefs.empty() ? _pos(_end) : *forwardRefs.begin();
+            }
+
+            // Scan the pointers in the block:
+            for (Val const& val : block->vals()) {
+                if (auto ptr = val.block()) {
+                    if (ptr < block) {
+                        // Backward ref:
+                        if (ptr < first)
+                            return "a pointer points outside the heap";
+                        backwardRefs.insert(_pos(ptr));
+                        numBacks++;
+                    } else if (ptr > next) {
+                        // Forward ref:
+                        if (ptr > (void*)_cur)
+                            return "a pointer points outside the heap";
+                        heappos ptrPos = _pos(ptr);
+                        forwardRefs.insert(ptrPos);
+                        nextFwdRef = std::min(nextFwdRef, ptrPos);
+                        maxForwards = std::max(maxForwards, unsigned(forwardRefs.size()));
+                    } else if (ptr > block && ptr < next) {
+                        return "a pointer points inside the object it belongs to";
+                    }
+                }
+            }
+        }
+
+        //std::cout << "There are " << backwardRefs.size() << " unique backward refs out of "
+        //          << numBacks << " total.\n";
+        if (!backwardRefs.empty()) {
+            // Iterate the blocks again to resolve the backward refs. For efficiency, do this by
+            // copying the refs in order into a vector; then step through the vector as we find them.
+            std::vector<heappos> backs(backwardRefs.begin(), backwardRefs.end());
+            backwardRefs.clear();
+            auto nextBack = backs.begin();
+            for (auto block = first; block < (void*)_cur; block = block->nextBlock()) {
+                if (heappos blockPos = _pos(block); blockPos == *nextBack) {
+                    if (++nextBack == backs.end())
+                        break;
+                } else if (blockPos > *nextBack) {
+                    return "there is a bad (backward) pointer within the heap";
+                }
+            }
+            if (nextBack != backs.end()) return "there are bad (backward) pointers within the heap";
+        }
+    }
+
+    if (!forwardRefs.empty()) return "there are bad (forward) pointers within the heap";
+    //std::cout << "Validation complete. There were max " << maxForwards << " forward refs being tracked.\n";
+    return nullptr;
+}
+
+bool Heap::validate() const {
+    if (const char* error = _validate()) {
+        _error = error;
+        std::cerr << "INVALID HEAP: " << error << std::endl;
+        return false;
+    }
+    return true;
+}
+
+
 void Heap::dump(std::ostream &out) {
     auto writeAddr = [&](const void *addr) -> std::ostream& {
         return out << addr << std::showpos << std::setw(8) << intpos(pos(addr))
@@ -353,6 +479,10 @@ void Heap::dump(std::ostream &out) {
         return true;
     });
 
+    unsigned blocks = 0;
+    unsigned byType[16] = {};
+    unsigned sizeByType[16] = {};
+    unsigned fwdLinks = 0, backLinks = 0, biggestPtr = 0, biggestPtrAt = 0;
 
     writeAddr(_base) << "--- HEAP BASE ---\n";
     visitAll([&](Block const& block) {
@@ -373,6 +503,25 @@ void Heap::dump(std::ostream &out) {
                                     << val.as<Dict>().capacity() << "]"; break;
             default:            out << val; break;
         }
+
+        ++blocks;
+        ++byType[int(val.type())];
+        sizeByType[int(val.type())] += block.blockSize();
+
+        for (auto& val : block.vals()) {
+            if (auto dstBlock = val.block(); dstBlock) {
+                if (dstBlock < &block)
+                    backLinks++;
+                else
+                    fwdLinks++;
+                auto distance = unsigned(abs((byte*)dstBlock - (byte*)&block));
+                if (distance > biggestPtr) {
+                    biggestPtr = distance;
+                    biggestPtrAt = unsigned(pos(&block));
+                }
+            }
+        }
+
         if (&block == rootBlock)
             out << "  <==ROOT";
         if (&block == symBlock)
@@ -381,33 +530,19 @@ void Heap::dump(std::ostream &out) {
             out << "  <--root";
         if (!block.isVisited())
             out << "  🞮";
+
         out << std::endl;
         return true;
     });
     writeAddr(_cur) << "--- cur ---\n";
-    writeAddr(_end) << "--- HEAP END ---\n";
+    writeAddr(_end) << "--- HEAP END ---\n" << blocks << " blocks:";
+    for (int t = 0; t < 16; t++) {
+        if (byType[t])
+            out << "  " << byType[t] << " " << TypeName(Type(t)) << "s (" << sizeByType[t] << " b)";
+    }
+    out << "\n" << fwdLinks << " forward pointers, " << backLinks << " backward pointers.\n";
+    out << "Longest pointer is " << biggestPtr << " bytes, at +" << biggestPtrAt << ".\n";
 }
-
-
-void Heap::visit(ObjectVisitor visitor) {
-    visitBlocks([&](Block const& block) { return visitor(Object(&block)); });
-}
-
-
-template <class T> static inline void _registerRoot(Heap const* self, std::vector<T*> &roots, T *ref) {
-    assert(ref->block() == nullptr || self->contains(ref->block()));
-    roots.push_back(ref);
-}
-template <class T> static inline void _unregisterRoot(std::vector<T*> &roots, T *ref) {
-    auto i = std::find(roots.rbegin(), roots.rend(), ref);
-    assert(i != roots.rend());
-    roots.erase(std::prev(i.base()));
-}
-
-void Heap::registerExternalRoot(Value *ref) const    {_registerRoot(this, _externalRootVals, ref);}
-void Heap::unregisterExternalRoot(Value* ref) const  {_unregisterRoot(_externalRootVals, ref);}
-void Heap::registerExternalRoot(Object *ref) const   {_registerRoot(this, _externalRootObjs, ref);}
-void Heap::unregisterExternalRoot(Object* ref) const {_unregisterRoot(_externalRootObjs, ref);}
 
 
 #pragma mark - CREATING OBJECTS:

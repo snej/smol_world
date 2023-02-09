@@ -35,7 +35,11 @@ public:
     /// Constructs a Heap from already-existing heap data. Throws if the data is not valid.
     static Heap existing(slice<byte> contents, size_t capacity);
 
-    bool valid() const                  {return _base != nullptr;}
+    /// Carefully checks a Heap for invalid metadata. Returns nullptr on success, else an error.
+    bool validate() const;
+
+    /// If the heap is invalid, returns an error message, else nullptr.
+    const char* invalid() const         {return _error;}
 
     const void*  base() const           {return _base;}         ///< Address of start of heap.
     const size_t capacity() const       {return _end - _base;}  ///< Maximum size it can grow to
@@ -163,27 +167,29 @@ private:
     struct Header;
 
     Heap();
+    explicit Heap(const char *error);
     Heap(void *base, size_t capacity, bool malloced);
-    Header& header()                {assert(_base); return *(Header*)_base;}
-    Header const& header() const    {assert(_base); return *(Header*)_base;}
-    void* _at(heappos off)          {return _base + uintpos(off);}
-    heappos _pos(const void *ptr) const {return heappos((byte*)ptr - _base);}
-    Value posToValue(heappos pos) const;
-    heappos valueToPos(Value obj) const;
+    Header& header() pure                {assert(_base); return *(Header*)_base;}
+    Header const& header() const pure    {assert(_base); return *(Header*)_base;}
+    void* _at(heappos off) pure         {return _base + uintpos(off);}
+    heappos _pos(const void *ptr) const pure {return heappos((byte*)ptr - _base);}
+    Value posToValue(heappos pos) const pure;
+    heappos valueToPos(Value obj) const pure;
     void registr();
     void unregistr();
     void clearForwarding();
     Heap const* enter() const;
     void exit() const;
     void exit(Heap const* newCurrent) const;
+    const char* _validate() const;
 
     // Allocates space without initializing it. Caller MUST initialize (see Block constructor)
     void* rawAlloc(heapsize size);
 
     void* rawAllocFailed(heapsize size);
 
-    Block* firstBlock();
-    Block* nextBlock(Block *obj);
+    Block const* firstBlock() const;
+    Block const* nextBlock(Block const*) const;
 
     Value symbolTableArray() const;
     void setSymbolTableArray(Value);
@@ -197,6 +203,7 @@ private:
     std::vector<Value*> mutable _externalRootVals;
     std::vector<Object*> mutable _externalRootObjs;
     std::unique_ptr<SymbolTable> _symbolTable;
+    mutable const char* _error = nullptr;
     bool    _malloced = false;
 };
 

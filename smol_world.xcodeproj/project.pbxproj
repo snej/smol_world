@@ -81,6 +81,7 @@
 		272AF615298C7CAE008943C3 /* stdint.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = stdint.h; sourceTree = "<group>"; };
 		272AF6172992F5EE008943C3 /* svg_menu.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = svg_menu.json; sourceTree = "<group>"; };
 		272AF6182992F619008943C3 /* twitter.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = twitter.json; sourceTree = "<group>"; };
+		272AF61929943C65008943C3 /* update-center.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "update-center.json"; sourceTree = "<group>"; };
 		2770B1AB297F1E7A00E2C126 /* Block.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Block.hh; sourceTree = "<group>"; };
 		2770B1AC297F1EDD00E2C126 /* slice.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = slice.hh; sourceTree = "<group>"; };
 		2770B1AE2980776400E2C126 /* GarbageCollector.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = GarbageCollector.hh; sourceTree = "<group>"; };
@@ -257,6 +258,7 @@
 			children = (
 				272AF6172992F5EE008943C3 /* svg_menu.json */,
 				272AF6182992F619008943C3 /* twitter.json */,
+				272AF61929943C65008943C3 /* update-center.json */,
 			);
 			path = data;
 			sourceTree = "<group>";

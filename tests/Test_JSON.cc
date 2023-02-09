@@ -67,12 +67,16 @@ static void testReadJSON(const char *path) {
 
     string err;
     Handle<Value> v = newFromJSON(readFile(path), heap, &err);
-    INFO("Error is '" << err << "'");
-    REQUIRE(v);
+    {
+        INFO("Error is '" << err << "'");
+        REQUIRE(v);
+    }
     Dict dict = v.as<Dict>();
     heap.setRoot(dict);
 
     heap.dump(cout);
+    heap.validate();
+    CHECK(heap.invalid() == nullptr);
 
     string json = toJSON(v);
     if (json.size() < 10000)
@@ -85,6 +89,8 @@ static void testReadJSON(const char *path) {
     GarbageCollector::run(heap);
 
     heap.dump(cout);
+    CHECK(heap.validate());
+
     string json2 = toJSON(v);
     if (json2.size() < 10000)
         cout << "As JSON: " << json2 << endl;
@@ -97,6 +103,11 @@ static void testReadJSON(const char *path) {
 
 TEST_CASE("Read Small JSON", "[object],[json]") {
     testReadJSON(JSON_TEST_DATA_DIR "svg_menu.json");
+}
+
+
+TEST_CASE("Read Med JSON", "[object],[json]") {
+    testReadJSON(JSON_TEST_DATA_DIR "update-center.json");
 }
 
 
