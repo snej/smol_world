@@ -49,7 +49,7 @@ GarbageCollector::~GarbageCollector() {
 
 void GarbageCollector::scanRoots() {
     assert(!_fromHeap._cannotGC);
-    
+
 #ifndef NDEBUG
     for (auto obj = _fromHeap.firstBlock(); obj; obj = _fromHeap.nextBlock(obj))
         assert(!obj->isForwarded());
@@ -101,9 +101,6 @@ Block* GarbageCollector::scan(Block *src) {
                 v = moveBlock(block);
             }
         }
-        // Some types need cleanup after this:
-        if (toScan->type() == Type::Dict)
-            Object(toScan)._as<Dict>().postGC();
 
         // And advance it to the next block in _toHeap:
         toScan = toScan->nextBlock();

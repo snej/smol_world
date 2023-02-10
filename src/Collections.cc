@@ -76,28 +76,31 @@ bool Vector::append(Value val) {
 #pragma mark - DICT:
 
 
-static bool keyCmp(DictEntry const& a, DictEntry const& b) {
-    return a.key.block() > b.key.block();   // reverse order
+Symbol::ID DictEntry::id() const {
+    return key ? key.as<Symbol>().id() : Symbol::ID::None;
 }
 
-static bool keyValueCmp(DictEntry const& a, Block const* b) {
-    return a.key.block() > b;   // reverse order
+
+static bool keyCmp(DictEntry const& a, DictEntry const& b) {
+    return a.id() > b.id();   // reverse order so nulls come last
+}
+
+static bool keyIDCmp(DictEntry const& a, Symbol::ID b) {
+    return a.id() > b;   // reverse order so nulls come last
 }
 
 DictEntry& DictEntry::operator=(DictEntry && other) {
-    (Val&)key = other.key;
+    (Val&)key = other.key; // override constness of `key`
     value = other.value;
     return *this;
 }
 
-void swap(DictEntry const&, DictEntry const&);
 
-
-
-// Returns the DictEntry with this key, or else the pos where it should go (DictEntry with next higher key),
+// Returns the DictEntry with this ID,
+// or else the pos where it should go (DictEntry with next higher key),
 // or else the end.
-static DictEntry* _findEntry(slice<DictEntry> entries, Block const* key) {
-    return (DictEntry*) std::lower_bound(entries.begin(), entries.end(), key, keyValueCmp);
+static DictEntry* _findEntry(slice<DictEntry> entries, Symbol::ID id) {
+    return (DictEntry*) std::lower_bound(entries.begin(), entries.end(), id, keyIDCmp);
 }
 
 
@@ -116,21 +119,23 @@ void Dict::dump(std::ostream& out) const {
 void Dict::dump() const {dump(std::cout);}
 
 
-
 void Dict::sort(size_t count) {
     std::sort(begin(), begin() + count, keyCmp);
 }
 
 
 slice<DictEntry> Dict::items() {
+    // The first null key is the end of the items:
     slice<DictEntry> all = _items();
-    return {all.begin(), _findEntry(all, nullptr)};
+    auto end = std::lower_bound(all.begin(), all.end(), Symbol::ID::None,
+                                [](DictEntry const& e, auto) {return !e.key.isNull();});
+    return {all.begin(), end};
 }
 
 
 Val* Dict::find(Symbol key) {
     slice<DictEntry> all = _items();
-    if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == Value(key))
+    if (DictEntry *ep = _findEntry(all, key.id()); ep != all.end() && ep->key == Value(key))
         return &ep->value;
     else
         return nullptr;
@@ -139,7 +144,7 @@ Val* Dict::find(Symbol key) {
 
 bool Dict::set(Symbol key, Value value, bool insertOnly) {
     slice<DictEntry> all = _items();
-    if (DictEntry *ep = _findEntry(all, key.block()); ep == all.end()) {
+    if (DictEntry *ep = _findEntry(all, key.id()); ep == all.end()) {
         return false;   // not found, and would go after last item (so dict must be full)
     } else if (ep->key == Value(key)) {
         if (insertOnly) return false;
@@ -169,7 +174,7 @@ bool Dict::replace(Symbol key, Value newValue) {
 
 bool Dict::remove(Symbol key) {
     slice<DictEntry> all = _items();
-    if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == Value(key)) {
+    if (DictEntry *ep = _findEntry(all, key.id()); ep != all.end() && ep->key == Value(key)) {
         for (auto p = ep + 1; p < all.end(); ++p) // can't use memmove bc of damned relative ptrs
             p[-1] = std::move(p[0]);
         new (&all.back()) DictEntry {};

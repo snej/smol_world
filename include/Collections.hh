@@ -70,7 +70,7 @@ Maybe<String> newString(std::string_view str, Heap &heap);
 /// The SymbolTable class manages Symbols.
 class Symbol : public Collection<char, Type::Symbol, Symbol> {
 public:
-    enum class ID : uint16_t { };
+    enum class ID : uint16_t { None = 0 };
 
     ID id() const                               {return *(ID*)rawBytes().begin();}
 
@@ -136,12 +136,13 @@ Maybe<Vector> newVector(slice<Val> vals, size_t capacity, Heap &heap);
 
 
 struct DictEntry {
-    Val const key;      // always a Symbol. Immutable.
+    Val const key;      // always a Symbol or null. Immutable.
     Val       value;
 
     DictEntry() { };
     DictEntry(DictEntry&& other) {*this = std::move(other);}
     DictEntry& operator=(DictEntry &&);
+    Symbol::ID id() const;
 };
 
 
@@ -171,11 +172,9 @@ public:
     void dump(std::ostream& out) const;
     void dump() const;
 
+private:
     void sort(size_t count);
     void sort()                                 {sort(capacity());}
-    void postGC()                               {sort();}   // GC changes the ordering of pointers
-
-private:
     bool set(Symbol key, Value value, bool insertOnly);
 };
 
