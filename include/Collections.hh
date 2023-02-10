@@ -70,7 +70,7 @@ Maybe<String> newString(std::string_view str, Heap &heap);
 /// The SymbolTable class manages Symbols.
 class Symbol : public Collection<char, Type::Symbol, Symbol> {
 public:
-    enum class ID : uint16_t { None = 0 };
+    enum class ID : uint16_t { None = 0xFFFF };
 
     ID id() const                               {return *(ID*)rawBytes().begin();}
 

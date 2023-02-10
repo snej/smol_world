@@ -44,7 +44,7 @@ using namespace std;
 
 std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap, heapsize capacity) {
     unless(table, HashSet::createArray(*heap, capacity)) {return nullptr;}
-    return std::make_unique<SymbolTable>(heap, table);
+    return std::unique_ptr<SymbolTable>(new SymbolTable(heap, table, true));
 }
 
 
@@ -63,16 +63,17 @@ std::unique_ptr<SymbolTable> SymbolTable::rebuild(Heap *heap) {
     if (!table) return table;
 
     // Now add all Symbols to the table:
-    Symbol::ID maxID = {};
+    int maxID = -1;
     bool ok = heap->visitAll([&](Block const& block) -> bool {
         if (block.type() == Type::Symbol) {
             Symbol symbol = Value(&block).as<Symbol>();
-            maxID = std::max(maxID, symbol.id());
+            maxID = std::max(maxID, int(symbol.id()));
             return table->_table.insert(symbol);
         }
         return true;
     });
-    table->_lastID = maxID;
+    assert(maxID < 0xFFFF);
+    table->_nextID = Symbol::ID(maxID + 1);
     if (!ok)
         return nullptr;
     return table;
@@ -83,27 +84,28 @@ SymbolTable::SymbolTable(Heap *heap, Array array, bool empty)
 :_table(*heap, array)
 {
     if (!empty) {
-        Symbol::ID maxID = {};
+        int maxID = -1;
         _table.visit([&](Value key, Value) {
-            maxID = std::max(maxID, key.as<Symbol>().id());
-            return true;
+           maxID = std::max(maxID, int(key.as<Symbol>().id()));
+           return true;
         });
-        _lastID = maxID;
+        assert(maxID < 0xFFFF);
+        _nextID = Symbol::ID(maxID + 1);
     }
 }
 
 
 
 Maybe<Symbol> SymbolTable::create(string_view str) {
-    auto id = Symbol::ID(uint16_t(_lastID) + 1);
-    assert(uint16_t(id) != 0); // overflow!
+    if (_nextID == Symbol::ID::None)
+        return nullvalue;           // Overflow!
     bool inserted = false;
     auto sym = _table.findOrInsert(str, [&](Heap &heap) {
         inserted = true;
-        return Maybe<Symbol>(Symbol::create(id, str, heap));
+        return Maybe<Symbol>(Symbol::create(_nextID, str, heap));
     });
     if (inserted) {
-        _lastID = id;
+        _nextID = Symbol::ID(unsigned(_nextID) + 1);
         _table.heap().setSymbolTableArray(_table.array());
     }
     return Maybe<Symbol>(sym);

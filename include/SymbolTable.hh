@@ -51,7 +51,7 @@ protected:
 private:
     SymbolTable(Heap *heap, Array array, bool empty);
     HashSet     _table;
-    Symbol::ID  _lastID {};
+    Symbol::ID  _nextID {0};
 };
 
 }

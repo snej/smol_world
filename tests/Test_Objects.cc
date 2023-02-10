@@ -245,7 +245,7 @@ TEST_CASE("Dicts", "[object]") {
     for (int i = 0; i < 11; ++i) {
         strs[i] = newSymbol(std::to_string(i), heap);
         CHECK(strs[i].value().str() == std::to_string(i));
-        CHECK(strs[i].value().id() == Symbol::ID(i + 1));
+        CHECK(strs[i].value().id() == Symbol::ID(i));
     }
     shuffle(strs+0, strs+11);
 

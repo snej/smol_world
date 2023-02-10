@@ -77,16 +77,16 @@ bool Vector::append(Value val) {
 
 
 Symbol::ID DictEntry::id() const {
-    return key ? key.as<Symbol>().id() : Symbol::ID::None;
+    return key ? key.as<Symbol>().id() : Symbol::ID::None; // `None` sorts higher than any Symbol ID
 }
 
 
 static bool keyCmp(DictEntry const& a, DictEntry const& b) {
-    return a.id() > b.id();   // reverse order so nulls come last
+    return a.id() < b.id();
 }
 
 static bool keyIDCmp(DictEntry const& a, Symbol::ID b) {
-    return a.id() > b;   // reverse order so nulls come last
+    return a.id() < b;
 }
 
 DictEntry& DictEntry::operator=(DictEntry && other) {
