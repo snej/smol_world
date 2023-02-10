@@ -48,6 +48,8 @@ GarbageCollector::~GarbageCollector() {
 
 
 void GarbageCollector::scanRoots() {
+    assert(!_fromHeap._cannotGC);
+    
 #ifndef NDEBUG
     for (auto obj = _fromHeap.firstBlock(); obj; obj = _fromHeap.nextBlock(obj))
         assert(!obj->isForwarded());

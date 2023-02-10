@@ -87,11 +87,11 @@ public:
     /// Copies a block, creating a new block with a larger size. The extra bytes are zeroed.
     /// @returns The new block; or the original if the new size is the same as the old;
     ///          or nullptr if the allocation failed.
-    Block* growBlock(Block* block, heapsize newDataSize);
+    Block* reallocBlock(Block* block, heapsize newDataSize);
 
     template <ObjectClass OBJ>
     Maybe<OBJ> grow(OBJ const& obj, heapsize newCapacity) {
-        Block* b = growBlock(obj.block(), newCapacity * sizeof(typename OBJ::Item));
+        Block* b = reallocBlock(obj.block(), newCapacity * sizeof(typename OBJ::Item));
         if (!b)
             return nullvalue;
         return Object(b).as<OBJ>();
@@ -101,7 +101,7 @@ public:
     /// It should attempt to increase the free space, then return true.
     /// If it can't do anything, it must return false.
     /// The typical things for the callback to do are garbage-collect or grow the heap.
-    using AllocFailureHandler = bool(*)(Heap*,heapsize sizeNeeded);
+    using AllocFailureHandler = bool(*)(Heap*, heapsize sizeNeeded, bool gcAllowed);
 
     /// Sets the allocation-failure handler. See @ref AllocFailureHandler for details.
     void setAllocFailureHandler(AllocFailureHandler h)  {_allocFailureHandler = h;}
@@ -133,6 +133,7 @@ public:
 
     SymbolTable const& symbolTable() const {return const_cast<Heap*>(this)->symbolTable();}
     SymbolTable& symbolTable();
+    void dropSymbolTable();
 
     using BlockVisitor = function_ref<bool(const Block&)>;
     using ObjectVisitor = function_ref<bool(const Object&)>;
@@ -142,7 +143,19 @@ public:
     void visit(ObjectVisitor);
 
     /// Calls the Visitor callback once for each object, even if it's unreachable (garbage).
-    void visitAll(BlockVisitor const&);
+    template <typename FN>
+    bool visitAll(FN visitor) {
+        bool result = true;
+        preventGCDuring([&]{
+            for (auto b = firstBlock(); b; b = nextBlock(b)) {
+                if (!visitor(*b)) {
+                    result = false;
+                    break;
+                }
+            }
+        });
+        return result;
+    }
 
     /// Calls the Visitor callback once for each known garbage-collection root.
     /// This includes the heap's root, its SymbolTable's array, and any registered external roots.
@@ -196,6 +209,14 @@ private:
 
     void swapMemoryWith(Heap&);
 
+    template <typename FN>
+    void preventGCDuring(FN fn) {
+        bool couldntGC = _cannotGC;
+        _cannotGC = true;
+        fn();
+        _cannotGC = couldntGC;
+    }
+
     byte*   _base;
     byte*   _end;
     byte*   _cur;
@@ -205,6 +226,8 @@ private:
     std::unique_ptr<SymbolTable> _symbolTable;
     mutable const char* _error = nullptr;
     bool    _malloced = false;
+    bool    _mayHaveSymbols = false;
+    bool    _cannotGC = false;
 };
 
 

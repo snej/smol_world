@@ -41,15 +41,38 @@ using namespace std;
  implement Robin Hood hashing.
  */
 
-// Initial capacity of hash table (number of symbols it can hold before growing.)
-static constexpr heapsize kInitialCapacity = 32;
 
-
-std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap) {
-    if_let(table, newArray(2 * kInitialCapacity, *heap))
+std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap, heapsize capacity) {
+    unless(table, HashSet::createArray(*heap, capacity)) {return nullptr;}
     return std::make_unique<SymbolTable>(heap, table);
-    else
+}
+
+
+std::unique_ptr<SymbolTable> SymbolTable::rebuild(Heap *heap) {
+    // Pre-count the number of symbols:
+    unsigned count = 0;
+    heap->visitAll([&](Block const& block) -> bool {
+        if (block.type() == Type::Symbol)
+            ++count;
+        return true;
+    });
+
+    // Create a big-enough table. We don't want the table to have to grow during the following
+    // `visitAll`, because that might trigger GC and relocate the heap during iteration...
+    auto table = SymbolTable::create(heap, std::max(count + 1, kInitialCapacity));
+    if (!table) return table;
+
+    // Now add all Symbols to the table:
+    bool ok = heap->visitAll([&](Block const& block) -> bool {
+        if (block.type() == Type::Symbol) {
+            Symbol symbol = Value(&block).as<Symbol>();
+            return table->_table.insert(symbol);
+        }
+        return true;
+    });
+    if (!ok)
         return nullptr;
+    return table;
 }
 
 

@@ -82,6 +82,9 @@ static void testReadJSON(const char *path) {
     if (json.size() < 10000)
         cout << "As JSON: " << json << endl;
 
+    auto numSymbols = heap.symbolTable().size();
+    heap.dropSymbolTable();
+
     cout << "Heap space used is " << heap.used() << " bytes; JSON is " << json.size()
          << " ... " << (heap.used() / double(json.size()) * 100.0) << "%\n";
 
@@ -98,6 +101,9 @@ static void testReadJSON(const char *path) {
          << " ... " << (heap.used() / double(json.size()) * 100.0) << "%\n";
     REQUIRE(json2.size() == json.size());
     // TODO: Compare equality; that will require canonical Dict ordering
+
+    cout << "Recovered " << heap.symbolTable().size() << " Symbols.\n";
+    CHECK(heap.symbolTable().size() == numSymbols);
 }
 
 

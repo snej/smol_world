@@ -82,6 +82,11 @@ void Heap::swapMemoryWith(Heap &h) {
     // _allocFailureHandle and _externalRoots are not swapped, they belong to the Heap itself.
 }
 
+Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
+void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
+Heap* Heap::current()               {return (Heap*)sCurHeap;}
+
+
 void Heap::registr() {
     if (_base)
         sKnownHeaps.push_back(this);
@@ -125,6 +130,7 @@ Heap Heap::existing(slice<byte> contents, size_t capacity) {
         return Heap("invalid size or capacity");
     Heap heap(contents.begin(), capacity, false);
     heap._cur = contents.end();
+    heap._mayHaveSymbols = true;
 
     auto header = heap.header();
     if (header.magic != kMagic)
@@ -140,7 +146,7 @@ Heap Heap::existing(slice<byte> contents, size_t capacity) {
     return heap;
 }
 
-bool Heap::validPos(heappos pos) const    {return pos >= sizeof(Header) && pos < used();}
+bool Heap::validPos(heappos pos) const          {return pos >= sizeof(Header) && pos < used();}
 
 Value Heap::posToValue(heappos pos) const {
     if (pos == nullpos)
@@ -153,28 +159,54 @@ heappos Heap::valueToPos(Value obj) const {
 }
 
 
+#pragma mark - ROOTS & SYMBOL TABLE:
+
+
 Maybe<Object> Heap::root() const                {return posToValue(header().root).maybeAs<Object>();}
 void Heap::setRoot(Maybe<Object> root)          {header().root = valueToPos(root);}
 Value Heap::symbolTableArray() const            {return posToValue(header().symbols);}
 void Heap::setSymbolTableArray(Value v)         {header().symbols = valueToPos(v);}
 
 
-Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
-void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
-Heap* Heap::current()               {return (Heap*)sCurHeap;}
+template <class T> static inline void _registerRoot(Heap const* self, std::vector<T*> &roots, T *ref) {
+    assert(ref->block() == nullptr || self->contains(ref->block()));
+    roots.push_back(ref);
+}
+template <class T> static inline void _unregisterRoot(std::vector<T*> &roots, T *ref) {
+    auto i = std::find(roots.rbegin(), roots.rend(), ref);
+    assert(i != roots.rend());
+    roots.erase(std::prev(i.base()));
+}
+
+void Heap::registerExternalRoot(Value *ref) const    {_registerRoot(this, _externalRootVals, ref);}
+void Heap::unregisterExternalRoot(Value* ref) const  {_unregisterRoot(_externalRootVals, ref);}
+void Heap::registerExternalRoot(Object *ref) const   {_registerRoot(this, _externalRootObjs, ref);}
+void Heap::unregisterExternalRoot(Object* ref) const {_unregisterRoot(_externalRootObjs, ref);}
 
 
 SymbolTable& Heap::symbolTable() {
     if (!_symbolTable) {
         if_let(symbols, symbolTableArray().maybeAs<Array>()) {
             _symbolTable = std::make_unique<SymbolTable>(this, symbols);
+        } else if (_mayHaveSymbols) {
+            _symbolTable = SymbolTable::rebuild(this);
         } else {
             _symbolTable = SymbolTable::create(this);
+            _mayHaveSymbols = true;
         }
         //FIXME: What if this fails?
     }
     return *_symbolTable;
 }
+
+
+void Heap::dropSymbolTable() {
+    _symbolTable.reset();
+    header().symbols = nullpos;
+}
+
+
+#pragma mark - ALLOCATION:
 
 
 void* Heap::rawAlloc(heapsize size) {
@@ -194,8 +226,11 @@ void* Heap::rawAllocFailed(heapsize size) {
     if (_allocFailureHandler) {
         while(true) {
             std::cerr << "** Heap full: " << size << " bytes requested, only "
-            << avail << " available -- invoking failure handler **\n";
-            if (!_allocFailureHandler(this, size))
+                      << avail << " available";
+            if (_cannotGC)
+                std::cerr << ", CANNOT GC!";
+            std::cerr << " -- invoking failure handler **\n";
+            if (!_allocFailureHandler(this, size, !_cannotGC))
                 break;
             auto oldAvail = avail;
             avail = available();
@@ -215,7 +250,7 @@ void* Heap::rawAllocFailed(heapsize size) {
         }
     }
     std::cerr << "** Heap allocation failed: " << size << " bytes requested, only "
-    << avail << " available **\n";
+              << avail << " available **\n";
     return nullptr;
 }
 
@@ -244,7 +279,7 @@ Block* Heap::allocBlock(heapsize size, Type type, slice<byte> contents) {
 }
 
 
-Block* Heap::growBlock(Block* block, heapsize newDataSize) {
+Block* Heap::reallocBlock(Block* block, heapsize newDataSize) {
     auto data = block->data();
     if (newDataSize == data.size())
         return block;
@@ -265,6 +300,8 @@ Block* Heap::growBlock(Block* block, heapsize newDataSize) {
 }
 
 
+#pragma mark - ITERATION / VISITING:
+
 
 Block const* Heap::firstBlock() const{
     auto b = (Block const*)(_base + sizeof(Header));
@@ -278,80 +315,62 @@ Block const* Heap::nextBlock(Block const* b) const {
 
 
 void Heap::visitRoots(BlockVisitor const& visitor) {
-    auto &header = this->header();
-    if (header.root != nullpos)
-        if (!visitor(*(Block*)at(header.root))) return;
-    if (header.symbols != nullpos)
-        if (!visitor(*(Block*)at(header.symbols))) return;
-    for (Object *refp : _externalRootObjs) {
-        if (auto block = refp->block())
-            if (!visitor(*block)) return;
-    }
-    for (Value *refp : _externalRootVals) {
-        if (auto block = refp->block())
-            if (!visitor(*block)) return;
-    }
+    preventGCDuring([&]{
+        auto &header = this->header();
+        if (header.root != nullpos)
+            if (!visitor(*(Block*)at(header.root))) return;
+        if (header.symbols != nullpos)
+            if (!visitor(*(Block*)at(header.symbols))) return;
+        for (Object *refp : _externalRootObjs) {
+            if (auto block = refp->block())
+                if (!visitor(*block)) return;
+        }
+        for (Value *refp : _externalRootVals) {
+            if (auto block = refp->block())
+                if (!visitor(*block)) return;
+        }
+    });
 }
 
-
-void Heap::visitAll(BlockVisitor const& visitor) {
-    for (auto b = firstBlock(); b; b = nextBlock(b))
-        if (!visitor(*b))
-            break;
-}
 
 void Heap::visitBlocks(BlockVisitor visitor) {
-    for (auto b = firstBlock(); b; b = nextBlock(b))
-        const_cast<Block*>(b)->clearVisited();
-
-    std::deque<Block*> stack;
-
-    auto processBlock = [&](Block *b) -> bool {
-        assert(contains(b) && (void*)b >= &header()+1);
-        if (!b->isVisited()) {
-            b->setVisited();
-            if (!visitor(*b))
-                return false;
-            if (TypeIs(b->type(), TypeSet::Container) && b->dataSize() > 0)
-                stack.push_back(b);
+    preventGCDuring([&]{
+        for (auto b = firstBlock(); b; b = nextBlock(b))
+            const_cast<Block*>(b)->clearVisited();
+        
+        std::deque<Block*> stack;
+        
+        auto processBlock = [&](Block *b) -> bool {
+            assert(contains(b) && (void*)b >= &header()+1);
+            if (!b->isVisited()) {
+                b->setVisited();
+                if (!visitor(*b))
+                    return false;
+                if (TypeIs(b->type(), TypeSet::Container) && b->dataSize() > 0)
+                    stack.push_back(b);
+            }
+            return true;
+        };
+        
+        visitRoots([&](Block const& block) {
+            return processBlock(const_cast<Block*>(&block));
+        });
+        
+        while (!stack.empty()) {
+            Block *b = stack.front();
+            stack.pop_front();
+            for (Val const& val : b->vals()) {
+                if (Block *block = val.block(); block && !processBlock(block))
+                    return;
+            }
         }
-        return true;
-    };
-
-    visitRoots([&](Block const& block) {
-        return processBlock(const_cast<Block*>(&block));
     });
-
-    while (!stack.empty()) {
-        Block *b = stack.front();
-        stack.pop_front();
-        for (Val const& val : b->vals()) {
-            if (Block *block = val.block(); block && !processBlock(block))
-                return;
-        }
-    }
 }
 
 
 void Heap::visit(ObjectVisitor visitor) {
     visitBlocks([&](Block const& block) { return visitor(Object(&block)); });
 }
-
-
-template <class T> static inline void _registerRoot(Heap const* self, std::vector<T*> &roots, T *ref) {
-    assert(ref->block() == nullptr || self->contains(ref->block()));
-    roots.push_back(ref);
-}
-template <class T> static inline void _unregisterRoot(std::vector<T*> &roots, T *ref) {
-    auto i = std::find(roots.rbegin(), roots.rend(), ref);
-    assert(i != roots.rend());
-    roots.erase(std::prev(i.base()));
-}
-
-void Heap::registerExternalRoot(Value *ref) const    {_registerRoot(this, _externalRootVals, ref);}
-void Heap::unregisterExternalRoot(Value* ref) const  {_unregisterRoot(_externalRootVals, ref);}
-void Heap::registerExternalRoot(Object *ref) const   {_registerRoot(this, _externalRootObjs, ref);}
-void Heap::unregisterExternalRoot(Object* ref) const {_unregisterRoot(_externalRootObjs, ref);}
 
 
 #pragma mark - HEAP VALIDATE & DUMP:
@@ -482,7 +501,9 @@ void Heap::dump(std::ostream &out) {
     unsigned blocks = 0;
     unsigned byType[16] = {};
     unsigned sizeByType[16] = {};
-    unsigned fwdLinks = 0, backLinks = 0, biggestPtr = 0, biggestPtrAt = 0;
+    unsigned fwdLinks = 0, backLinks = 0;
+    intpos biggestPtr = 0;
+    heappos biggestPtrAt = nullpos;
 
     writeAddr(_base) << "--- HEAP BASE ---\n";
     visitAll([&](Block const& block) {
@@ -514,10 +535,10 @@ void Heap::dump(std::ostream &out) {
                     backLinks++;
                 else
                     fwdLinks++;
-                auto distance = unsigned(abs((byte*)dstBlock - (byte*)&block));
-                if (distance > biggestPtr) {
+                intpos distance = intpos((byte*)dstBlock - (byte*)&block);
+                if (abs(distance) > abs(biggestPtr)) {
                     biggestPtr = distance;
-                    biggestPtrAt = unsigned(pos(&block));
+                    biggestPtrAt = pos(&block);
                 }
             }
         }
@@ -541,7 +562,7 @@ void Heap::dump(std::ostream &out) {
             out << "  " << byType[t] << " " << TypeName(Type(t)) << "s (" << sizeByType[t] << " b)";
     }
     out << "\n" << fwdLinks << " forward pointers, " << backLinks << " backward pointers.\n";
-    out << "Longest pointer is " << biggestPtr << " bytes, at +" << biggestPtrAt << ".\n";
+    out << "Farthest pointer is " << biggestPtr << " bytes, at " << uintpos(biggestPtrAt) << ".\n";
 }
 
 

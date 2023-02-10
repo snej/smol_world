@@ -15,8 +15,14 @@ namespace snej::smol {
 
 class SymbolTable {
 public:
+    /// Default initial capacity of hash table (number of symbols it can hold before growing.)
+    static constexpr heapsize kInitialCapacity = 20;
+
     /// Creates a new empty SymbolTabe for a Heap.
-    static std::unique_ptr<SymbolTable> create(Heap *heap);
+    static std::unique_ptr<SymbolTable> create(Heap *heap, heapsize capacity = kInitialCapacity);
+
+    /// Creates a new SymbolTabe that scans the Heap and adds all existing Symbol objects.
+    static std::unique_ptr<SymbolTable> rebuild(Heap *heap);
 
     /// Constructs a SymbolTable for a Heap, with an already existing array backing store.
     SymbolTable(Heap *heap, Array array)                :_table(*heap, array) { }
@@ -43,8 +49,6 @@ protected:
     void setHeap(Heap& h)                               {_table.setHeap(h);}
 
 private:
-    bool grow();
-
     HashSet   _table;
 };
 

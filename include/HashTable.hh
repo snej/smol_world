@@ -102,10 +102,14 @@ public:
 
     explicit HashSet(Heap &heap, Array array)     :HashSet(heap, array, true) { }
 
-    /// Returns the existing value for this key, if any.
+    /// Returns the existing key equal to this string, if any.
     Value find(std::string_view str) const;
 
-    /// Returns the existing value for this key; else calls the `creator` function,
+    /// Inserts a key, but only if there's no existing one.
+    /// Returns false if it's a duplicate, or if growing the table failed.
+    bool insert(Value key)          {return HashTable::insert(key, computeHash(key), nullvalue);}
+
+    /// Returns the existing key equal to this string; else calls the `creator` function,
     /// which should return `Value`, and adds the resulting value.
     /// Returns null if the creator function returned null, or if growing the table failed.
     template <typename FN>
@@ -115,7 +119,7 @@ public:
             return entry[_size];
         } else {
             Value symbol = creator(*_heap);
-            if (!insert(symbol, hashCode, entry, nullvalue))
+            if (!HashTable::insert(symbol, hashCode, entry, nullvalue))
                 symbol = nullvalue;
             return symbol;
         }
