@@ -70,10 +70,10 @@ public:
         if (length <= kMaxStringDedupSize) {
             ++_numShortStrings;
             string = _strings.findOrInsert(string_view(str,length), [&](Heap& heap) {
-                return newString(str, length, heap);
+                return newString({str, length}, heap);
             });
         } else {
-            string = newString(str, length, _heap);
+            string = newString({str, length}, _heap);
         }
         return addValue(string);
     }
@@ -106,7 +106,7 @@ public:
     }
 
     bool Key(const char* str, rapidjson::SizeType length, bool /*copy*/) {
-        unless(key, newSymbol(str, length, _heap)) {return false;}
+        unless(key, newSymbol({str, length}, _heap)) {return false;}
         _keys.push_back(key);
         return true;
     }

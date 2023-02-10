@@ -242,8 +242,11 @@ TEST_CASE("Dicts", "[object]") {
     srandomdev();
 
     Maybe<Symbol> strs[11];
-    for (int i = 0; i < 11; ++i)
+    for (int i = 0; i < 11; ++i) {
         strs[i] = newSymbol(std::to_string(i), heap);
+        CHECK(strs[i].value().str() == std::to_string(i));
+        CHECK(strs[i].value().id() == Symbol::ID(i + 1));
+    }
     shuffle(strs+0, strs+11);
 
     for (int len = 0; len <= 10; ++len) {

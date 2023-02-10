@@ -12,8 +12,8 @@
 namespace snej::smol {
 
 
-/// Abstract base of String, Symbol, Blob, Array, Dict
-template <typename ITEM, Type TYPE>
+/// Abstract base of String, Symbol, Blob, Array, Vector, Dict.
+template <typename ITEM, Type TYPE, class Subclass>
 class Collection : public Object {
 public:
     using Item = ITEM;
@@ -22,58 +22,79 @@ public:
 
     static constexpr heapsize MaxCount = (Block::MaxSize / sizeof(Item)) - 1;
 
-    slice<Item> items()             {return slice_cast<Item>(this->rawBytes());}// Vector & Dict
-    slice<Item> items() const       {return slice_cast<Item>(this->rawBytes());}// "override" these
+    // These are "mixin" methods that call and depend on the _subclass's_ implementation of
+    // `items`.
+    // The `capacity` method defaults to returning the objects' entire size, but can be overridden.
 
-    heapsize capacity() const       {return items().size();}
-    heapsize size() const           {return capacity();}        // Vector & Dict "override" this
-    bool empty() const              {return size() == 0;}
+    heapsize capacity() const                   {return _capacity();}
+    heapsize size() const                       {return ((Subclass*)this)->items().size();}
+    bool empty() const                          {return size() == 0;}
+    bool full() const                           {return size() == ((Subclass*)this)->capacity();}
 
     using iterator = Item*;
-    iterator begin()                {return items().begin();}
-    iterator end()                  {return items().end();}
+    iterator begin()                            {return ((Subclass*)this)->items().begin();}
+    iterator end()                              {return ((Subclass*)this)->items().end();}
 
     using const_iterator = const Item*;
-    const_iterator begin() const    {return items().begin();}
-    const_iterator end() const      {return items().end();}
+    const_iterator begin() const                {return ((Subclass*)this)->items().begin();}
+    const_iterator end() const                  {return ((Subclass*)this)->items().end();}
 
+    Item& operator[] (heapsize i)               {return ((Subclass*)this)->items()[i];}
+    Item const& operator[] (heapsize i) const   {return ((Subclass*)this)->items()[i];}
+
+protected:
     Collection() = delete; // (these aren't constructed. See newObject() in Heap.cc)
+
+    // Default versions that assume the entire object capacity is in use:
+    heapsize _capacity() const                  {return _items().size();}
+    slice<Item> _items()                        {return slice_cast<Item>(this->rawBytes());}
+    slice<Item> _items() const                  {return slice_cast<Item>(this->rawBytes());}
 };
 
 
 
 /// A string object. Stores UTF-8 characters. Not zero-terminated.
-class String : public Collection<char, Type::String> {
+class String : public Collection<char, Type::String, String> {
 public:
-    const char* data() const        {return begin();}
-    std::string_view str() const    {return {begin(), size()};}
+    std::string_view str() const pure           {return {begin(), size()};}
+
+    slice<char> items()                         {return _items();}
+    slice<char> items() const                   {return const_cast<String*>(this)->items();}
 };
 
 Maybe<String> newString(std::string_view str, Heap &heap);
-Maybe<String> newString(const char *str, size_t length, Heap &heap);
 
 
 
-/// A unique string: there is only one Symbol in a Heap with any specific string value.
+/// A unique identifier. Has a string and a 16-bit integer, both unique in this Heap.
 /// The SymbolTable class manages Symbols.
-class Symbol : public String {
+class Symbol : public Collection<char, Type::Symbol, Symbol> {
 public:
-    static constexpr enum Type Type = Type::Symbol;
-    static bool HasType(enum Type t) {return t == Type;}
+    enum class ID : uint16_t { };
+
+    ID id() const                               {return *(ID*)rawBytes().begin();}
+
+    std::string_view str() const pure           {return {begin(), size()};}
+
+    inline slice<char> items()                  {return _items().moveStart(sizeof(ID));}
+    slice<char> items() const                   {return const_cast<Symbol*>(this)->items();}
 
 private:
     friend class SymbolTable;
-    static Value create(std::string_view str, Heap &heap);
+    static Value create(ID, std::string_view str, Heap &heap); // only SymbolTable calls this
 };
 
 Maybe<Symbol> newSymbol(std::string_view str, Heap &heap);
-Maybe<Symbol> newSymbol(const char *str, size_t length, Heap &heap);
+
 
 
 /// A blob object ... just like a String but with `byte` instead of `char`.
-class Blob : public Collection<byte, Type::Blob> {
+class Blob : public Collection<byte, Type::Blob, Blob> {
 public:
     slice<byte> bytes() const                   {return items();}
+
+    slice<byte> items()                         {return _items();}
+    slice<byte> items() const                   {return const_cast<Blob*>(this)->items();}
 };
 
 Maybe<Blob> newBlob(size_t capacity, Heap &heap);
@@ -81,10 +102,10 @@ Maybe<Blob> newBlob(const void *data, size_t size, Heap &heap);
 
 
 /// A fixed-size array of `Val`s.
-class Array : public Collection<Val, Type::Array> {
+class Array : public Collection<Val, Type::Array, Array> {
 public:
-    Val& operator[] (heapsize i)                {return items()[i];}
-    Val const&  operator[] (heapsize i) const   {return items()[i];}
+    slice<Val> items()                          {return _items();}
+    slice<Val> items() const                    {return const_cast<Array*>(this)->items();}
 };
 
 Maybe<Array> newArray(heapsize size, Heap &heap);
@@ -94,28 +115,19 @@ Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap);
 
 
 /// A variable-size array of `Val`s. Uses an additional slot to store the current size.
-class Vector : public Collection<Val, Type::Vector> {
+class Vector : public Collection<Val, Type::Vector, Vector> {
 public:
-    heapsize capacity() const pure              {return Collection::capacity() - 1;}
-    heapsize size() const pure                  {return Collection::begin()->asInt();}
-    bool empty() const                          {return size() == 0;}
-    bool full() const                           {return size() == capacity();}
+    heapsize capacity() const pure              {return _capacity() - 1;}
+    heapsize size() const pure                  {return _items()[0].asInt();}
 
-    iterator begin()                            {return Collection::begin() + 1;}
-    iterator end()                              {return Collection::end();}
-    const_iterator begin() const                {return Collection::begin() + 1;}
-    const_iterator end() const                  {return Collection::end();}
-
-    slice<Val> items() const                    {return {(Val*)begin(), size()};}
-    Val& operator[] (heapsize i)                {return Collection::items()[i + 1];}
-    Val const&  operator[] (heapsize i) const   {return Collection::items()[i + 1];}
+    slice<Val> items()                          {return {_items().begin() + 1, size()};}
+    slice<Val> items() const                    {return const_cast<Vector*>(this)->items();}
 
     bool insert(Value, heapsize pos);
     bool append(Value);
     void clear()                                {_setSize(0);}
-    
+
 private:
-    slice<Val> allItems() const                 {return Collection::items();}
     void _setSize(heapsize);
 };
 
@@ -136,51 +148,39 @@ struct DictEntry {
 /// A key-value mapping.
 /// Keys can be anything but null, and are compared by identity (i.e. two Strings with the same
 /// contents are not the same key!) Values can be anything including null.
-class Dict : public Collection<DictEntry, Type::Dict> {
+class Dict : public Collection<DictEntry, Type::Dict, Dict> {
 public:
-    heapsize capacity() const           {return Collection::capacity();}
-    bool full() const                   {return capacity() == 0 || (endAll() - 1)->key != nullval;}
-    bool empty() const                  {return capacity() == 0 || begin()->key == nullval;}
-    heapsize size() const               {return heapsize(items().size());} // "overridden"
+    bool full() const                           {return capacity() == 0 || _items().end()[-1].key;}
+    bool empty() const                          {return capacity() == 0 || begin()->key == nullval;}
+
+    slice<DictEntry> items();
+    slice<DictEntry> items() const              {return const_cast<Dict*>(this)->items();}
 
     Val* find(Symbol key);
-    const Val* find(Symbol key) const    {return const_cast<Dict*>(this)->find(key);}
-    Value get(Symbol key) const          {auto v = find(key); return v ? Value(*v) : nullptr;}
-    bool contains(Symbol key) const      {return find(key) != nullptr;}
+    const Val* find(Symbol key) const           {return const_cast<Dict*>(this)->find(key);}
+    Value get(Symbol key) const                 {auto v = find(key); return v ? Value(*v) :nullptr;}
+    bool contains(Symbol key) const             {return find(key) != nullptr;}
 
-    bool set(Symbol key, Value newValue)     {return set(key, newValue, false);}
-    bool insert(Symbol key, Value newValue)  {return set(key, newValue, true);}
+    bool set(Symbol key, Value newValue)        {return set(key, newValue, false);}
+    bool insert(Symbol key, Value newValue)     {return set(key, newValue, true);}
     bool replace(Symbol key, Value newValue);
     bool remove(Symbol key);
 
-    Value operator[] (Symbol key) const  {return get(key);}
-
-    slice<DictEntry> items() const;
-
-    iterator begin()                    {return allItems().begin();}
-    iterator end()                      {return items().end();} // redefined items()
-    const_iterator begin() const        {return const_cast<Dict*>(this)->begin();}
-    const_iterator end() const          {return const_cast<Dict*>(this)->end();}
+    Value operator[] (Symbol key) const         {return get(key);}
 
     void dump(std::ostream& out) const;
     void dump() const;
 
     void sort(size_t count);
-    void sort()                         {sort(capacity());}
-    void postGC()                       {sort();}   // GC changes the ordering of pointers
+    void sort()                                 {sort(capacity());}
+    void postGC()                               {sort();}   // GC changes the ordering of pointers
 
 private:
-    slice<DictEntry> allItems() const               {return Collection::items();}
-    const_iterator endAll() const                   {return begin() + capacity();}
     bool set(Symbol key, Value value, bool insertOnly);
 };
 
 Maybe<Dict> newDict(heapsize capacity, Heap &heap);
 
-
-
-std::ostream& operator<<(std::ostream&, String const&);
-std::ostream& operator<<(std::ostream&, Array const&);
 
 
 template <typename FN>

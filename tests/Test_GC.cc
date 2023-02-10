@@ -74,7 +74,8 @@ TEST_CASE("GC", "[gc]") {
 TEST_CASE("GC On Demand", "[gc]") {
     Heap heap(100000);
     UsingHeap u(heap);
-    heap.setAllocFailureHandler([](Heap* heap, heapsize sizeNeeded) {
+    heap.setAllocFailureHandler([](Heap* heap, heapsize sizeNeeded, bool gcAllowed) {
+        CHECK(gcAllowed);
         cout << "** GC **\n";
         GarbageCollector::run(*heap);
         heap->dump(cout); //TEMP

@@ -25,7 +25,7 @@ public:
     static std::unique_ptr<SymbolTable> rebuild(Heap *heap);
 
     /// Constructs a SymbolTable for a Heap, with an already existing array backing store.
-    SymbolTable(Heap *heap, Array array)                :_table(*heap, array) { }
+    SymbolTable(Heap *heap, Array array)                :SymbolTable(heap, array, false) { }
 
     /// The number of symbols in the table
     uint32_t size() const                               {return _table.count();}
@@ -49,7 +49,9 @@ protected:
     void setHeap(Heap& h)                               {_table.setHeap(h);}
 
 private:
-    HashSet   _table;
+    SymbolTable(Heap *heap, Array array, bool empty);
+    HashSet     _table;
+    Symbol::ID  _lastID {};
 };
 
 }

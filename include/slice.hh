@@ -38,7 +38,9 @@ struct slice {
         return {_begin + i, size};
     }
 
-    slice<T> upTo(uint32_t i)           {return {_begin, std::min(i, _size)};}
+    slice<T> upTo(uint32_t i) const     {return {_begin, std::min(i, _size)};}
+
+    slice<T> moveStart(uint32_t i) const {assert(i <= _size); return {_begin + i, _size - i};}
 
     void moveTo(T* addr)                {assert(addr); _begin = addr;}
 

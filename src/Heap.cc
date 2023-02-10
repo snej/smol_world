@@ -638,21 +638,12 @@ Value newNumber(double d, Heap &heap) {
 }
 
 Maybe<String> newString(std::string_view str, Heap &heap) {
-    return newString(str.data(), str.size(), heap);
-}
-Maybe<String> newString(const char *str, size_t length, Heap &heap) {
-    return newObject<String>({(char*)str, length}, heap);
+    return newObject<String>({(char*)str.data(), str.size()}, heap);
 }
 
 
-Value Symbol::create(std::string_view str, Heap &heap) {
-    return newObject<Symbol>({(char*)str.data(), str.size()}, heap);
-}
 Maybe<Symbol> newSymbol(std::string_view str, Heap &heap) {
     return heap.symbolTable().create(str);
-}
-Maybe<Symbol> newSymbol(const char *str, size_t length, Heap &heap) {
-    return newSymbol(std::string_view(str, length), heap);
 }
 
 

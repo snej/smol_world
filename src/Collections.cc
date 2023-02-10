@@ -17,10 +17,25 @@
 //
 
 #include "Collections.hh"
+#include "Heap.hh"
 #include <iomanip>
 #include <iostream>
 
 namespace snej::smol {
+
+
+#pragma mark - SYMBOL:
+
+
+Value Symbol::create(ID id, std::string_view str, Heap &heap) {
+    Block *block = heap.allocBlock(heapsize(sizeof(ID) + str.size()), Type::Symbol);
+    if (!block)
+        return nullptr;
+    auto dst = block->data();
+    memcpy(&dst[0], &id, sizeof(ID));
+    memcpy(&dst[sizeof(ID)], str.data(), str.size());
+    return Value(block);
+}
 
 
 #pragma mark - VECTOR:
@@ -28,7 +43,7 @@ namespace snej::smol {
 
 void Vector::_setSize(heapsize sz) {
     assert(sz <= capacity());
-    *Collection::begin() = int(sz);
+    _items().begin()[0] = int(sz);
 }
 
 bool Vector::insert(Value val, heapsize pos) {
@@ -51,7 +66,7 @@ bool Vector::append(Value val) {
     if (auto sz = size(); sz >= capacity()) {
         return false;
     } else {
-        allItems()[sz + 1] = val;
+        _items()[sz + 1] = val;
         _setSize(sz + 1);
         return true;
     }
@@ -88,7 +103,7 @@ static DictEntry* _findEntry(slice<DictEntry> entries, Block const* key) {
 
 void Dict::dump(std::ostream& out) const {
     std::string_view prefix = "\t[";
-    for (auto &entry : allItems()) {
+    for (auto &entry : _items()) {
         out << prefix << std::setw(10) << (void*)entry.key.block() << " " << entry.key
         << " = " << entry.value;
         prefix = "\n\t ";
@@ -107,14 +122,14 @@ void Dict::sort(size_t count) {
 }
 
 
-slice<DictEntry> Dict::items() const {
-    slice<DictEntry> all = allItems();
+slice<DictEntry> Dict::items() {
+    slice<DictEntry> all = _items();
     return {all.begin(), _findEntry(all, nullptr)};
 }
 
 
 Val* Dict::find(Symbol key) {
-    slice<DictEntry> all = allItems();
+    slice<DictEntry> all = _items();
     if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == Value(key))
         return &ep->value;
     else
@@ -123,7 +138,7 @@ Val* Dict::find(Symbol key) {
 
 
 bool Dict::set(Symbol key, Value value, bool insertOnly) {
-    slice<DictEntry> all = allItems();
+    slice<DictEntry> all = _items();
     if (DictEntry *ep = _findEntry(all, key.block()); ep == all.end()) {
         return false;   // not found, and would go after last item (so dict must be full)
     } else if (ep->key == Value(key)) {
@@ -153,7 +168,7 @@ bool Dict::replace(Symbol key, Value newValue) {
 
 
 bool Dict::remove(Symbol key) {
-    slice<DictEntry> all = allItems();
+    slice<DictEntry> all = _items();
     if (DictEntry *ep = _findEntry(all, key.block()); ep != all.end() && ep->key == Value(key)) {
         for (auto p = ep + 1; p < all.end(); ++p) // can't use memmove bc of damned relative ptrs
             p[-1] = std::move(p[0]);
@@ -168,40 +183,40 @@ bool Dict::remove(Symbol key) {
 #pragma mark - I/O:
 
 
-std::ostream& operator<<(std::ostream& out, Null const& val) {
+static std::ostream& operator<<(std::ostream& out, Null const& val) {
     return out << (val.isNull() ? "null" : "nullish");
 }
 
-std::ostream& operator<<(std::ostream& out, Bool const& val) {
+static std::ostream& operator<<(std::ostream& out, Bool const& val) {
     return out << (val ? "true" : "false");
 }
 
-std::ostream& operator<<(std::ostream& out, Int const& val) {
+static std::ostream& operator<<(std::ostream& out, Int const& val) {
     return out << val.asInt();
 }
 
-std::ostream& operator<<(std::ostream& out, BigInt const& val) {
+static std::ostream& operator<<(std::ostream& out, BigInt const& val) {
     return out << val.asInt();
 }
 
-std::ostream& operator<<(std::ostream& out, Float const& val) {
+static std::ostream& operator<<(std::ostream& out, Float const& val) {
     if (val.isDouble())
         return out << val.asDouble();
     else
         return out << val.asFloat();
 }
 
-std::ostream& operator<<(std::ostream& out, String const& str) {
+static std::ostream& operator<<(std::ostream& out, String const& str) {
     out << "“" << str.str() << "”";
     return out;
 }
 
-std::ostream& operator<<(std::ostream& out, Symbol const& str) {
-    out << "«" << str.str() << "»";
+static std::ostream& operator<<(std::ostream& out, Symbol const& str) {
+    out << "«" << str.str() << "«" << uint16_t(str.id()) << "»";
     return out;
 }
 
-std::ostream& operator<<(std::ostream& out, Blob const& blob) {
+static std::ostream& operator<<(std::ostream& out, Blob const& blob) {
     out << "Blob<" << std::hex;
     for (byte b : blob.bytes().upTo(32)) {
         out << std::setw(2) << unsigned(b);
@@ -212,7 +227,7 @@ std::ostream& operator<<(std::ostream& out, Blob const& blob) {
     return out;
 }
 
-std::ostream& operator<<(std::ostream& out, Array const& arr) {
+static std::ostream& operator<<(std::ostream& out, Array const& arr) {
     out << "Array[" << arr.size();
     if (!arr.empty()) {
         out << ": ";
@@ -225,7 +240,7 @@ std::ostream& operator<<(std::ostream& out, Array const& arr) {
     return out << "]";
 }
 
-std::ostream& operator<<(std::ostream& out, Vector const& vec) {
+static std::ostream& operator<<(std::ostream& out, Vector const& vec) {
     out << "Vector[" << vec.size();
     if (!vec.empty()) {
         out << ": ";
@@ -238,7 +253,7 @@ std::ostream& operator<<(std::ostream& out, Vector const& vec) {
     return out << "]";
 }
 
-std::ostream& operator<<(std::ostream& out, Dict const& dict) {
+static std::ostream& operator<<(std::ostream& out, Dict const& dict) {
     out << "Dict{" << dict.size();
     int n = 0;
     for (auto &entry : dict) {

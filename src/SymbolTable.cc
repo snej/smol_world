@@ -63,27 +63,49 @@ std::unique_ptr<SymbolTable> SymbolTable::rebuild(Heap *heap) {
     if (!table) return table;
 
     // Now add all Symbols to the table:
+    Symbol::ID maxID = {};
     bool ok = heap->visitAll([&](Block const& block) -> bool {
         if (block.type() == Type::Symbol) {
             Symbol symbol = Value(&block).as<Symbol>();
+            maxID = std::max(maxID, symbol.id());
             return table->_table.insert(symbol);
         }
         return true;
     });
+    table->_lastID = maxID;
     if (!ok)
         return nullptr;
     return table;
 }
 
 
+SymbolTable::SymbolTable(Heap *heap, Array array, bool empty)
+:_table(*heap, array)
+{
+    if (!empty) {
+        Symbol::ID maxID = {};
+        _table.visit([&](Value key, Value) {
+            maxID = std::max(maxID, key.as<Symbol>().id());
+            return true;
+        });
+        _lastID = maxID;
+    }
+}
+
+
+
 Maybe<Symbol> SymbolTable::create(string_view str) {
+    auto id = Symbol::ID(uint16_t(_lastID) + 1);
+    assert(uint16_t(id) != 0); // overflow!
     bool inserted = false;
     auto sym = _table.findOrInsert(str, [&](Heap &heap) {
         inserted = true;
-        return Maybe<Symbol>(Symbol::create(str, heap));
+        return Maybe<Symbol>(Symbol::create(id, str, heap));
     });
-    if (inserted)
+    if (inserted) {
+        _lastID = id;
         _table.heap().setSymbolTableArray(_table.array());
+    }
     return Maybe<Symbol>(sym);
 }
 
