@@ -506,8 +506,12 @@ void Heap::dump(std::ostream &out) {
     heappos biggestPtrAt = nullpos;
 
     writeAddr(_base) << "--- HEAP BASE ---\n";
-    visitAll([&](Block const& block) {
+    bool ok = visitAll([&](Block const& block) {
         writeAddr(&block);
+        if (const char *err = block.validate()) {
+            out << "**** INVALID BLOCK!!! " << err << " -- header = 0x" << std::hex << *(uint16_t*)&block << std::dec << std::endl;
+            return false;
+        }
         out << std::setw(4) << block.dataSize() << " bytes : ";
         Value val(&block);
         switch (val.type()) {
@@ -555,6 +559,8 @@ void Heap::dump(std::ostream &out) {
         out << std::endl;
         return true;
     });
+    if (!ok)
+        return; // bad heap
     writeAddr(_cur) << "--- cur ---\n";
     writeAddr(_end) << "--- HEAP END ---\n" << blocks << " blocks:";
     for (int t = 0; t < 16; t++) {

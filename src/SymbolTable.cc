@@ -112,6 +112,20 @@ Maybe<Symbol> SymbolTable::create(string_view str) {
 }
 
 
+Maybe<Symbol> SymbolTable::find(Symbol::ID id) const {
+    Maybe<Symbol> result;
+    visit([&](Symbol key) {
+        if (key.id() == id) {
+            result = key;
+            return false;
+        } else {
+            return true;
+        }
+    });
+    return result;
+}
+
+
 bool SymbolTable::visit(Visitor visitor) const {
     return _table.visit([&](Value key, Value) {return visitor(key.as<Symbol>());});
 }

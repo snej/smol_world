@@ -33,6 +33,9 @@ public:
     /// Returns the existing symbol with this string, or nothing.
     Maybe<Symbol> find(std::string_view s) const        {return Maybe<Symbol>(_table.find(s));}
 
+    /// Returns the existing symbol with this ID, or nothing.
+    Maybe<Symbol> find(Symbol::ID) const;
+
     /// Returns the existing symbol with this string, or creates a new one.
     Maybe<Symbol> create(std::string_view s);
 

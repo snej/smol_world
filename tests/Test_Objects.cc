@@ -239,7 +239,8 @@ static void shuffle(T* begin, T* end) {
 TEST_CASE("Dicts", "[object]") {
     Heap heap(1000);
     UsingHeap u(heap);
-    srandomdev();
+    //srandomdev();
+    srandom(1);
 
     Maybe<Symbol> strs[11];
     for (int i = 0; i < 11; ++i) {
@@ -270,7 +271,7 @@ TEST_CASE("Dicts", "[object]") {
             CHECK(!dict.contains(key));
             CHECK(!dict.replace(key, -1));
             if (i < len) {
-                cerr << "----i is " << i << ", adding " << (void*)strs[i].value().block() << endl;
+                cerr << "----i is " << i << ", adding " << strs[i].value() << endl;
                 CHECK(dict.set(key, i));
                 //dict.dump(cout);
                 CHECK(!dict.empty());
@@ -279,9 +280,10 @@ TEST_CASE("Dicts", "[object]") {
                 CHECK(!dict.insert(key, -1));
                 CHECK(dict.replace(key, -i));
 
-                for (int j = 0; j < 10; ++j)
+                for (int j = 0; j < 10; ++j) {
+                    INFO("j = " << j);
                     CHECK(dict.get(strs[j].value()) == ((j <= i) ? Value(-j) : Value()));
-
+                }
             } else {
                 CHECK(!dict.set(key, i));
                 CHECK(!dict.insert(key, -1));
@@ -292,12 +294,14 @@ TEST_CASE("Dicts", "[object]") {
         cout << ".... checking\n";
         shuffle(strs+0, strs+len);
         for (int i = 0; i < len; ++i) {
+            cerr << "----i is " << i << ", removing " << strs[i].value() << endl;
             Symbol key = strs[i].value();
-            INFO("i = " << i << ", key = " << (void*)key.block());
+            INFO("i = " << i << ", key = " << key);
             CHECK(dict.size() == len-i);
             CHECK(dict.full() == (i == 0));
             CHECK(dict.contains(key));
             CHECK(dict.remove(key));
+            dict.dump(cout);
             CHECK(!dict.contains(key));
             CHECK(!dict.remove(key));
             CHECK(dict.empty() == (i == len-1));

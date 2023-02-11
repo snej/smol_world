@@ -43,6 +43,12 @@ static string readFile(const char *path) {
 }
 
 
+static void checkHeap(Heap &heap) {
+    if (!heap.validate())
+        FAIL("Corrupt heap: " << heap.invalid());
+}
+
+
 TEST_CASE("JSON", "[object],[json]") {
     Heap heap(3000);
     UsingHeap u(heap);
@@ -75,8 +81,7 @@ static void testReadJSON(const char *path) {
     heap.setRoot(dict);
 
     heap.dump(cout);
-    heap.validate();
-    CHECK(heap.invalid() == nullptr);
+    checkHeap(heap);
 
     string json = toJSON(v);
     if (json.size() < 10000)
@@ -92,7 +97,7 @@ static void testReadJSON(const char *path) {
     GarbageCollector::run(heap);
 
     heap.dump(cout);
-    CHECK(heap.validate());
+    checkHeap(heap);
 
     string json2 = toJSON(v);
     if (json2.size() < 10000)
