@@ -11,6 +11,7 @@
 #include <iostream>
 #include <set>
 #include <unordered_set>
+#include <unordered_map>
 
 namespace snej::smol {
 
@@ -505,6 +506,8 @@ void Heap::dump(std::ostream &out) {
     intpos biggestPtr = 0;
     heappos biggestPtrAt = nullpos;
 
+    std::unordered_map<std::string_view,unsigned> strings;
+
     writeAddr(_base) << "--- HEAP BASE ---\n";
     bool ok = visitAll([&](Block const& block) {
         writeAddr(&block);
@@ -519,6 +522,8 @@ void Heap::dump(std::ostream &out) {
                 std::string_view str = val.as<String>().str();
                 out << "“" << str.substr(0, std::min(str.size(),size_t(50)))
                     << (str.size() <= 50 ? "”" : "……");
+                auto [i, isNew] = strings.insert({str, 0});
+                i->second++;
                 break;
             }
             case Type::Array:   out << "Array[" << val.as<Array>().size() << "]"; break;
@@ -563,11 +568,22 @@ void Heap::dump(std::ostream &out) {
         return; // bad heap
     writeAddr(_cur) << "--- cur ---\n";
     writeAddr(_end) << "--- HEAP END ---\n" << blocks << " blocks:";
+
     for (int t = 0; t < 16; t++) {
         if (byType[t])
             out << "  " << byType[t] << " " << TypeName(Type(t)) << "s (" << sizeByType[t] << " b)";
     }
-    out << "\n" << fwdLinks << " forward pointers, " << backLinks << " backward pointers.\n";
+    out << "\n";
+
+    size_t stringSize = 0, wasted = 0;
+    for (auto [str,count] : strings) {
+        if (count > 1 ) out << "\t'" << str << "' x " << count << std::endl;
+        stringSize += str.size() + 2;
+        wasted += (count - 1) * str.size();
+    }
+    out << strings.size() << " unique strings, " << stringSize << " bytes; dups waste " << wasted << " bytes\n";
+
+    out << fwdLinks << " forward pointers, " << backLinks << " backward pointers.\n";
     out << "Farthest pointer is " << biggestPtr << " bytes, at " << uintpos(biggestPtrAt) << ".\n";
 }
 
