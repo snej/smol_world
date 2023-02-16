@@ -70,10 +70,10 @@ TEST_CASE("Sparse Bucket", "[sparse]") {
     CHECK(bucket.contains(123));
     CHECK(bucket.get(127) == "onetwoseven");
 
-    for (unsigned i = 0; i < 128; ++i)
+    for (size_t i = 0; i < 128; ++i)
         bucket.put(i, to_string(i));
     CHECK(bucket.count() == 128);
-    for (unsigned i = 0; i < 128; ++i)
+    for (size_t i = 0; i < 128; ++i)
         CHECK(bucket.get(i) == to_string(i));
 }
 
@@ -82,7 +82,7 @@ TEST_CASE("Sparse Array", "[sparse]") {
     sparse_array<string, 128> array(256);
     CHECK(array.size() == 256);
     CHECK(array.count() == 0);
-    for (unsigned i = 0; i < 256; i++)
+    for (size_t i = 0; i < 256; i++)
         CHECK(!array.contains(i));
 
     CHECK(array.insert(17, "seventeen"));
@@ -105,7 +105,7 @@ TEST_CASE("Sparse Array", "[sparse]") {
     CHECK(!array.contains(127));
     CHECK(array.get(128) == "onetwentyeight");
 
-    for (unsigned i = 0; i < 256; i++)
+    for (size_t i = 0; i < 256; i++)
         CHECK(array.contains(i) == (i == 17 || i == 250 || i == 128));
 }
 
@@ -115,9 +115,11 @@ struct strHash {
 };
 
 
-TEST_CASE("Sparse Hash", "[sparse]") {
-    sparse_hash_table<string_view,string,strHash> hash(150);
-    CHECK(hash.capacity() >= 150);
+const size_t End = 150;
+
+template <class Hash>
+static void testHash(Hash &hash) {
+    CHECK(hash.capacity() >= 10);
     CHECK(hash.count() == 0);
 
     CHECK(hash.get("foo") == nullptr);
@@ -131,23 +133,58 @@ TEST_CASE("Sparse Hash", "[sparse]") {
     REQUIRE(bar);
     CHECK(*bar == "bar");
 
-    hash.dump(cout);
+    dump(cout, hash);
 
-    for (unsigned i = 0; i < 20; ++i)
+    for (size_t i = 0; i < 20; ++i)
         hash.put(to_string(i));
     CHECK(hash.count() == 22);
-    for (unsigned i = 0; i < 20; ++i)
+    CHECK(hash.capacity() >= 22);
+    for (size_t i = 0; i < 20; ++i)
         CHECK(hash.get(to_string(i)));
 
     cout << endl;
-    hash.dump(cout);
+    dump(cout, hash);
 
-    for (unsigned i = 20; i < 128; ++i)
+    for (size_t i = 20; i < End; ++i)
         hash.put(to_string(i));
-    CHECK(hash.count() == 130);
-    for (unsigned i = 0; i < 128; ++i)
+    CHECK(hash.count() == 2 + End);
+    for (size_t i = 0; i < End; ++i)
         CHECK(hash.get(to_string(i)));
 
+    size_t maxProbes = 1;
+    hash.visit([&](size_t i, string const& item) {
+        cout << setw(3) << i << ": ";
+        cout << item;
+        if (auto probes = hash.probe_count(item); probes > 1) {
+            cout << "   (" << probes << ")";
+            maxProbes = max(maxProbes, probes);
+        }
+        cout << endl;
+        return true;
+    });
+    cout << "With " << (2+End) << " keys, max probes is " << maxProbes << endl;
+
     cout << endl;
-    hash.dump(cout);
+    dump(cout, hash);
 }
+
+
+TEST_CASE("Sparse Hash", "[sparse]") {
+    sparse_hash_table<string_view,string,strHash> hash(10);
+    testHash(hash);
+}
+
+
+TEST_CASE("Dense Hash", "[sparse]") {
+    dense_hash_table<string_view,string,strHash> dense(10);
+    testHash(dense);
+
+    // Now copy to a sparse table:
+    sparse_hash_table<string_view,string,strHash> sparse(dense);
+    cout << endl;
+    dump(cout, sparse);
+    CHECK(sparse.count() == dense.count());
+    for (size_t i = 0; i < End; ++i)
+        CHECK(sparse.get(to_string(i)));
+}
+

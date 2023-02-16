@@ -24,26 +24,35 @@
 namespace snej::smol {
 
 
-template <typename T, unsigned Size>
-void sparse_bucket<T,Size>::dump(std::ostream &out) const {
+template <size_t Size>
+void dump(std::ostream &out, bitmap<Size> const& bitm) {
     out << std::hex;
-    for (uint64_t b : _bitmap)
+    for (uint64_t b : bitm.bits())
         out << std::setw(16) << std::setfill('0') << b << ' ';
     out << std::dec;
+}
+
+template <typename T, size_t Size, bool Sparse>
+void dump(std::ostream &out, sparse_bucket<T,Size,Sparse> const& bucket) {
+    dump(out, bucket.bits());
     out << '|';
-    for (unsigned i = 0, n = count(); i < n; ++i)
-        out << ' ' << _items[i];
+    bucket.visit([&](size_t, T const& item) {
+        out << ' ' << item;
+        return true;
+    });
     out << std::endl;
 }
 
-template <typename Key, typename Item, typename Hash>
-void sparse_hash_table<Key,Item,Hash>::dump(std::ostream &out) const {
-    out << "Sparse Hash Table, capacity=" << capacity() << ", " << _array.buckets().size() << " buckets of " << Bucket::Capacity << " bits (" << sizeof(Bucket) << " bytes) each\n";
-    for (auto const& bucket : _array.buckets())
-        bucket.dump(out);
-    size_t space = _array.buckets().size() * sizeof(Bucket);
-    out << "Using " << space << " bytes for " << count() << " items: " << (8*float(space)/count()) << " bits per item. ";
-    out << "At full capacity, " << (8*float(space)/capacity()) << " bits per item.\n";
+
+template <typename Key, typename Item, typename Hash, bool Sparse>
+void dump(std::ostream &out, hash_table<Key,Item,Hash,Sparse> const& hash) {
+    using ArrayClass = sparse_array<Item,HashBucketSize,Sparse>;
+    out << (Sparse ? "Sparse" : "Dense") << " Hash Table: count=" << hash.count() << ", capacity=" << hash.capacity() << ", size=" << hash.table_size() << "; " << hash.buckets().size() << " buckets of " << ArrayClass::Bucket::Size << " bits (" << sizeof(typename ArrayClass::Bucket) << " bytes) each\n";
+    for (auto const& bucket : hash.buckets())
+        dump(out, bucket);
+    size_t space = hash.buckets().size() * sizeof(typename ArrayClass::Bucket);
+    out << "Overhead is " << space << " bytes for " << hash.count() << " items: " << (8*float(space)/hash.count()) << " bits per item. ";
+    out << "At full capacity, " << (8*float(space)/hash.capacity()) << " bits per item.\n";
 }
 
 
