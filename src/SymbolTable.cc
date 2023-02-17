@@ -43,7 +43,7 @@ using namespace std;
 
 
 std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap, heapsize capacity) {
-    unless(table, HashSet::createArray(*heap, capacity)) {return nullptr;}
+    Array table = HashSet::createArray(*heap, capacity);
     return std::unique_ptr<SymbolTable>(new SymbolTable(heap, table, true));
 }
 
@@ -85,7 +85,7 @@ SymbolTable::SymbolTable(Heap *heap, Array array, bool empty)
 {
     if (!empty) {
         int maxID = -1;
-        _table.visit([&](Value key, Value) {
+        _table.visit([&](Value key) {
            maxID = std::max(maxID, int(key.as<Symbol>().id()));
            return true;
         });
@@ -127,7 +127,7 @@ Maybe<Symbol> SymbolTable::find(Symbol::ID id) const {
 
 
 bool SymbolTable::visit(Visitor visitor) const {
-    return _table.visit([&](Value key, Value) {return visitor(key.as<Symbol>());});
+    return _table.visit([&](Value key) {return visitor(key.as<Symbol>());});
 }
 
 }

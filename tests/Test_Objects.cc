@@ -17,6 +17,7 @@
 //
 
 #include "smol_world.hh"
+#include "SparseArray.hh"
 #include "catch.hpp"
 #include <array>
 #include <iostream>
@@ -30,6 +31,14 @@ template <ObjectClass OBJ>
 static OBJ mustHave(Maybe<OBJ> const& m) {
     REQUIRE(m);
     return m.value();
+}
+
+
+template <typename T>
+static void shuffle(T* begin, T* end) {
+    auto len = end - begin;
+    for (auto i = len - 1; i > 0; --i)
+        swap(begin[i], begin[random() % (i+1)]);
 }
 
 
@@ -194,6 +203,61 @@ TEST_CASE("Arrays", "[object]") {
 }
 
 
+TEST_CASE("Sparse Arrays", "[object]") {
+
+    //srandomdev();
+    srandom(1);
+
+    for (int len = 64; len < 384; len += 64) {
+        INFO("len is " << len);
+        Heap heap(100000);
+        UsingHeap u(heap);
+
+        Handle<Maybe<String>> strs[640];
+        for (int i = 0; i < len; ++i)
+            strs[i] = newString(std::to_string(i), heap);
+
+        SparseArray array(len, heap);
+
+        CHECK(array.size() == len);
+        CHECK(array.nonNullCount() == 0);
+        CHECK(array.allNull());
+
+        for (int i = 0; i < len; ++i) {
+            CHECK(!array.contains(i));
+            CHECK(array.get(i) == nullvalue);
+        }
+        for (int n = 0; n < len / 2; n++) {
+            int i;
+            do {
+                i = random() % len;
+            } while (array.contains(i));
+            INFO("n is " << n << ", i is " << i);
+            REQUIRE(array.put(i, strs[i]));
+            CHECK(array.contains(i));
+            CHECK(array.get(i).maybeAs<String>() == strs[i]);
+            CHECK(array.nonNullCount() == n + 1);
+//            if (n == len / 8)
+//                cout << array;
+        }
+        int count = 0;
+        for (int i = 0; i < len; ++i) {
+            INFO("i is " << i);
+            Value val = array.get(i);
+            if (val) {
+                CHECK(val.maybeAs<String>() == strs[i]);
+                ++count;
+                REQUIRE(array.put(i, nullvalue));
+                CHECK(array.get(i) == nullvalue);
+                CHECK(!array.contains(i));
+            }
+        }
+        CHECK(count == len / 2);
+        CHECK(array.allNull());
+    }
+}
+
+
 TEST_CASE("Vectors", "[object]") {
     Heap heap(1000);
     UsingHeap u(heap);
@@ -225,14 +289,6 @@ TEST_CASE("Vectors", "[object]") {
         for (int i = 0; i < capacity; ++i)
             CHECK(vec[i].maybeAs<String>() == strs[i]);
     }
-}
-
-
-template <typename T>
-static void shuffle(T* begin, T* end) {
-    auto len = end - begin;
-    for (auto i = len - 1; i > 0; --i)
-        swap(begin[i], begin[random() % (i+1)]);
 }
 
 
@@ -310,37 +366,8 @@ TEST_CASE("Dicts", "[object]") {
 }
 
 
-TEST_CASE("HashMap", "[object],[hash]") {
-    Heap heap(10000);
-    UsingHeap u(heap);
-    Handle<Array> hashArray = mustHave( HashMap::createArray(heap, 50) );
-    HashMap table(heap, hashArray);
-
-    CHECK(&table.heap() == &heap);
-    CHECK(table.array() == hashArray);
-    CHECK(table.count() == 0);
-    CHECK(table.capacity() >= 50);
-
-    Handle<String> foo = mustHave( newString("foo", heap) );
-    Handle<String> bar = mustHave( newString("bar", heap) );
-
-    CHECK(table.get(foo) == nullptr);
-    table.put(foo, 0xF00);
-    CHECK(table.count() == 1);
-    CHECK(table.get(foo) == 0xF00);
-
-    CHECK(table.get(bar) == nullptr);
-    table.put(bar, 0xBA4);
-    CHECK(table.count() == 2);
-    CHECK(table.get(bar) == 0xBA4);
-    CHECK(table.get(foo) == 0xF00);
-
-    table.dump(cout);
-}
-
-
 TEST_CASE("Symbols", "[object],[hash]") {
-    Heap heap(10000);
+    Heap heap(1000000);
     SymbolTable& table = heap.symbolTable();
     SymbolTable& tableAgain = heap.symbolTable();
     CHECK(&table == &tableAgain);

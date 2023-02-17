@@ -111,7 +111,7 @@ TEST_CASE("Sparse Array", "[sparse]") {
 
 
 struct strHash {
-    uint32_t operator() (string_view const& str) { return HashTable::computeHash(str); };
+    uint32_t operator() (string_view const& str) { return HashSet::computeHash(str); };
 };
 
 

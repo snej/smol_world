@@ -224,7 +224,7 @@ static std::ostream& operator<<(std::ostream& out, Symbol const& str) {
 static std::ostream& operator<<(std::ostream& out, Blob const& blob) {
     out << "Blob<" << std::hex;
     for (byte b : blob.bytes().upTo(32)) {
-        out << std::setw(2) << unsigned(b);
+        out << std::setw(2) << std::setfill('0') << unsigned(b);
     }
     if (blob.size() > 32)
         out << " …";

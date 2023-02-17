@@ -39,13 +39,13 @@ static inline heapsize grow(heapsize size) {
 
 class JSONParseHandler {
 public:
-    static constexpr size_t kMaxStringDedupSize = 16;
+    static constexpr size_t kMaxStringDedupSize = 0;//TEMP 16;
 
     JSONParseHandler(Heap &h)
     :_heap(h)
     ,_root(h)
     ,_emptyArray(h)
-    ,_strings(h, HashSet::createArray(h, 100).value())
+    ,_strings(h, 100)
     { }
 
     ~JSONParseHandler() {
@@ -143,8 +143,9 @@ private:
     }
 
     bool append(Vector vec, Value val) {
+        Handle vecHandle(&vec);   // in case grow() triggers GC
+        Handle valHandle(&val);   // in case grow() triggers GC
         if (!vec.append(val)) {
-            Handle valHandle(&val);   // in case grow() triggers GC
             unless(newVector, _heap.grow(vec, grow(vec.capacity()))) {return false;}
             __unused bool ok = newVector.append(val);
             assert(ok);
@@ -154,9 +155,10 @@ private:
     }
 
     bool insert(Dict dict, Symbol key, Value val) {
+        Handle dictHandle(&dict);   // in case grow() triggers GC
+        Handle keyHandle(&key);   // in case grow() triggers GC
+        Handle valHandle(&val);
         if (!dict.insert(key, val)) {
-            Handle keyHandle(&key);   // in case grow() triggers GC
-            Handle valHandle(&val);
             unless(newDict, _heap.grow(dict, grow(dict.capacity()))) {return false;}
             if (!newDict.insert(key, val))
                 return false;

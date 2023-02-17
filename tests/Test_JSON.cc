@@ -50,8 +50,9 @@ static void checkHeap(Heap &heap) {
 
 
 TEST_CASE("JSON", "[object],[json]") {
-    Heap heap(3000);
+    Heap heap(4000);
     UsingHeap u(heap);
+    GarbageCollector::runOnDemand(heap);
 
     string err;
     Handle<Value> v = newFromJSON(readFile(JSON_TEST_DATA_DIR "svg_menu.json"), heap, &err);
@@ -70,6 +71,7 @@ TEST_CASE("JSON", "[object],[json]") {
 static void testReadJSON(const char *path) {
     Heap heap(1000000);
     UsingHeap u(heap);
+    GarbageCollector::runOnDemand(heap);
 
     string err;
     Handle<Value> v = newFromJSON(readFile(path), heap, &err);
@@ -88,7 +90,7 @@ static void testReadJSON(const char *path) {
         cout << "As JSON: " << json << endl;
 
     auto numSymbols = heap.symbolTable().size();
-    heap.dropSymbolTable();
+//  TEMP  heap.dropSymbolTable();
 
     cout << "Heap space used is " << heap.used() << " bytes; JSON is " << json.size()
          << " ... " << (heap.used() / double(json.size()) * 100.0) << "%\n";
@@ -108,6 +110,7 @@ static void testReadJSON(const char *path) {
     // TODO: Compare equality; that will require canonical Dict ordering
 
     cout << "Recovered " << heap.symbolTable().size() << " Symbols.\n";
+    cout << heap.symbolTable();
     CHECK(heap.symbolTable().size() == numSymbols);
 }
 

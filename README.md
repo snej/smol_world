@@ -55,7 +55,7 @@ At the same time, our programs use 64-bit pointers. That’s eight bytes! For on
 
 There’s no law that says pointers have to be the size of your CPU address bus. If you use relative offsets instead of absolute addresses they can be as small as you want, it just constrains their reach. 32-bit offsets let you access 4GB of memory, which ought to be enough for ~~anyone~~ many purposes, such as virtual machines for interpreters. Even if you whittle away a bit or two for tags, that leaves a gigabyte or more.
 
-I know I’m not the only one to think of this: [the V8 JavaScript engine also uses 32-bit pointers](https://v8.dev/blog/pointer-compression).
+I know I’m not the only one to think of this: [the V8 JavaScript engine also uses 32-bit pointers](https://v8.dev/blog/oilpan-pointer-compression).
 
 (Pointers could get even smaller! A few years ago I wrote a B-tree storage engine whose 4KB pages have little heaps inside them; the heaps use *12-bit* pointers. That’s getting too smol for general use ... but 24-bit pointers might be cool; you can do a lot in 16MB.)
 

@@ -40,7 +40,7 @@ Heap::Heap(void *base, size_t capacity, bool malloced)
 }
 
 Heap::~Heap() {
-    assert(this != current());
+    assert(this != maybeCurrent());
     if (_malloced) free(_base);
     unregistr();
 }
@@ -77,15 +77,14 @@ void Heap::swapMemoryWith(Heap &h) {
     std::swap(_end, h._end);
     std::swap(_cur, h._cur);
     std::swap(_malloced, h._malloced);
-    std::swap(_symbolTable, h._symbolTable);
-    if (_symbolTable) _symbolTable->setHeap(*this);
-    if (h._symbolTable) h._symbolTable->setHeap(h);
+    // The symbolTable and root stay with the heap.
     // _allocFailureHandle and _externalRoots are not swapped, they belong to the Heap itself.
 }
 
-Heap const* Heap::enter() const     {auto prev = sCurHeap; sCurHeap = this; return prev;}
-void Heap::exit(Heap const* next) const  {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
-Heap* Heap::current()               {return (Heap*)sCurHeap;}
+Heap const* Heap::enter() const         {auto prev = sCurHeap; sCurHeap = this; return prev;}
+void Heap::exit(Heap const* next) const {assert(sCurHeap == this); sCurHeap = (Heap*)next;}
+Heap* Heap::maybeCurrent()              {return (Heap*)sCurHeap;}
+Heap* Heap::current()                   {assert(sCurHeap); return (Heap*)sCurHeap;}
 
 
 void Heap::registr() {
@@ -285,9 +284,14 @@ Block* Heap::reallocBlock(Block* block, heapsize newDataSize) {
     if (newDataSize == data.size())
         return block;
     assert(newDataSize > data.size()); //TODO: Implement shrinking
+
+    Handle<Value> val{Value(block)};
     auto newBlock = allocBlock(newDataSize, block->type());
     if (!newBlock)
         return nullptr;
+    block = val.block();    // in case GC occurred
+    data = block->data();
+
     if (auto vals = block->vals()) {
         // Vals are relative ptrs so they have to be copied specially:
         auto dst = (Val*)newBlock->data().begin();
@@ -343,6 +347,8 @@ void Heap::visitBlocks(BlockVisitor visitor) {
         
         auto processBlock = [&](Block *b) -> bool {
             assert(contains(b) && (void*)b >= &header()+1);
+            if (const char *err = b->validate())
+                assert(!err);
             if (!b->isVisited()) {
                 b->setVisited();
                 if (!visitor(*b))

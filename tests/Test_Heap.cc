@@ -41,12 +41,13 @@ TEST_CASE("Empty Heap", "[heap]") {
     CHECK(heap.root() == nullvalue);
 
     // current heap:
-    CHECK(Heap::current() == nullptr);
+    CHECK(Heap::maybeCurrent() == nullptr);
     {
         UsingHeap u(heap);
         CHECK(Heap::current() == &heap);
+        CHECK(Heap::maybeCurrent() == &heap);
     }
-    CHECK(Heap::current() == nullptr);
+    CHECK(Heap::maybeCurrent() == nullptr);
 
     // visit:
     heap.visitBlocks([&](const Block&) { FAIL("Visitor should not be called"); return false; });

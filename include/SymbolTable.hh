@@ -44,7 +44,7 @@ public:
     bool visit(Visitor visitor) const;
 
     friend std::ostream& operator<<(std::ostream& out, SymbolTable const &st) {
-        st._table.dump(out, true); return out;
+        st._table.dump(out); return out;
     }
 
 protected:

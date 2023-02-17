@@ -23,6 +23,14 @@
 
 namespace snej::smol {
 
+void GarbageCollector::runOnDemand(Heap &heap) {
+    heap.setAllocFailureHandler([](Heap* heap, heapsize sizeNeeded, bool gcAllowed) {
+        if (gcAllowed)
+            GarbageCollector::run(*heap);
+        return heap->available() >= sizeNeeded;
+    });
+}
+
 GarbageCollector::GarbageCollector(Heap &heap)
 :_tempHeap(std::make_unique<Heap>(heap.capacity()))
 ,_fromHeap(heap)
@@ -41,7 +49,6 @@ GarbageCollector::GarbageCollector(Heap &fromHeap, Heap &toHeap)
 
 // The destructor swaps the two heaps, so _fromHeap is now the live one.
 GarbageCollector::~GarbageCollector() {
-    _fromHeap.reset();
     _fromHeap.swapMemoryWith(_toHeap);
 }
 
@@ -60,8 +67,7 @@ void GarbageCollector::scanRoots() {
         update(*refp);
     for (Value *refp : _fromHeap._externalRootVals)
         update(*refp);
-    _toHeap.setSymbolTableArray(scan(_fromHeap.symbolTableArray()));
-    // TODO: remove any unmarked Symbols from the table instead of copying them
+    // (The SymbolTable registers root(s), so it will get updated implicitly.)
 }
 
 

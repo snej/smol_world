@@ -24,6 +24,9 @@ public:
         GarbageCollector gc(heap, otherHeap);
     }
 
+    /// Installs a callback in the Heap that will run GC when it fills up.
+    static void runOnDemand(Heap &heap);
+
     /// Constructs the GC and copies all Values reachable from the root into a temporary Heap
     /// with the same capacity as this one.
     GarbageCollector(Heap &heap);

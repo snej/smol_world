@@ -62,8 +62,11 @@ public:
 
     //---- Current Heap:
 
-    /// The current heap of the current thread, or nullptr if none.
+    /// The current heap of the current thread; aborts if there is none.
     static Heap* current();
+
+    /// The current heap of the current thread, or nullptr if none.
+    static Heap* maybeCurrent();
 
     /// Returns the Heap that owns this address, or nullptr if none.
     static Heap* heapContaining(const void *);
@@ -167,6 +170,10 @@ public:
     void unregisterExternalRoot(Value*) const;
     void registerExternalRoot(Object*) const;
     void unregisterExternalRoot(Object*) const;
+    template <class T>
+        void registerExternalRoot(Maybe<T>* m) const    {registerExternalRoot(&_unsafeval_(*m));}
+    template <class T>
+        void unregisterExternalRoot(Maybe<T>* m) const  {unregisterExternalRoot(&_unsafeval_(*m));}
 
     void registerExternalRoots(Val rootArray[], size_t count);
     void unregisterExternalRoots(Val rootArray[]);
