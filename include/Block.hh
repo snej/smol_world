@@ -106,6 +106,27 @@ public:
         ::memset(vals.begin() + contents.size(), 0, (vals.size() - contents.size()) * sizeof(Val));
     }
 
+    /// Reduces the data size of this block to `newDataSize`, if possible.
+    /// (It's not possible to shrink a block by less than 4 bytes.)
+    bool shrinkDataTo(heapsize newDataSize) {
+        auto newSize = sizeForData(newDataSize);
+        auto oldSize = blockSize();
+        void* oldData = dataPtr();
+        if (newSize + 4 > oldSize)  // Must free up at least 4 bytes at end
+            return false;
+        // Update the header with the new smaller size:
+        new (this) Block(newDataSize, type());
+        // If I went from 4-byte header to 2-byte, slide the data down:
+        byte* newData = (byte*)dataPtr();
+        if (newData != oldData)
+            ::memmove(newData, oldData, newDataSize);
+        assert(newData + newDataSize == (void*)nextBlock());
+        // Finally create a new valid Block in the empty space:
+        new (newData + newDataSize) Block(oldSize - newSize, Type::Blob);
+        assert(blockSize() + nextBlock()->blockSize() == oldSize);
+        return true;
+    }
+
     //---- Data type:
 
     Type type() const pure                      {assert(!isForwarded());
