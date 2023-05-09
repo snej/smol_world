@@ -8,6 +8,7 @@
 #include "Heap.hh"
 #include "Val.hh"
 #include "Value.hh"
+#include <deque>
 
 namespace snej::smol {
 
@@ -42,8 +43,6 @@ public:
     /// Do not do anything else with the heap while the GarbageCollector is in scope!
     Value scan(Value v);
 
-    [[nodiscard]] Block* scan(Block*);
-
     // These are equivalent to scanValue but update the Val/Ptr/Block in place:
     void update(Val*);
     void update(Value&);
@@ -53,10 +52,12 @@ public:
 
 private:
     void scanRoots();
-    Block* moveBlock(Block*);
+    Block* scan(Block*, Type) ;
+    Block* moveBlock(Block*, Type);
 
     std::unique_ptr<Heap> _tempHeap;    // Owns temporary heap, if there is one
     Heap &_fromHeap, &_toHeap;          // The source and destination heaps
+    std::deque<Block*> _toScan;              // Values in fromHeap
 };
 
 }

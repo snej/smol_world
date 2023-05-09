@@ -9,8 +9,6 @@
 /* Begin PBXBuildFile section */
 		2705301E2978B4FB003D4C93 /* Test_Heap.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2705301D2978B4FB003D4C93 /* Test_Heap.cc */; };
 		270530202978B556003D4C93 /* TestsMain.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2705301F2978B556003D4C93 /* TestsMain.cc */; };
-		272AF5E6298C35D8008943C3 /* JSON.cc in Sources */ = {isa = PBXBuildFile; fileRef = 272AF5E5298C35D8008943C3 /* JSON.cc */; };
-		272AF5E8298C4375008943C3 /* Test_JSON.cc in Sources */ = {isa = PBXBuildFile; fileRef = 272AF5E7298C4375008943C3 /* Test_JSON.cc */; };
 		272BADBD299EAC5300411C14 /* SparseArray.cc in Sources */ = {isa = PBXBuildFile; fileRef = 272BADBC299EAC5300411C14 /* SparseArray.cc */; };
 		2762F6E5299B084E003363E3 /* Test_Sparse.cc in Sources */ = {isa = PBXBuildFile; fileRef = 2762F6E4299B084E003363E3 /* Test_Sparse.cc */; };
 		2762F6E7299C0A00003363E3 /* sparse_hash_io.hh in Sources */ = {isa = PBXBuildFile; fileRef = 2762F6E6299C0A00003363E3 /* sparse_hash_io.hh */; };
@@ -22,6 +20,8 @@
 		27AA27FB2970835E00BF17A5 /* Heap.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27FA2970835E00BF17A5 /* Heap.cc */; };
 		27AA27FE2970BFF300BF17A5 /* Val.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27AA27FD2970BFF300BF17A5 /* Val.cc */; };
 		27AA28012970C04900BF17A5 /* Collections.cc in Sources */ = {isa = PBXBuildFile; fileRef = 27AA28002970C04900BF17A5 /* Collections.cc */; };
+		27D23D302A0AB31400082FD3 /* JSON.cc in Sources */ = {isa = PBXBuildFile; fileRef = 272AF5E5298C35D8008943C3 /* JSON.cc */; };
+		27D23D312A0AB31800082FD3 /* Test_JSON.cc in Sources */ = {isa = PBXBuildFile; fileRef = 272AF5E7298C4375008943C3 /* Test_JSON.cc */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -40,7 +40,8 @@
 		2705301129776C46003D4C93 /* Collections.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = Collections.hh; sourceTree = "<group>"; };
 		2705301429776CB2003D4C93 /* smol_world.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = smol_world.hh; sourceTree = "<group>"; };
 		2705301D2978B4FB003D4C93 /* Test_Heap.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_Heap.cc; sourceTree = "<group>"; };
-		2705301F2978B556003D4C93 /* TestsMain.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = TestsMain.cc; path = ../../tendril/test/TestsMain.cc; sourceTree = "<group>"; };
+		2705301F2978B556003D4C93 /* TestsMain.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = TestsMain.cc; sourceTree = "<group>"; };
+		271E33BB2A008DEE0070BE9A /* InPlaceHeap.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = InPlaceHeap.hh; sourceTree = "<group>"; };
 		272AF5E4298C35D8008943C3 /* JSON.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = JSON.hh; sourceTree = "<group>"; };
 		272AF5E5298C35D8008943C3 /* JSON.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSON.cc; sourceTree = "<group>"; };
 		272AF5E7298C4375008943C3 /* Test_JSON.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_JSON.cc; sourceTree = "<group>"; };
@@ -143,6 +144,7 @@
 				272AF5E5298C35D8008943C3 /* JSON.cc */,
 				2762F6E3299ABF5A003363E3 /* sparse_hash.hh */,
 				2762F6E6299C0A00003363E3 /* sparse_hash_io.hh */,
+				271E33BB2A008DEE0070BE9A /* InPlaceHeap.hh */,
 			);
 			path = src;
 			sourceTree = "<group>";
@@ -391,14 +393,14 @@
 				27733D0D297C6E1100EDA2E9 /* SymbolTable.cc in Sources */,
 				2770B1BA2989AC8200E2C126 /* HashTable.cc in Sources */,
 				2770B1B02980776400E2C126 /* GarbageCollector.cc in Sources */,
-				272AF5E6298C35D8008943C3 /* JSON.cc in Sources */,
+				272BADBD299EAC5300411C14 /* SparseArray.cc in Sources */,
+				27D23D302A0AB31400082FD3 /* JSON.cc in Sources */,
 				2705301E2978B4FB003D4C93 /* Test_Heap.cc in Sources */,
 				2762F6E5299B084E003363E3 /* Test_Sparse.cc in Sources */,
 				27733D04297B39D300EDA2E9 /* Test_Objects.cc in Sources */,
 				2770B1B229807E5C00E2C126 /* Test_GC.cc in Sources */,
-				272AF5E8298C4375008943C3 /* Test_JSON.cc in Sources */,
+				27D23D312A0AB31800082FD3 /* Test_JSON.cc in Sources */,
 				270530202978B556003D4C93 /* TestsMain.cc in Sources */,
-				272BADBD299EAC5300411C14 /* SparseArray.cc in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -468,6 +470,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				OTHER_CFLAGS = "-fno-sanitize=alignment";
 				SDKROOT = macosx;
+				WARNING_CFLAGS = "-Wno-zero-length-array";
 			};
 			name = Debug;
 		};
@@ -529,6 +532,7 @@
 				MTL_FAST_MATH = YES;
 				OTHER_CFLAGS = "-fno-sanitize=alignment";
 				SDKROOT = macosx;
+				WARNING_CFLAGS = "-Wno-zero-length-array";
 			};
 			name = Release;
 		};

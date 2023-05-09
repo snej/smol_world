@@ -34,12 +34,62 @@ Value Symbol::create(ID id, std::string_view str, Heap &heap) {
     auto dst = block->data();
     memcpy(&dst[0], &id, sizeof(ID));
     memcpy(&dst[sizeof(ID)], str.data(), str.size());
-    return Value(block);
+    return Value(block, Type::Symbol);
 }
+
+
+#pragma mark - ARRAY:
+
+
+heapsize Array::itemCount() const {
+    const_iterator i;
+    for (i = end() - 1; i >= begin(); --i)
+        if (*i != nullval)
+            break;
+    return heapsize(i + 1 - begin());
+}
+
+bool Array::insert(Value val, heapsize pos) {
+    assert(pos < capacity());
+    iterator i = begin() + pos;
+    if (*i) {
+        // Already an item here. Is there room to insert?
+        if (full())
+            return false;
+        // Then slide existing items up to make room:
+        Value cur = *i, next;
+        auto j = i;
+        do {
+            next = *++j;
+            *j = cur;
+        } while (next);
+    } else {
+        assert(pos == 0 || i[-1]); // can't insert after the end
+        // No item, just past end; can simply store it:
+    }
+    *i = val;
+    return true;
+}
+
+bool Array::append(Value val) {
+    if (full()) {
+        return false;
+    } else {
+        items()[itemCount()] = val;
+        return true;
+    }
+}
+
+void Array::clear() {
+    rawBytes().memset(0);
+}
+
+
 
 
 #pragma mark - VECTOR:
 
+#if 0
 
 void Vector::_setSize(heapsize sz) {
     assert(sz <= capacity());
@@ -72,6 +122,7 @@ bool Vector::append(Value val) {
     }
 }
 
+#endif
 
 #pragma mark - DICT:
 
@@ -200,10 +251,6 @@ static std::ostream& operator<<(std::ostream& out, Int const& val) {
     return out << val.asInt();
 }
 
-static std::ostream& operator<<(std::ostream& out, BigInt const& val) {
-    return out << val.asInt();
-}
-
 static std::ostream& operator<<(std::ostream& out, Float const& val) {
     if (val.isDouble())
         return out << val.asDouble();
@@ -222,13 +269,14 @@ static std::ostream& operator<<(std::ostream& out, Symbol const& str) {
 }
 
 static std::ostream& operator<<(std::ostream& out, Blob const& blob) {
-    out << "Blob<" << std::hex;
+    auto fill = out.fill();
+    out << "Blob<" << std::hex << std::setfill('0');
     for (byte b : blob.bytes().upTo(32)) {
-        out << std::setw(2) << std::setfill('0') << unsigned(b);
+        out << std::setw(2) << unsigned(b);
     }
     if (blob.size() > 32)
         out << " …";
-    out << std::dec << ">";
+    out << std::dec << std::setfill(fill) << ">";
     return out;
 }
 
@@ -245,6 +293,7 @@ static std::ostream& operator<<(std::ostream& out, Array const& arr) {
     return out << "]";
 }
 
+#if 0
 static std::ostream& operator<<(std::ostream& out, Vector const& vec) {
     out << "Vector[" << vec.size();
     if (!vec.empty()) {
@@ -257,6 +306,7 @@ static std::ostream& operator<<(std::ostream& out, Vector const& vec) {
     }
     return out << "]";
 }
+#endif
 
 static std::ostream& operator<<(std::ostream& out, Dict const& dict) {
     out << "Dict{" << dict.size();

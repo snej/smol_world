@@ -42,9 +42,10 @@ public:
     const char* invalid() const         {return _error;}
 
     const void*  base() const           {return _base;}         ///< Address of start of heap.
-    const size_t capacity() const       {return _end - _base;}  ///< Maximum size it can grow to
-    const size_t used() const           {return _cur - _base;}  ///< Maximum byte-offset used
-    const size_t available() const      {return _end - _cur;}   ///< Bytes of capacity left
+    size_t capacity() const             {return _end - _base;}  ///< Maximum size it can grow to
+    size_t used() const                 {return _cur - _base;}  ///< Maximum byte-offset used
+    size_t available() const            {return _end - _cur;}   ///< Bytes of capacity left
+    bool empty() const;
 
     /// The contents of the heap. You can persist the heap by writing this to a file or socket.
     slice<byte> contents() const        {return {_base, _cur};}
@@ -80,24 +81,26 @@ public:
     ///
     /// Note that if there is a failure handler that runs the garbage collector,
     /// then `alloc` may move objects, invalidating `Object` pointers and `Val`s!
-    void* alloc(heapsize size);
+    void* alloc(heapsize size)          {return allocBlock(size, Type::Blob);}
 
     /// Allocates a Block; does not initialize its contents.
-    Block* allocBlock(heapsize dataSize, Type);
+    Block* allocBlock(heapsize dataSize, Type type);
     /// Allocates a Block and copies the data in `contents` into it, filling the rest with 0.
-    Block* allocBlock(heapsize dataSize, Type, slice<byte> contents);
+    Block* allocBlock(heapsize dataSize, Type type, slice<byte> contents);
 
     /// Copies a block, creating a new block with a larger size. The extra bytes are zeroed.
     /// @returns The new block; or the original if the new size is the same as the old;
     ///          or nullptr if the allocation failed.
-    Block* reallocBlock(Block* block, heapsize newDataSize);
+    Block* reallocBlock(Block* block, Type type, heapsize newDataSize);
 
     template <ObjectClass OBJ>
     Maybe<OBJ> grow(OBJ const& obj, heapsize newCapacity) {
-        Block* b = reallocBlock(obj.block(), newCapacity * sizeof(typename OBJ::Item));
+        Block* b = reallocBlock(obj.block(),
+                                obj.type(),
+                                newCapacity * sizeof(typename OBJ::Item));
         if (!b)
             return nullvalue;
-        return Object(b).as<OBJ>();
+        return Object(b, obj.type()).as<OBJ>();
     }
 
     /// A callback that's invoked when the Heap doesn't have enough space for an allocation.
@@ -134,24 +137,38 @@ public:
     /// allocated memory.
     bool validPos(heappos pos) const;
 
+    //---- Symbol Table:
+
     SymbolTable const& symbolTable() const {return const_cast<Heap*>(this)->symbolTable();}
     SymbolTable& symbolTable();
     void dropSymbolTable();
 
-    using BlockVisitor = function_ref<bool(const Block&)>;
+    //---- Heap Iteration:
+
+    using BlockVisitor = function_ref<bool(const Block&, Type)>;
     using ObjectVisitor = function_ref<bool(const Object&)>;
 
     /// Calls the Visitor callback once for each live (reachable) block.
     void visitBlocks(BlockVisitor);
     void visit(ObjectVisitor);
 
+    /// Calls the Visitor callback once for each known garbage-collection root.
+    /// This includes the heap's root, its SymbolTable's array, and any registered external roots.
+    void visitRoots(BlockVisitor const&);
+
+    /// Enables heap iteration: the visitAll and dump methods.
+    /// This requires adding one byte to the size of every block.
+    /// This can only be called before anything is allocated in a new Heap.
+    void makeIterable()             {assert(empty()); _iterable = true;}
+
     /// Calls the Visitor callback once for each object, even if it's unreachable (garbage).
+    /// FN should look like `bool(Block&,Type)`
     template <typename FN>
     bool visitAll(FN visitor) {
         bool result = true;
         preventGCDuring([&]{
             for (auto b = firstBlock(); b; b = nextBlock(b)) {
-                if (!visitor(*b)) {
+                if (!visitor(*b, typeHint(b))) {
                     result = false;
                     break;
                 }
@@ -160,11 +177,10 @@ public:
         return result;
     }
 
-    /// Calls the Visitor callback once for each known garbage-collection root.
-    /// This includes the heap's root, its SymbolTable's array, and any registered external roots.
-    void visitRoots(BlockVisitor const&);
-
     void dump(std::ostream&);
+    void dump();
+
+    //---- External Roots:
 
     void registerExternalRoot(Value*) const;
     void unregisterExternalRoot(Value*) const;
@@ -185,15 +201,16 @@ private:
     friend class UsingHeap;
     friend class HandleBase;
     struct Header;
+    struct BlockHint;
 
     Heap();
     explicit Heap(const char *error);
     Heap(void *base, size_t capacity, bool malloced);
     Header& header() pure                {assert(_base); return *(Header*)_base;}
     Header const& header() const pure    {assert(_base); return *(Header*)_base;}
-    void* _at(heappos off) pure         {return _base + uintpos(off);}
+    void* _at(heappos off) pure             {return _base + uintpos(off);}
+    const void* _at(heappos off) const pure {return _base + uintpos(off);}
     heappos _pos(const void *ptr) const pure {return heappos((byte*)ptr - _base);}
-    Value posToValue(heappos pos) const pure;
     heappos valueToPos(Value obj) const pure;
     void registr();
     void unregistr();
@@ -201,7 +218,7 @@ private:
     Heap const* enter() const;
     void exit() const;
     void exit(Heap const* newCurrent) const;
-    const char* _validate() const;
+    bool fail(const char*, ...) const;
 
     // Allocates space without initializing it. Caller MUST initialize (see Block constructor)
     void* rawAlloc(heapsize size);
@@ -210,6 +227,11 @@ private:
 
     Block const* firstBlock() const;
     Block const* nextBlock(Block const*) const;
+    Block const* _nextBlock(Block const*) const;
+    slice<Val> blockVals(Block const*) const;
+    Block const* skipBlockHeader(const void*) const;
+    BlockHint& hint(Block const* b) const;
+    Type typeHint(Block const*) const;
 
     Value symbolTableArray() const;
     void setSymbolTableArray(Value);
@@ -231,8 +253,9 @@ private:
     std::vector<Value*> mutable _externalRootVals;
     std::vector<Object*> mutable _externalRootObjs;
     std::unique_ptr<SymbolTable> _symbolTable;
-    mutable const char* _error = nullptr;
+    mutable char* _error = nullptr;
     bool    _malloced = false;
+    bool    _iterable = false;
     bool    _mayHaveSymbols = false;
     bool    _cannotGC = false;
 };

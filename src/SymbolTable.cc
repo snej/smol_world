@@ -51,8 +51,8 @@ std::unique_ptr<SymbolTable> SymbolTable::create(Heap *heap, heapsize capacity) 
 std::unique_ptr<SymbolTable> SymbolTable::rebuild(Heap *heap) {
     // Pre-count the number of symbols:
     unsigned count = 0;
-    heap->visitAll([&](Block const& block) -> bool {
-        if (block.type() == Type::Symbol)
+    heap->visitAll([&](Block const&, Type type) -> bool {
+        if (type == Type::Symbol)
             ++count;
         return true;
     });
@@ -64,9 +64,9 @@ std::unique_ptr<SymbolTable> SymbolTable::rebuild(Heap *heap) {
 
     // Now add all Symbols to the table:
     int maxID = -1;
-    bool ok = heap->visitAll([&](Block const& block) -> bool {
-        if (block.type() == Type::Symbol) {
-            Symbol symbol = Value(&block).as<Symbol>();
+    bool ok = heap->visitAll([&](Block const& block, Type type) -> bool {
+        if (type == Type::Symbol) {
+            Symbol symbol = Value(&block,type).as<Symbol>();
             maxID = std::max(maxID, int(symbol.id()));
             return table->_table.insert(symbol);
         }

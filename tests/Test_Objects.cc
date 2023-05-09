@@ -49,7 +49,7 @@ static void checkTypes(Value v, Type t, string_view asString) {
     CHECK((v.isNull() || v.isNullish()) == (t == Type::Null));
     CHECK(v.isBool() == (t == Type::Bool));
     CHECK(v.isInt() == (t == Type::Int));
-    CHECK(v.isObject() == (t < Type::Null));
+    CHECK(v.isObject() == (t >= Type::Float && t < Type::Bool));
 
     stringstream s;
     s << v;
@@ -95,7 +95,7 @@ TEST_CASE("Numbers", "[object]") {
     CHECK_FALSE(Bool(1).isNumber());
     CHECK(Int(1).isNumber());
     CHECK(Int(1).asNumber<float>() == 1.0f);
-
+#ifdef BIGINT
     BigInt i = newBigInt(1234567890123, heap).value();
     checkTypes(i, Type::BigInt, "1234567890123");
     CHECK(i.isNumber());
@@ -108,7 +108,7 @@ TEST_CASE("Numbers", "[object]") {
     CHECK(i.asInt() == -1234567890123);
     CHECK(i.asNumber<int32_t>() == INT32_MIN);
     CHECK(i.asNumber<uint64_t>() == 0);
-
+#endif
     Float f = newFloat(3.14159, heap).value();
     checkTypes(f, Type::Float, "3.14159");
     CHECK(f.isNumber());
@@ -268,22 +268,16 @@ TEST_CASE("Vectors", "[object]") {
 
     for (int capacity = 0; capacity <= 10; ++capacity) {
         INFO("capacity is " << capacity);
-        unless(vec, newVector(capacity, heap)) {FAIL("Failed to alloc object");}
-        REQUIRE(vec.type() == Type::Vector);
-        REQUIRE(vec.is<Vector>());
-        Value val = vec;
-        CHECK(val.as<Vector>() == vec);
+        unless(vec, newArray(capacity, heap)) {FAIL("Failed to alloc object");}
 
         CHECK(vec.capacity() == capacity);
-        CHECK(vec.size() == 0);
-        CHECK(vec.empty());
+        CHECK(vec.itemCount() == 0);
         CHECK(vec.full() == (capacity == 0));
 
         for (int i = 0; i < capacity; ++i) {
             vec.append(strs[i]);
             CHECK(vec[i] == strs[i]);
-            CHECK(vec.size() == i + 1);
-            CHECK(!vec.empty());
+            CHECK(vec.itemCount() == i + 1);
             CHECK(vec.full() == (i == (capacity-1)));
         }
         for (int i = 0; i < capacity; ++i)
@@ -338,6 +332,9 @@ TEST_CASE("Dicts", "[object]") {
 
                 for (int j = 0; j < 10; ++j) {
                     INFO("j = " << j);
+                    Value v1 = dict.get(strs[j].value());
+                    Value v2 = ((j <= i) ? Value(-j) : Value());
+                    CHECK(v1 == v2);
                     CHECK(dict.get(strs[j].value()) == ((j <= i) ? Value(-j) : Value()));
                 }
             } else {

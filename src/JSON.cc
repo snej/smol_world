@@ -39,7 +39,7 @@ static inline heapsize grow(heapsize size) {
 
 class JSONParseHandler {
 public:
-    static constexpr size_t kMaxStringDedupSize = 0;//TEMP 16;
+    static constexpr size_t kMaxStringDedupSize = 16;
 
     JSONParseHandler(Heap &h)
     :_heap(h)
@@ -79,12 +79,12 @@ public:
     }
 
     bool StartArray() {
-        unless(vec, newVector(4, _heap)) {return false;}
+        unless(vec, newArray(4, _heap)) {return false;}
         _stack.emplace_back(vec);
         return true;
     }
     bool EndArray(rapidjson::SizeType /*elementCount*/) {
-        Handle<Vector> vec = _stack.back().as<Vector>();
+        Handle<Array> vec = _stack.back().as<Array>();
         _stack.pop_back();
         if (vec.empty()) {
             // Empty arrays are common in JS; use a singleton to save room.
@@ -126,7 +126,7 @@ private:
             _root = val;
         } else {
             Object obj = _stack.back();
-            if_let (vec, obj.maybeAs<Vector>()) {
+            if_let (vec, obj.maybeAs<Array>()) {
                 return append(vec, val);
             } else {
                 assert(!_keys.empty());
@@ -142,14 +142,14 @@ private:
         return addValue(newNumber(num, _heap));
     }
 
-    bool append(Vector vec, Value val) {
+    bool append(Array vec, Value val) {
         Handle vecHandle(&vec);   // in case grow() triggers GC
         Handle valHandle(&val);   // in case grow() triggers GC
         if (!vec.append(val)) {
-            unless(newVector, _heap.grow(vec, grow(vec.capacity()))) {return false;}
-            __unused bool ok = newVector.append(val);
+            unless(newArray, _heap.grow(vec, grow(vec.capacity()))) {return false;}
+            __unused bool ok = newArray.append(val);
             assert(ok);
-            _stack.back() = newVector;
+            _stack.back() = newArray;
         }
         return true;
     }
@@ -204,7 +204,9 @@ static bool writeVal(Value val, rapidjson::Writer<rapidjson::StringBuffer> &writ
         case Type::Null:    return writer.Null();
         case Type::Bool:    return writer.Bool(val.asBool());
         case Type::Int:     return writer.Int(val.asInt());
+#ifdef BIGINT
         case Type::BigInt:  return writer.Int64(val.as<BigInt>().asInt());
+#endif
         case Type::Float:   return writer.Double(val.as<Float>().asDouble());
 
         case Type::String: {
@@ -224,12 +226,14 @@ static bool writeVal(Value val, rapidjson::Writer<rapidjson::StringBuffer> &writ
             }
             return writer.EndArray();
         }
+#ifdef VECTOR
         case Type::Vector: {
             if (!writer.StartArray()) return false;
             for (Value item : val.as<Vector>().items())
                 if (!item || !writeVal(item, writer)) return false;
             return writer.EndArray();
         }
+#endif
         case Type::Dict: {
             if (!writer.StartObject()) return false;
             for (DictEntry const& item : val.as<Dict>().items()) {

@@ -36,6 +36,7 @@ GarbageCollector::GarbageCollector(Heap &heap)
 ,_fromHeap(heap)
 ,_toHeap(*_tempHeap)
 {
+    _tempHeap->_iterable = _fromHeap._iterable;
     scanRoots();
 }
 
@@ -43,6 +44,7 @@ GarbageCollector::GarbageCollector(Heap &heap)
 GarbageCollector::GarbageCollector(Heap &fromHeap, Heap &toHeap)
 :_fromHeap(fromHeap), _toHeap(toHeap)
 {
+    assert(_fromHeap._iterable == _toHeap._iterable);
     scanRoots();
 }
 
@@ -58,8 +60,10 @@ void GarbageCollector::scanRoots() {
     assert(!_fromHeap._cannotGC);
 
 #ifndef NDEBUG
-    for (auto obj = _fromHeap.firstBlock(); obj; obj = _fromHeap.nextBlock(obj))
-        assert(!obj->isForwarded());
+    if (_fromHeap._iterable) {
+        for (auto obj = _fromHeap.firstBlock(); obj; obj = _fromHeap.nextBlock(obj))
+            assert(!obj->isForwarded());
+    }
 #endif
     _toHeap.reset();
     _toHeap.setRoot(scan(_fromHeap.root()).maybeAs<Object>());
@@ -71,20 +75,24 @@ void GarbageCollector::scanRoots() {
 }
 
 
-Value GarbageCollector::scan(Value val) {
-    update(val);
-    return val;
-}
-
-
 void GarbageCollector::update(Value& val) {
-    if (Block *block = val.block())
-        val = Value(scan(block));
+    if (val.isObject())
+        val = scan(val);
 }
 
 
 void GarbageCollector::update(Object& obj) {
-    obj.relocate(scan(obj.block()));
+    obj.relocate(scan(obj.block(), obj.type()));
+}
+
+
+Value GarbageCollector::scan(Value srcVal) {
+    Block *src = srcVal.block();
+    if (!src)
+        return srcVal;
+    Type type = srcVal.type();
+    Block *dst = scan(src, type);
+    return Value(dst, type);
 }
 
 
@@ -93,23 +101,23 @@ void GarbageCollector::update(Object& obj) {
 // any object pointed to by a Val is moved to toHeap and its pointer Val updated.
 // This scan proceeds through any subsequent Blocks in toHeap that are appended to it by the moves.
 // On completion, the `src` block and any blocks it transitively references are fully moved.
-Block* GarbageCollector::scan(Block *src) {
-    Block *toScan = (Block*)_toHeap._cur;
-    Block *dst = moveBlock(src);
-    while (toScan < (Block*)_toHeap._cur) {
-        // Scan & update the contents of the Object in `toScan`:
-        //std::cerr << "**** Scanning block " << (void*)toScan << "\n";
-        for (Val &v : toScan->vals()) {
-            if (v.isObject()) {
-                // Note: v is in toHeap, but was memcpy'd from fromHeap,
-                // so any address in it is still relative to fromHeap.
-                auto block = (Block*)_fromHeap.at(heappos((uintpos&)v >> 1));   // translate it back to fromHeap
-                v = moveBlock(block);
+Block* GarbageCollector::scan(Block *src, Type type) {
+    Block *dst = moveBlock(src, type);
+    while (!_toScan.empty()) {
+        Block *toScan = _toScan.front();
+        _toScan.pop_front();
+        if (IsContainer(type)) {
+            // Scan & update the contents of the Object in `toScan`:
+            //std::cerr << "**** Scanning Vals in moved block " << (void*)toScan << "\n";
+            for (Val &v : slice_cast<Val>(toScan->data())) {
+                if (v.isObject()) {
+                    // Note: v is in toHeap, but was memcpy'd from fromHeap,
+                    // so any address in it is still relative to fromHeap.
+                    auto block = (Block*)_fromHeap.at(heappos(v.decode()));
+                    v.set(moveBlock(block, v.type()), v.type());
+                }
             }
         }
-
-        // And advance it to the next block in _toHeap:
-        toScan = toScan->nextBlock();
     }
     return dst;
 }
@@ -118,18 +126,16 @@ Block* GarbageCollector::scan(Block *src) {
 // Moves a Block from _fromHeap to _toHeap, without altering its contents.
 // - If the Block has already been moved, just returns the new location.
 // - Otherwise copies (appends) it to _toHeap, then overwrites it with the forwarding address.
-Block* GarbageCollector::moveBlock(Block* src) {
+Block* GarbageCollector::moveBlock(Block* src, Type type) {
     if (src->isForwarded()) {
+        // Already forwarded! Just return the new address in _toHeap:
         return (Block*)_toHeap.at(src->forwardingAddress());
     } else {
         Block *dst;
-        if (src->containsVals()) {
-            slice<Val> vals = src->vals();
-            if_let(dict, Value(src).maybeAs<Dict>()) {
-                vals = vals(0, 2 * dict.size());        // only write the used portion of a Dict
-            } else if_let(vector, Value(src).maybeAs<Vector>()) {
-                vals = vals(0, vector.size() + 1);      // only write the used portion of a Vector
-            }
+        if (TypeIs(type, TypeSet::Container)) {
+            slice<Val> vals = slice_cast<Val>(src->data());
+            dst = _toHeap.allocBlock(vals.size() * sizeof(Val), type);
+            //std::cerr << "**** Move container block " << (void*)src << " to " << (void*)dst << " -- " << _toHeap._cur << "\n";
             // Ugh. We have to move a bunch of relative-pointers, which still need to resolve to
             // their original addresses until they get processed during the loop in scan().
             // But there's no guarantee toHeap is within 2GB of fromHeap, so they're not capable
@@ -137,23 +143,27 @@ Block* GarbageCollector::moveBlock(Block* src) {
             // The workaround is to transform each pointer-based value into a pointer to the
             // equivalent heap offset. So if the original Val pointed to fromHeap+3F8, the copied
             // Val points to toHeap+3F8. This isn't a useable Val, but scan() can undo this.
-            dst = _toHeap.allocBlock(vals.size() * sizeof(Val), src->type());
-            //std::cerr << "**** Move block " << (void*)src << " to " << (void*)dst << " -- " << _toHeap._cur << "\n";
-            auto dstItem = (uintpos*)dst->dataPtr();
+            auto dstItem = (uintpos*)dst;
             for (Val const& srcVal : vals) {
                 if (srcVal.isObject())
-                    *dstItem++ = uintpos(_fromHeap.pos(srcVal._block())) << 1;
+                    *dstItem++ = Val::encode(srcVal.type(), uintpos(_fromHeap.pos(srcVal._block())));
                 else
                     *dstItem++ = (uintpos&)srcVal;
             }
-            assert(dstItem == (void*)dst->vals().end());
+            _toScan.push_back(dst);
         } else {
-            // Moving a block of non-Vals is easy:
-            auto size = src->blockSize();
-            dst = (Block*)_toHeap.rawAlloc(size);
-            //std::cerr << "---- Move block " << (void*)src << " to " << (void*)dst << " -- " << _toHeap._cur << "\n";
-            ::memcpy(dst, src, size);
+            // Moving a block of non-Vals just memcpy:
+            auto [withHeader, headerSize] = src->withHeader();
+            if (_fromHeap._iterable) {
+                withHeader = withHeader.moveStart(-1);
+                ++headerSize;
+            }
+            auto dstHeader = (byte*)_toHeap.rawAlloc(withHeader.sizeInBytes());
+            withHeader.memcpyTo(dstHeader);
+            dst = (Block*)(dstHeader + headerSize);
+            //std::cerr << "---- Move data block " << (void*)src << " to " << (void*)dst << " -- " << _toHeap._cur << "\n";
         }
+        // Finally replace the block with a forwarding address (overwriting part of its contents):
         src->setForwardingAddress(_toHeap.pos(dst));
         return dst;
     }

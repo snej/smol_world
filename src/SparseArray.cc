@@ -179,9 +179,9 @@ unsigned SparseArray::indexInBucket(unsigned i) const {
 
 
 std::ostream& operator<< (std::ostream &out, SparseArray const& array) {
-    heapsize total = array._array.block()->blockSize();
+    heapsize total = array._array.block()->sizeWithHeader();
     for (Value val : array._array)
-        total += val.block()->blockSize();
+        total += val.block()->sizeWithHeader();
     auto count = array.nonNullCount();
 
     out << "SparseArray(" << count << " / " << array.size() << "), " << total << " bytes (" << (total / float(count)) << "/item):\n";

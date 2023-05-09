@@ -26,10 +26,11 @@ namespace snej::smol {
 
 template <size_t Size>
 void dump(std::ostream &out, bitmap<Size> const& bitm) {
-    out << std::hex;
+    auto fill = out.fill();
+    out << std::hex << std::setfill('0');
     for (uint64_t b : bitm.bits())
-        out << std::setw(16) << std::setfill('0') << b << ' ';
-    out << std::dec;
+        out << std::setw(16) << b << ' ';
+    out << std::dec << std::setfill(fill);
 }
 
 template <typename T, size_t Size, bool Sparse>

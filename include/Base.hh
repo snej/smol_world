@@ -58,6 +58,16 @@ template <Numeric FROM>
     constexpr FROM pinning_cast(FROM n) {return n;}
 
 
+template <typename T>
+T* offsetBy(T *ptr, intptr_t offset) {
+    return (T*)(intptr_t(ptr) + offset);
+}
+
+template <typename T>
+T const* offsetBy(T const *ptr, intptr_t offset) {
+    return (T const*)(intptr_t(ptr) + offset);
+}
+
 class Block;
 class Heap;
 class Object;

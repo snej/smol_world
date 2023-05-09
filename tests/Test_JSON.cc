@@ -63,13 +63,14 @@ TEST_CASE("JSON", "[object],[json]") {
     auto menu = dict.get(newSymbol("menu", heap).value());
     REQUIRE(menu.type() == Type::Dict);
     auto items = menu.as<Dict>().get(newSymbol("items", heap).value());
-    REQUIRE(items.type() == Type::Vector);
-    CHECK(items.as<Vector>().size() == 22);
+    REQUIRE(items.type() == Type::Array);
+    CHECK(items.as<Array>().itemCount() == 22);
 }
 
 
 static void testReadJSON(const char *path) {
     Heap heap(1000000);
+   // heap.makeIterable();
     UsingHeap u(heap);
     GarbageCollector::runOnDemand(heap);
 
@@ -98,6 +99,7 @@ static void testReadJSON(const char *path) {
     cout << "\n..... garbage collection .....\n\n";
     GarbageCollector::run(heap);
 
+    CHECK(heap.validate());
     heap.dump(cout);
     checkHeap(heap);
 

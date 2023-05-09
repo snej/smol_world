@@ -27,6 +27,7 @@ using namespace snej::smol;
 TEST_CASE("GC", "[gc]") {
     Heap heap(1000);
     UsingHeap u(heap);
+    heap.makeIterable();
     constexpr int kNumStrings = 5;
 
     auto gc = [&] {
@@ -78,7 +79,7 @@ TEST_CASE("GC On Demand", "[gc]") {
         CHECK(gcAllowed);
         cout << "** GC **\n";
         GarbageCollector::run(*heap);
-        heap->dump(cout); //TEMP
+        //heap->dump(cout);
         return heap->available() >= sizeNeeded;
     });
 

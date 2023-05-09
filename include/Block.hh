@@ -13,180 +13,136 @@
 
 namespace snej::smol {
 
-/// A heap block; always created inside a Heap.
-/// The smol pointers in Vals/Values point to Blocks.
-/// Contains the metadata that gives its data size in bytes, its Type, and a few flags for GC.
-class Block {
+/*  BLOCK HEADER:
+    A block's header occupies 1-3 bytes before the start of the Block.
+    The byte immediately before the block contains the flags that indicate the size.
+
+                  0xxxxxxx |            = Small: the x bits are the size in bytes, 0-127
+         <1 byte> 100xxxxx |            = Medium: size is 128  + xxxxxyyyyyyyy, up to 8199
+        <2 bytes> 101xxxxx |            = Large: size is 8200 - 2 million
+        <3 bytes> 110xxxxx |            = Huge; size up to 2^29
+
+    If the flag bits are 111, the block has been forwarded, moved to another heap,
+    and the rest of the byte plus the first 3 bytes of the block give the address:
+
+                  111xxxxx <3 bytes>    = Forward -- xxxxx + next 3 bytes are 29-bit address
+
+    This implies every block has to occupy at least 4 bytes (3 bytes data), to leave room.
+    This is not reflected in the header! So a 2-byte block has a size 2 in its header, but
+    occupies 3 bytes (plus the 1-byte header.)
+
+    NOTE: The Heap class may add a 'hint' byte just before the header, to enable it to iterate
+          its blocks.
+
+ */
+
+/// A heap block header; always created inside a Heap.
+/// Variable size, from 1 to 4 bytes depending on the size of the value following.
+/// For sanity's sake, `this` always points to 4 bytes before the value data.
+class BlockHeader {
 public:
     //---- Allocation:
 
-    static heapsize sizeForData(heapsize dataSize) {
-        assert(dataSize <= MaxSize);
-        heapsize blockSize = std::max(heapsize(sizeof(Block) + dataSize), kMinBlockSize);
-        if (dataSize >= LargeSize)
-            blockSize += 2;      // Add room for 32-bit dataSize
-        return blockSize;
-    }
+    BlockHeader() = default;
 
-    static void* operator new(size_t, void *addr) pure {return addr;} // "placement" operator new
-
-    Block(heapsize dataSize, Type type) {
+    slice<byte> init(heapsize dataSize) {
         assert(dataSize <= MaxSize);
-        uint32_t meta = (dataSize << TagBits) | typeTag(type);
-        if (meta <= 0xFFFF) {
-            _meta = meta;
+        heapsize blockSize;
+        uint8_t meta;
+        if (dataSize < MedSize) {
+            blockSize = 1;
+            meta = uint8_t(dataSize);
         } else {
-            meta |= Large;
-            bigMeta() = meta;
+            blockSize = 2;
+            meta = (dataSize & ~SizeMask) | NotSmolMask;
+            _ext0 = uint8_t(dataSize >> 5);
+            if (dataSize >= LargeSize) {
+                blockSize = 3;
+                meta += NextSizeTag;
+                _ext1 = uint8_t(dataSize >> 13);
+                if (dataSize >= HugeSize) {
+                    blockSize = 4;
+                    meta += NextSizeTag;
+                    _ext2 = uint8_t(dataSize >> 21);
+                }
+            }
         }
+        _meta = meta;
+        auto start = &_meta + 1 - blockSize;
+        return {(byte*)start, blockSize};
     }
 
     //---- Data & size:
 
-    static constexpr heapsize TagBits = 7;                          //   Number of bits of tags
-    static constexpr heapsize MaxSize = (1 << (32 - TagBits)) - 1;  ///< Maximum block size in bytes
-    static constexpr heapsize LargeSize = 1 << (16 - TagBits);      //   Size that needs more header
+    static constexpr heapsize MedSize   = (1 << 7);      ///< Size requiring 2-byte header
+    static constexpr heapsize LargeSize = (1 << 13);     ///< Size requiring 3-byte header
+    static constexpr heapsize HugeSize  = (1 << 21);     ///< Size requiring 4-byte header
+    static constexpr heapsize MaxSize   = (1 << 29) - 1; ///< Maximum block size in bytes
 
-    heapsize blockSize() const                  {
-        return std::max(((_tags & Large) ? 4 : 2) + dataSize(), kMinBlockSize);
-    }
+    static constexpr heappos MaxForwardingAddr { (1 << 29) - 1 };
 
-    /// Returns both the data pointer and size; slightly more efficient.
-    slice<byte> data() const pure {
-        assert(!isForwarded());
-        if (uint32_t meta = bigMeta(); meta & Large)
-            return {(byte*)this + 4, meta >> TagBits};
-        else
-            return {(byte*)this + 2, (meta & 0xFFFF) >> TagBits};
+    /// The exact size of the block's data.
+    heapsize dataSize() const {
+        heapsize size = 0;
+        switch (_meta >> 5) {
+            case 7: // forwarded!
+                assert(false);
+            case 6: // huge
+                size  = (heapsize(_ext2) << 21);
+            case 5: // large
+                size += (heapsize(_ext1) << 13);
+            case 4: // med
+                size += (heapsize(_ext0) << 5) + (_meta & ~SizeMask);
+                break;
+            default: // 0..3 means smol
+                size = _meta;
+                break;
+        }
+        return size;
     }
 
     /// A pointer to the block's data, just past its header.
-    void* dataPtr() pure                        {return (byte*)this + ((_tags & Large) ? 4 : 2);}
-    const void* dataPtr() const pure            {return const_cast<Block*>(this)->dataPtr();}
+    void* dataPtr() pure                        {return &_meta + 1;}
+    const void* dataPtr() const pure            {return &_meta + 1;}
 
-    /// The exact size of the block's data.
-    heapsize dataSize() const pure {
-        assert(!isForwarded());
-        uint32_t meta = bigMeta();
-        if (!(meta & Large))
-            meta &= 0xFFFF;
-        return meta >> TagBits;
+    /// Recovers the Block object given the data.
+    static BlockHeader& fromData(void* data) pure {
+        assert(data);
+        return *(BlockHeader*)((byte*)data - sizeof(BlockHeader));
     }
 
-    /// Recovers the Block object given the data range it owns.
-    static Block* fromData(slice<byte> data) pure {
-        return (data.size()<LargeSize) ? fromSmallData(data.begin()) : fromLargeData(data.begin());
-    }
-    static Block* fromSmallData(void* data) pure {assert(data); return (Block*)((byte*)data - 2);}
-    static Block* fromLargeData(void* data) pure {assert(data); return (Block*)((byte*)data - 4);}
-
-    void fill(slice<byte> contents) {
-        auto bytes = this->data();
-        assert(contents.size() <= bytes.size());
-        if (contents)
-            ::memcpy(bytes.begin(), contents.begin(), contents.size());
-        ::memset(bytes.begin() + contents.size(), 0, bytes.size() - contents.size());
+    static const BlockHeader& fromData(const void* data) pure {
+        assert(data);
+        return *(const BlockHeader*)((byte*)data - sizeof(BlockHeader));
     }
 
-    bool containsVals() const pure              {return TypeIs(type(), TypeSet::Container);}
-    
-    slice<Val> vals() const pure {
-        return containsVals() ? slice_cast<Val>(data()) : slice<Val>();
-    }
-
-    void fill(slice<Val> contents) {
-        assert(containsVals());
-        auto vals = slice_cast<Val>(data());
-        assert(contents.size() <= vals.size());
-        if (contents) {
-            Val *dst = vals.begin();
-            for (Val &src : contents)
-                *dst++ = src;
+    heapsize headerSize() const {
+        switch (_meta >> 5) {
+            case 7:     return 0; // forwarded!
+            case 6:     return 4; // huge
+            case 5:     return 3; // large
+            case 4:     return 2; // med
+            default:    return 1; // 0..3 means smol
         }
-        ::memset(vals.begin() + contents.size(), 0, (vals.size() - contents.size()) * sizeof(Val));
     }
 
-    /// Reduces the data size of this block to `newDataSize`, if possible.
-    /// (It's not possible to shrink a block by less than 4 bytes.)
-    bool shrinkDataTo(heapsize newDataSize) {
-        auto newSize = sizeForData(newDataSize);
-        auto oldSize = blockSize();
-        void* oldData = dataPtr();
-        if (newSize + 4 > oldSize)  // Must free up at least 4 bytes at end
-            return false;
-        // Update the header with the new smaller size:
-        new (this) Block(newDataSize, type());
-        // If I went from 4-byte header to 2-byte, slide the data down:
-        byte* newData = (byte*)dataPtr();
-        if (newData != oldData)
-            ::memmove(newData, oldData, newDataSize);
-        assert(newData + newDataSize == (void*)nextBlock());
-        // Finally create a new valid Block in the empty space:
-        new (newData + newDataSize) Block(oldSize - newSize, Type::Blob);
-        assert(blockSize() + nextBlock()->blockSize() == oldSize);
-        return true;
+    bool isForwarded() const pure               {return (_meta & SizeMask) == Forwarded;}
+
+    heappos forwardingAddress() const pure {
+        auto bytes = &_meta;
+        heapsize addr = (uintpos(bytes[0] & ~SizeMask) << 24)
+                            | uintpos(bytes[1] << 16) | uintpos(bytes[2] << 8) | bytes[3];
+        return heappos(addr);
     }
 
-    //---- Data type:
-
-    Type type() const pure                      {assert(!isForwarded());
-                                                 return Type((_tags & TypeMask) >> TypeShift);}
-
-    //---- Stuff used by Heap and GC:
-
-    /// Points to the next Block in the Heap (or else to the Heap's '_cur' pointer.)
-    Block* nextBlock() pure {
-        auto dat = data();
-        return (Block*)( dat.begin() + std::max(dat.size(), heapsize(2)) );
-    }
-
-    Block const* nextBlock() const pure         {return const_cast<Block*>(this)->nextBlock();}
-
-    bool isVisited() const pure                 {return (_tags & Visited) != 0;}
-    void setVisited()                           {_tags |= Visited;}
-    void clearVisited()                         {_tags &= ~Visited;}
-
-    bool isForwarded() const pure               {return (_tags & Fwd) != 0;}
-    heappos forwardingAddress() const pure      {assert(isForwarded());
-                                                 return heappos(bigMeta() >> 1);}
     void setForwardingAddress(heappos addr) {
-        assert(addr > 0 && !(uintpos(addr) & 0x80000000));
-        bigMeta() = (uintpos(addr) << 1) | Fwd;
-    }
-
-    const char* validate() const {
-        if (isForwarded()) return "a block is forwarded";
-        //if (isVisited()) return "a block's temporary 'visited' flag is set";
-        auto size = dataSize();
-        if (size < LargeSize && (_tags & Large))
-            return "a small block's 'large' flag is set unnecessarily";
-        switch (Type t = type()) {
-            case Type::BigInt:
-                if (size < 1 || size > 8) return "a BigInt has an invalid size";
-                break;
-            case Type::Float:
-                if (size != 4 && size != 8) return "A Float has an invalid size";
-                break;
-            case Type::Array:
-                if (size & 0x3) return "An Array has an invalid size";
-                break;
-            case Type::Vector:
-                if ((size & 0x3) || size == 0) return "A Vector has an invalid size";
-                break;
-            case Type::Dict:
-                if (size & 0x7) return "A Dict has an invalid size";
-                break;
-            case Type::String:
-            case Type::Symbol:
-            case Type::Blob:
-                break;
-            default:
-                if (TypeIs(t, TypeSet::Valid))
-                    return "a block has a non-object type";
-                else
-                    return "a block has an invalid type";
-        }
-        return nullptr;
+        assert(addr > 0 && addr < MaxForwardingAddr);
+        auto n = uintpos(addr);
+        auto bytes = &_meta;
+        bytes[0] = uint8_t(Forwarded | (n >> 24));
+        bytes[1] = uint8_t(n >> 16);
+        bytes[2] = uint8_t(n >> 8);
+        bytes[3] = uint8_t(n);
     }
 
 private:
@@ -197,31 +153,68 @@ private:
 
     // Tag bits stored in an Block's meta word, alongsize its size.
     enum Tags : uint8_t {
-        Fwd          = 0b00000001,    // If set, all 31 remaining bits are the forwarding address
-        Large        = 0b00000010,          // If set, size is 32-bit not 16-bit
-        Visited      = 0b00000100,          // Marker used by Heap::visit()
-        TypeMask     = 0b01111000,          // type tags; encodes Type values 0..15
-        TagsMask     = (1 << TagBits) - 1,  // all tags
+        NotSmolMask  = 0b10000000,    // High bit 0 means this byte is the value size
+        SizeMask     = 0b11100000,
+        NextSizeTag  = 0b00100000,    // Add this to increment size tag
+        Forwarded    = 0b11100000,
     };
-
-    static constexpr heapsize TypeShift = 3; // How far over the TypeMask is
-
-    static constexpr Tags typeTag(Type t)       {return Tags(uint8_t(t) << TypeShift);}
-    Tags tags() const pure                      {return Tags(_tags & TagsMask);}
-
-    uint32_t& bigMeta() const pure              {return *(uint32_t*)this;}
 
     static void* operator new(size_t size) = delete;
     static void operator delete(void*) = delete;
 
-    // Finally the instance data! (little-endian CPU assumed)
-    union {
-        uint8_t  _tags;
-        uint16_t _meta;
-    };
+    uint8_t _ext3, _ext2, _ext1, _ext0;    // up to 4 bytes of size extension
+    uint8_t _meta;                         // the main size and flags byte
+                                           // ...the actual data value follows...
 } __attribute__((aligned (1))) __attribute__((packed));
 
-static_assert(sizeof(Block) == 2);
-static_assert(alignof(Block) == 1);
+static_assert(alignof(BlockHeader) == 1);
+
+
+
+class Block {
+public:
+    static constexpr heapsize MinSize   = 3;    ///< Minimum size (ensures room for fwd ptr)
+    static constexpr heapsize MaxSize   = BlockHeader::MaxSize; ///< Maximum block size in bytes
+
+    heapsize sizeInBytes() const pure           {return header().dataSize();}
+    heapsize dataSize() const pure           {return header().dataSize();}// TODO: Remove
+    slice<byte> data() const pure               {return {(byte*)this, sizeInBytes()};}
+
+    void fill(slice<byte> contents) {
+        auto size = this->sizeInBytes();
+        assert(contents.sizeInBytes() <= size);
+        if (contents)
+            contents.memcpyTo((byte*)this);
+        ::memset((byte*)this + contents.size(), 0, size - contents.sizeInBytes());
+    }
+
+    bool isForwarded() const pure               {return header().isForwarded();}
+    heappos forwardingAddress() const pure      {return header().forwardingAddress();}
+    void setForwardingAddress(heappos addr)     {header().setForwardingAddress(addr);}
+
+    BlockHeader& header() pure                  {return BlockHeader::fromData(this);}
+    BlockHeader const& header() const pure      {return BlockHeader::fromData(this);}
+
+    std::pair<slice<byte>,heapsize> withHeader() const pure {
+        BlockHeader const& hdr = header();
+        auto headerSize = hdr.headerSize();
+        auto begin = offsetBy(this, -int32_t(headerSize));
+        auto end = offsetBy(this, std::max(hdr.dataSize(), MinSize));
+        return {slice<byte>{(byte*)begin, (byte*)end}, headerSize};
+    }
+
+    heapsize sizeWithHeader() const pure {
+        BlockHeader const& hdr = header();
+        return hdr.headerSize() + std::max(hdr.dataSize(), MinSize);
+    }
+
+    const void* end() const {return offsetBy(this, std::max(sizeInBytes(), MinSize));}
+
+private:
+    Block() = delete;
+    static void* operator new(size_t size) = delete;
+    static void operator delete(void*) = delete;
+} __attribute__((aligned (1)));
+
 
 }

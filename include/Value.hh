@@ -22,17 +22,12 @@ public:
 
     Value(Val const& val) {
         if (Block *block = val.block())
-            setBlock(block);
+            setBlock(block, val.rawType());
         else
             _val = val._val;
     }
 
-    explicit Value(Block const* block)              {setBlock(block);}
-
-    Type type() const pure;
-
-    /// True if the value has a numeric type (Int, BigInt or Float.)
-    bool isNumber() const pure                      {return TypeIs(type(), TypeSet::Numeric);}
+    explicit Value(Block const* block, Type type)   {setBlock(block, type);}
 
     /// Returns the value as a number. Unlike `asInt` this supports types other than Int;
     /// it supports Bool, Int, BigInt and Float, and otherwise returns 0.
@@ -42,7 +37,6 @@ public:
 
     Block* block() const pure                       {return (isObject()) ? _block() : nullptr;}
 
-    template <ValueClass T> bool is() const pure    {return T::HasType(type());}
     template <ValueClass T> T as() const pure       {auto x = T::fromValue(*this); return (T&)x;}
     template <ValueClass T> Maybe<T> maybeAs() const pure   {return Maybe<T>(*this);}
 
@@ -60,7 +54,7 @@ protected:
 
     constexpr explicit Value(magic m)       :ValBase(m) { }
     Block* _block() const pure              {assert(isObject()); return (Block*)(_val >> TagSize);}
-    void setBlock(Block const* block)       {_val = uintptr_t(block) << TagSize;}
+    void setBlock(Block const* block, Type t)       {_val = (uintptr_t(block) << TagSize) | uintptr_t(t);}
 };
 
 std::ostream& operator<< (std::ostream&, Value);
@@ -125,14 +119,15 @@ class Object {
 public:
     constexpr static bool HasType(enum Type t)      {return t < Type::Null;}
 
-    explicit Object(Block const* block)             :_data(block->data()) { }
-    explicit Object(Val const& val)                 :Object(val._block()) { }
-    explicit Object(Value val)                      :Object(val._block()) { }
+    explicit Object(Block const* block, Type type)  :_data(block->data()), _type(type) { }
+    explicit Object(Val const& val)                 :Object(val._block(), val.type()) { }
+    explicit Object(Value val)                      :Object(val._block(), val.type()) { }
 
-    operator Value() const pure                     {return Value(block());}
+    operator Value() const pure                     {return Value(block(), _type);}
 
     bool isNull() const pure                        {return _data.isNull();}
     bool isNumber() const pure                      {return TypeIs(type(), TypeSet::Numeric);}
+    bool isContainer() const pure                   {return IsContainer(type());}
 
     /// Returns the object's numeric value if it's a BigInt or Float; else 0.
     template <Numeric NUM> NUM asNumber() const pure {return Value(*this).asNumber<NUM>();}
@@ -145,10 +140,31 @@ public:
     /// with this value cast to its runtime type.
     template <typename FN> bool visit(FN fn) const;
 
-    Block* block() const pure                       {return _data ?Block::fromData(_data) :nullptr;}
-    Type type() const pure                          {return block()->type();}
+    Block* block() const pure                       {if (_data) return (Block*)_data.begin();
+                                                     else return nullptr;}
+    Type type() const pure                          {return _type;}
 
     slice<byte> rawBytes() const pure               {return _data;}
+
+    /// The Vals of a container. Null if not a container.
+    slice<Val> values() const pure {
+        if (isContainer())
+            return slice_cast<Val>(rawBytes());
+        return {};
+    }
+
+    /// Copies Vals into a container. Any leftover items are set to null.
+    void fill(slice<Val> contents) {
+        assert(isContainer());
+        auto vals = slice_cast<Val>(rawBytes());
+        assert(contents.size() <= vals.size());
+        if (contents) {
+            Val *dst = vals.begin();
+            for (Val &src : contents)
+                *dst++ = src;
+        }
+        ::memset(vals.begin() + contents.size(), 0, (vals.size() - contents.size()) * sizeof(Val));
+    }
 
     friend bool operator==(Object const& a, Object const& b) pure {
         return a._data.begin() == b._data.begin();
@@ -168,10 +184,12 @@ protected:
 
 private:
     slice<byte> _data;      // The heap block's data, just past its header
+    Type        _type;
 };
 
 
 
+#if 0
 /// The Object subclass representing the BigInt type.
 class BigInt : public Object {
 public:
@@ -195,7 +213,7 @@ Maybe<BigInt> newBigInt(int64_t, Heap&);
 
 /// Returns an inline Int if possible, else creates a BigInt object.
 Value newInt(int64_t i, Heap &heap);
-
+#endif
 
 
 /// The Object subclass representing the Float type.
@@ -244,7 +262,7 @@ public:
     Maybe(nullptr_t)                    :Maybe() { }
     Maybe(Null)                         :Maybe() { }
     explicit Maybe(Value val)           {if (T::HasType(val.type())) _obj = Object(val);}
-    explicit Maybe(Block *block)        :_obj(block) {assert(_obj.type() == T::Type);}
+//    explicit Maybe(Block *block)        :_obj(block) {assert(_obj.type() == T::Type);}
     Maybe(T const& obj)                 :_obj(obj) { }
 
     explicit operator bool() const      {return !_obj.isNull();}
@@ -294,7 +312,9 @@ template <Numeric NUM> NUM Value::asNumber() const {
     switch (type()) {
         case Type::Bool:    return NUM(asBool());
         case Type::Int:     return pinning_cast<NUM>(asInt());
+#ifdef BIGINT
         case Type::BigInt:  return pinning_cast<NUM>(as<BigInt>().asInt());
+#endif
         case Type::Float:   return pinning_cast<NUM>(as<Float>().asDouble());
         default:            return 0;
     }

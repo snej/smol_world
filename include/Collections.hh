@@ -49,6 +49,7 @@ protected:
     heapsize _capacity() const                  {return _items().size();}
     slice<Item> _items()                        {return slice_cast<Item>(this->rawBytes());}
     slice<Item> _items() const                  {return slice_cast<Item>(this->rawBytes());}
+
 };
 
 
@@ -106,6 +107,13 @@ class Array : public Collection<Val, Type::Array, Array> {
 public:
     slice<Val> items()                          {return _items();}
     slice<Val> items() const                    {return const_cast<Array*>(this)->items();}
+
+    // Partially-full (Vector) operations:
+    heapsize itemCount() const;                 ///< Size ignoring null items at the end
+    bool full() const                           {return capacity() == 0 || end()[-1] != nullval;}
+    bool insert(Value, heapsize pos);           ///< Inserts an item; last item will be lost
+    bool append(Value);                         ///< Inserts after the last non-null item
+    void clear();                               ///< Sets all items to null
 };
 
 Maybe<Array> newArray(heapsize size, Heap &heap);
@@ -113,7 +121,7 @@ Maybe<Array> newArray(heapsize size, Value initialValue, Heap &heap);
 Maybe<Array> newArray(slice<Val> vals, size_t capacity, Heap &heap);
 
 
-
+#if 0
 /// A variable-size array of `Val`s. Uses an additional slot to store the current size.
 class Vector : public Collection<Val, Type::Vector, Vector> {
 public:
@@ -133,6 +141,7 @@ private:
 
 Maybe<Vector> newVector(heapsize capacity, Heap &heap);
 Maybe<Vector> newVector(slice<Val> vals, size_t capacity, Heap &heap);
+#endif
 
 
 struct DictEntry {
@@ -188,13 +197,12 @@ bool Value::visit(FN fn) const {
         case Type::Null:    fn(as<Null>()); break;
         case Type::Bool:    fn(as<Bool>()); break;
         case Type::Int:     fn(as<Int>()); break;
-        case Type::BigInt:  fn(as<BigInt>()); break;
         case Type::Float:   fn(as<Float>()); break;
         case Type::String:  fn(as<String>()); break;
         case Type::Symbol:  fn(as<Symbol>()); break;
         case Type::Blob:    fn(as<Blob>()); break;
         case Type::Array:   fn(as<Array>()); break;
-        case Type::Vector:  fn(as<Vector>()); break;
+//        case Type::Vector:  fn(as<Vector>()); break;
         case Type::Dict:    fn(as<Dict>()); break;
         default:            assert(false); return false;
     }

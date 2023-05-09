@@ -18,23 +18,18 @@ class Value;
 
 /** Value types. */
 enum class Type : uint8_t {
-    // Object types:  (these come from Block type tags, 0..15)
-    Float = 0,
-    BigInt,
-    String,
-    Symbol,
-    Blob,
-    Array,
-    Vector,
-    Dict,
-    // (8 spares)
+    Null    = 0,
+    Int     = 1,
+    Float   = 2,
+    String  = 3,
+    Symbol  = 4,
+    Blob    = 5,
+    Array   = 6,
+    Dict    = 7,
 
-    // Primitives:  (these are stored inline in a Val without any pointers)
-    Null = 0x10,
-    Bool,
-    Int,
+    Bool    = 8,    // not actually stored in tag; encoded as Null tag
 
-    Max = Int,
+    Max = Bool,
 }; // Note: If you change this you must update TypeSet::All below and kTypeNames[] in Val.cc
 
 const char* TypeName(Type t);
@@ -44,15 +39,36 @@ std::ostream& operator<<(std::ostream& out, Type);
 constexpr uint32_t _mask(Type t) {return uint32_t(1) << uint8_t(t);}
 
 enum class TypeSet : uint32_t {
-    Object      = 0b00000000011111111,
+    Object      = 0b011111100,
     Inline      = _mask(Type::Null)  | _mask(Type::Bool)   | _mask(Type::Int),
-    Numeric     = _mask(Type::Int)   | _mask(Type::BigInt) | _mask(Type::Float),
-    Container   = _mask(Type::Array) | _mask(Type::Vector) | _mask(Type::Dict),
+    Numeric     = _mask(Type::Int)   | _mask(Type::Float),
+    Container   = _mask(Type::Array) | _mask(Type::Dict),
     Valid       = uint32_t(Object) | uint32_t(Inline),
 };
 
-constexpr bool TypeIs(Type t, TypeSet set) {return (_mask(t) & uint32_t(set)) != 0;}
+constexpr pure bool TypeIs(Type t, TypeSet set) {return (_mask(t) & uint32_t(set)) != 0;}
 
+constexpr pure bool IsContainer(Type t)         {return TypeIs(t, TypeSet::Container);}
+
+/*  VAL / VALUE DATA FORMAT:
+    The low 3 bits are tags giving the type as type Type.
+    (The type Null is also used for the values nullish, false and true.)
+
+     Direct/inline types:
+         …0000000000000'000 = null/undefined
+         …0000000000001'000 = nullish
+         …0000000000010'000 = false
+         …0000000000011'000 = true
+         …iiiiiiiiiiiii'001 = int
+
+     Reference types:
+         …ppppppppppppp'010 = float64
+         …ppppppppppppp'011 = string
+         …ppppppppppppp'100 = symbol
+         …ppppppppppppp'101 = blob
+         …ppppppppppppp'110 = array
+         …ppppppppppppp'111 = dict
+ */
 
 // template class with common functionality between Val and Value. Don't use directly.
 template <typename RAWVAL>
@@ -62,33 +78,60 @@ public:
     constexpr explicit ValBase(nullptr_t)       :ValBase() { }
     constexpr explicit ValBase(int i)           :_val(encodeInt(i)) { }
 
+    Type type() const pure {
+        Type t = rawType();
+        if (t == Type::Null) {
+            switch(_val) {
+                case NullVal:
+                case NullishVal:    return Type::Null;
+                case FalseVal:
+                case TrueVal:       return Type::Bool;
+                default:            assert(false);
+            }
+        }
+        return t;
+    }
+
     constexpr bool isNull() const               {return _val == NullVal;}
     constexpr bool isNullish() const            {return _val == NullishVal;}
     constexpr bool isBool() const               {return _val == FalseVal || _val == TrueVal;}
     constexpr bool asBool() const               {return _val > FalseVal;}
-    constexpr bool isInt() const                {return (_val & IntTag) != 0;}
+    constexpr bool isInt() const                {return rawType() == Type::Int;}
     constexpr int asInt() const                 {assert(isInt()); return int32_t(_val) >> TagSize;}
-    constexpr bool isObject() const             {return (_val & IntTag) == 0 && _val > TrueVal;}
+    constexpr bool isObject() const             {return rawType() > Type::Int;}
+
+    /// True if the value has a numeric type (Int, BigInt or Float.)
+    bool isNumber() const pure                          {return TypeIs(type(), TypeSet::Numeric);}
+
+    bool isContainer() const pure                       {return IsContainer(type());}
+
+    template <ValueClass T> bool is() const pure                {return T::HasType(type());}
 
     /// A Val/Value is "truthy" if it is not `null`. (Yes, `nullish` is truthy.)
     constexpr explicit operator bool() const pure {return !isNull();}
 
 protected:
     friend class Value;
+    friend class GarbageCollector;
 
     enum TagBits : uint32_t {
-        IntTag      = 0b001,
+        TagMask  = 0b111,
     };
 
-    static constexpr int TagSize = 1;
+    Type rawType() const pure                   {return Type(_val & TagMask);}
 
-    static constexpr RAWVAL encodeInt(int i)    {return (i << TagSize) | IntTag;}
+    static constexpr int TagSize = 3;
+
+    static constexpr RAWVAL encode(Type t, RAWVAL i) pure  {return (uint32_t(i) << TagSize) | uint32_t(t);}
+    static constexpr RAWVAL encodeInt(int i) pure       {return encode(Type::Int, RAWVAL(i));}
+
+    RAWVAL decode() const pure                      {return _val >> TagSize;}
 
     enum magic : RAWVAL {
-        NullVal    = 0,
-        NullishVal = 2,
-        FalseVal   = 4,
-        TrueVal    = 6,
+        NullVal    = 0b00'000,
+        NullishVal = 0b01'000,
+        FalseVal   = 0b10'000,
+        TrueVal    = 0b11'000,
     };
 
     constexpr explicit ValBase(magic m)         :_val(m) { }
@@ -103,18 +146,13 @@ protected:
 /// Application code never creates values of this type; use `Value` instead.
 class Val : public ValBase<uintpos> {
 public:
-    static constexpr int MaxInt = (1 << 30) - 1;
+    static constexpr int MaxInt = (1 << (sizeof(uintpos)-TagSize-1)) - 1;
     static constexpr int MinInt = -MaxInt - 1;
 
     constexpr Val() = default;
 
     Val& operator= (Val const&);
     Val& operator= (Value);
-
-    Type type() const pure;
-
-    /// True if the value has a numeric type (Int, BigInt or Float.)
-    bool isNumber() const pure                          {return TypeIs(type(), TypeSet::Numeric);}
 
     /// Returns the value as a number. Unlike `asInt` this supports types other than Int;
     /// it supports Bool, Int, BigInt and Float, and otherwise returns 0.
@@ -123,8 +161,6 @@ public:
     /// Returns the value as an Object. Same as `Object(val)`.
     /// Only legal if `isObject()` returns true.
     Object asObject() const pure;
-
-    template <ValueClass T> bool is() const pure                {return T::HasType(type());}
 
     template <ValueClass T> T as() const pure;
     template <ValueClass T> Maybe<T> maybeAs() const pure;
@@ -136,7 +172,8 @@ public:
 
     //---- Blocks:
 
-    Val& operator= (Block const* dst);
+   // Val& operator= (Block const* dst);
+    void set(Block const*, Type);
 
     Block* block() const pure                           {return isObject() ? _block() : nullptr;}
 

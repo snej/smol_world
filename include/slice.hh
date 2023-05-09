@@ -19,7 +19,8 @@ struct slice {
     slice(T* b, size_t s)               :slice(b, uint32_t(s)) {assert(s < UINT32_MAX);}
     slice(T* b, T* e)                   :slice(b, size_t(e - b)) { }
 
-    uint32_t size() const pure          {return uint32_t(_size);}
+    uint32_t size() const pure          {return _size;}
+    uint32_t sizeInBytes() const pure   {return _size * sizeof(T);}
     bool empty() const pure             {return _size == 0;}
     bool isNull() const pure            {return _begin == nullptr;}
     explicit operator bool() const pure {return _begin != nullptr;}
@@ -33,16 +34,20 @@ struct slice {
 
     T& operator[] (uint32_t i) const pure  {assert(i < _size); return _begin[i];}
 
-    slice<T> operator() (uint32_t i, uint32_t size) const {
+    slice<T> operator() (uint32_t i, uint32_t size) const pure {
         assert(i <= _size && size <= _size - i);
         return {_begin + i, size};
     }
 
-    slice<T> upTo(uint32_t i) const     {return {_begin, std::min(i, _size)};}
+    slice<T> upTo(uint32_t i) const pure    {return {_begin, std::min(i, _size)};}
 
-    slice<T> moveStart(uint32_t i) const {assert(i <= _size); return {_begin + i, _size - i};}
+    slice<T> moveStart(int i) const pure    {assert(i <= int(_size)); return {_begin + i, _size - i};}
 
     void moveTo(T* addr)                {assert(addr); _begin = addr;}
+
+    void memcpyTo(T *addr) const        {::memcpy(addr, begin(), sizeInBytes());}
+    void memcpyFrom(T const* addr)      {::memcpy(begin(), addr, sizeInBytes());}
+    void memset(uint8_t byte)           {::memset(begin(), byte, sizeInBytes());}
 
     template <typename TO>
     friend inline slice<TO> slice_cast(slice<T> from) pure {
