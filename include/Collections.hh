@@ -110,6 +110,7 @@ public:
 
     // Partially-full (Vector) operations:
     heapsize itemCount() const;                 ///< Size ignoring null items at the end
+    bool empty() const                          {return capacity() == 0 || *begin() == nullval;}
     bool full() const                           {return capacity() == 0 || end()[-1] != nullval;}
     bool insert(Value, heapsize pos);           ///< Inserts an item; last item will be lost
     bool append(Value);                         ///< Inserts after the last non-null item

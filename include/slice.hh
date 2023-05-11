@@ -44,6 +44,7 @@ struct slice {
     slice<T> moveStart(int i) const pure    {assert(i <= int(_size)); return {_begin + i, _size - i};}
 
     void moveTo(T* addr)                {assert(addr); _begin = addr;}
+    void resize(uint32_t newSize)       {_size = newSize;}
 
     void memcpyTo(T *addr) const        {::memcpy(addr, begin(), sizeInBytes());}
     void memcpyFrom(T const* addr)      {::memcpy(begin(), addr, sizeInBytes());}

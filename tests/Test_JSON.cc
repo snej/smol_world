@@ -70,7 +70,7 @@ TEST_CASE("JSON", "[object],[json]") {
 
 static void testReadJSON(const char *path) {
     Heap heap(1000000);
-   // heap.makeIterable();
+    heap.makeIterable();
     UsingHeap u(heap);
     GarbageCollector::runOnDemand(heap);
 
@@ -101,7 +101,10 @@ static void testReadJSON(const char *path) {
 
     CHECK(heap.validate());
     heap.dump(cout);
+    heap.dumpBlockSizes(cout);
+    heap.dumpStrings(cout);
     checkHeap(heap);
+    CHECK(heap.root() != nullvalue);
 
     string json2 = toJSON(v);
     if (json2.size() < 10000)

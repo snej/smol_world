@@ -39,7 +39,7 @@ static inline heapsize grow(heapsize size) {
 
 class JSONParseHandler {
 public:
-    static constexpr size_t kMaxStringDedupSize = 16;
+    static constexpr size_t kMaxStringDedupSize = 1000;
 
     JSONParseHandler(Heap &h)
     :_heap(h)
@@ -95,6 +95,7 @@ public:
             }
             return addValue(_emptyArray);
         } else {
+            compact(vec);
             return addValue(vec);
         }
     }
@@ -114,6 +115,7 @@ public:
     bool EndObject(rapidjson::SizeType /*memberCount*/) {
         Handle<Dict> dict = _stack.back().as<Dict>();
         _stack.pop_back();
+        compact(dict);
         return addValue(dict);
     }
 
@@ -165,6 +167,25 @@ private:
             _stack.back() = newDict;
         }
         return true;
+    }
+
+    void compact(Array &vec) {
+        if (!vec.full()) {
+            if_let(newVec, _heap.grow(vec, vec.itemCount())) {
+                vec = newVec;
+            }
+        }
+    }
+
+    void compact(Dict &dict) {
+        if (!dict.full()) {
+            //TODO: Implement grow() for Dict
+            if_let(d, newDict(dict.size(), _heap)) {
+                for (auto &item : dict.items())
+                    d.set(item.key.as<Symbol>(), item.value);
+                dict = d;
+            }
+        }
     }
 
     Heap& _heap;

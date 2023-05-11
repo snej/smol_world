@@ -81,19 +81,19 @@ public:
     ///
     /// Note that if there is a failure handler that runs the garbage collector,
     /// then `alloc` may move objects, invalidating `Object` pointers and `Val`s!
-    void* alloc(heapsize size)          {return allocBlock(size, Type::Blob);}
+    [[nodiscard]] void* alloc(heapsize size)          {return allocBlock(size, Type::Blob);}
 
     /// Allocates a Block; does not initialize its contents.
-    Block* allocBlock(heapsize dataSize, Type type);
+    [[nodiscard]] Block* allocBlock(heapsize dataSize, Type type);
     /// Allocates a Block and copies the data in `contents` into it, filling the rest with 0.
-    Block* allocBlock(heapsize dataSize, Type type, slice<byte> contents);
+    [[nodiscard]] Block* allocBlock(heapsize dataSize, Type type, slice<byte> contents);
 
     /// Copies a block, creating a new block with a larger size. The extra bytes are zeroed.
     /// @returns The new block; or the original if the new size is the same as the old;
     ///          or nullptr if the allocation failed.
-    Block* reallocBlock(Block* block, Type type, heapsize newDataSize);
+    [[nodiscard]] Block* reallocBlock(Block* block, Type type, heapsize newDataSize);
 
-    template <ObjectClass OBJ>
+    template <ObjectClass OBJ> [[nodiscard]]
     Maybe<OBJ> grow(OBJ const& obj, heapsize newCapacity) {
         Block* b = reallocBlock(obj.block(),
                                 obj.type(),
@@ -119,7 +119,7 @@ public:
     /// - It is illegal to shrink a Heap smaller than its current `used()` size.
     /// If you grow a non-malloced heap, the new address space at the end must be available
     /// and writeable, otherwise Bad Things will happen when the Heap writes into it.
-    bool resize(size_t newSize);
+    [[nodiscard]] bool resize(size_t newSize);
 
     //---- Address Translation:
 
@@ -177,8 +177,10 @@ public:
         return result;
     }
 
-    void dump(std::ostream&);
     void dump();
+    void dump(std::ostream&);
+    void dumpBlockSizes(std::ostream&);
+    void dumpStrings(std::ostream&);
 
     //---- External Roots:
 

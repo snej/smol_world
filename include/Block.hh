@@ -81,6 +81,10 @@ public:
 
     static constexpr heappos MaxForwardingAddr { (1 << 29) - 1 };
 
+    static heapsize sizeForDataSize(heapsize dataSize) {
+        return 1 + (dataSize >= MedSize) + (dataSize >= LargeSize) + (dataSize >= HugeSize);
+    }
+
     /// The exact size of the block's data.
     heapsize dataSize() const {
         heapsize size = 0;

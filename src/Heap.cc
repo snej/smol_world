@@ -9,6 +9,7 @@
 #include <deque>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <set>
 #include <unordered_set>
 #include <unordered_map>
@@ -314,9 +315,9 @@ Block* Heap::allocBlock(heapsize size, Type type, slice<byte> contents) {
 
 Block* Heap::reallocBlock(Block* block, Type type, heapsize newDataSize) {
     auto data = block->data();
-    if (newDataSize == data.size())
+    auto oldDataSize = data.size();
+    if (newDataSize == oldDataSize)
         return block;
-    assert(newDataSize > data.size()); //TODO: Implement shrinking
     if (_iterable)
         assert(hint(block).type == type);
 
@@ -326,6 +327,8 @@ Block* Heap::reallocBlock(Block* block, Type type, heapsize newDataSize) {
         return nullptr;
     block = val.block();    // in case GC occurred
     data = block->data();
+    if (newDataSize < oldDataSize)
+        data.resize(newDataSize);
 
     if (TypeIs(type, TypeSet::Container)) {
         // Vals are relative ptrs so they have to be copied specially:
@@ -335,7 +338,8 @@ Block* Heap::reallocBlock(Block* block, Type type, heapsize newDataSize) {
     } else {
         newBlock->fill(data);
     }
-    ::memset(&newBlock->data()[data.size()], 0, newDataSize - data.size());
+    if (newDataSize > oldDataSize)
+        ::memset(&newBlock->data()[data.size()], 0, newDataSize - data.size());
     return newBlock;
 }
 
@@ -631,13 +635,9 @@ void Heap::dump(std::ostream &out) {
     });
 
     unsigned blocks = 0;
-    unsigned byType[16] = {};
-    unsigned sizeByType[16] = {};
     unsigned fwdLinks = 0, backLinks = 0;
     intpos biggestPtr = 0;
     heappos biggestPtrAt = nullpos;
-
-    std::unordered_map<std::string_view,unsigned> strings;
 
     writeAddr(_base) << "--- HEAP BASE ---\n";
     bool ok = visitAll([&](Block const& block, Type type) {
@@ -648,16 +648,15 @@ void Heap::dump(std::ostream &out) {
 //        }
         out << std::setw(4) << block.sizeInBytes() << " bytes : ";
         Value val(&block, type);
-        switch (val.type()) {
+        switch (type) {
             case Type::String: {
                 std::string_view str = val.as<String>().str();
                 out << "“" << str.substr(0, std::min(str.size(),size_t(50)))
                     << (str.size() <= 50 ? "”" : "……");
-                auto [i, isNew] = strings.insert({str, 0});
-                i->second++;
                 break;
             }
-            case Type::Array:   out << "Array[" << val.as<Array>().size() << "]"; break;
+            case Type::Array:   out << "Array[" << val.as<Array>().itemCount() << " / "
+                                    << val.as<Array>().size() << "]"; break;
 #ifdef VECTOR
             case Type::Vector:  out << "Vector[" << val.as<Vector>().size()
                                     << " / " << val.as<Vector>().capacity() << "]"; break;
@@ -668,8 +667,6 @@ void Heap::dump(std::ostream &out) {
         }
 
         ++blocks;
-        ++byType[int(val.type())];
-        sizeByType[int(val.type())] += block.sizeInBytes() + block.header().headerSize();
 
         for (auto& val : blockVals(&block)) {
             if (auto dstBlock = val.block(); dstBlock) {
@@ -702,11 +699,68 @@ void Heap::dump(std::ostream &out) {
     writeAddr(_cur) << "--- cur ---\n";
     writeAddr(_end) << "--- HEAP END ---\n" << blocks << " blocks:";
 
+    out << fwdLinks << " forward pointers, " << backLinks << " backward pointers.\n";
+    out << "Farthest pointer is " << biggestPtr << " bytes, at " << uintpos(biggestPtrAt) << ".\n";
+}
+
+
+void Heap::dumpBlockSizes(std::ostream &out) {
+    unsigned blocks = 0;
+    unsigned byType[16] = {};
+    unsigned sizeByType[16] = {};
+    std::map<heapsize,unsigned> blockSizes;
+
+    visitAll([&](Block const& block, Type type) {
+        ++blocks;
+        ++byType[int(type)];
+        sizeByType[int(type)] += block.sizeWithHeader() + _iterable;
+        blockSizes[block.sizeInBytes()] += 1;
+        return true;
+    });
+
     for (int t = 0; t < 16; t++) {
         if (byType[t])
             out << "  " << byType[t] << " " << TypeName(Type(t)) << "s (" << sizeByType[t] << " b)";
     }
     out << "\n";
+
+    unsigned maxCount = 0, maxTotalSize = 0;
+    for (auto [size, count] : blockSizes) {
+        maxCount = std::max(maxCount, count);
+        maxTotalSize = std::max(maxTotalSize, size * count);
+    }
+    for (auto [size, count] : blockSizes) {
+        auto width = (120 * count + maxCount/2) / maxCount;
+        out << std::setw(4) << size << " bytes : " << std::setw(4) << count << " blocks | "
+            << std::string(width, '*') << std::endl;
+        auto totalSize = size * count;
+        width = (120 * totalSize + maxTotalSize/2) / maxTotalSize;
+        out << "           " << std::setw(7) << totalSize << " bytes | "
+            << std::string(width, '=');
+        auto totalSizePlusHeaders = totalSize + count * (BlockHeader::sizeForDataSize(size) + _iterable);
+        auto widthWithHeaders = (120 * totalSizePlusHeaders + maxTotalSize/2) / maxTotalSize;
+        out << std::string(widthWithHeaders - width, '-') << std::endl;
+    }
+}
+
+
+void Heap::dumpStrings(std::ostream &out) {
+    std::unordered_map<std::string_view,unsigned> strings;
+
+    visitAll([&](Block const& block, Type type) {
+        Value val(&block, type);
+        switch (type) {
+            case Type::String: {
+                std::string_view str = val.as<String>().str();
+                auto [i, isNew] = strings.insert({str, 0});
+                i->second++;
+                break;
+            }
+            default:
+                break;
+        }
+        return true;
+    });
 
     size_t stringSize = 0, wasted = 0;
     for (auto [str,count] : strings) {
@@ -715,9 +769,6 @@ void Heap::dump(std::ostream &out) {
         wasted += (count - 1) * str.size();
     }
     out << strings.size() << " unique strings, " << stringSize << " bytes; dups waste " << wasted << " bytes\n";
-
-    out << fwdLinks << " forward pointers, " << backLinks << " backward pointers.\n";
-    out << "Farthest pointer is " << biggestPtr << " bytes, at " << uintpos(biggestPtrAt) << ".\n";
 }
 
 
@@ -758,14 +809,19 @@ Maybe<BigInt> newBigInt(int64_t i, Heap &heap) {
     Object obj(block);
     return (Maybe<BigInt>&)obj;
 }
+#endif
 
 Value newInt(int64_t i, Heap &heap) {
     if (i >= Int::Min && i <= Int::Max)
         return Int(int(i));
-    else
+    else {
+#ifdef BIGINT
         return newBigInt(i, heap);
-}
+#else
+        return newFloat(double(i), heap);
 #endif
+    }
+}
 
 
 template <typename F>
@@ -788,11 +844,9 @@ Maybe<Float> newFloat(double d, Heap &heap) {
 }
 
 Value newNumber(double d, Heap &heap) {
-#ifdef BIGINT
     if (auto i = int64_t(d); i == d)
         return newInt(i, heap);
     else
-#endif
         return newFloat(d, heap);
 }
 

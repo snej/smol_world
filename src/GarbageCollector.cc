@@ -82,7 +82,8 @@ void GarbageCollector::update(Value& val) {
 
 
 void GarbageCollector::update(Object& obj) {
-    obj.relocate(scan(obj.block(), obj.type()));
+    if (obj.block())
+        obj.relocate(scan(obj.block(), obj.type()));
 }
 
 

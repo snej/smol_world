@@ -117,7 +117,7 @@ public:
 /// A reference to a heap object -- any type except Null, Bool or Int.
 class Object {
 public:
-    constexpr static bool HasType(enum Type t)      {return t < Type::Null;}
+    constexpr static bool HasType(enum Type t)      {return TypeIs(t, TypeSet::Object);}
 
     explicit Object(Block const* block, Type type)  :_data(block->data()), _type(type) { }
     explicit Object(Val const& val)                 :Object(val._block(), val.type()) { }
@@ -246,7 +246,10 @@ Maybe<Float> newFloat(float, Heap&);
 Maybe<Float> newFloat(double, Heap&);
 
 /// Returns a (non-object) Int value if possible;
-/// else creates a BigInt if the value is integral;
+/// else creates a Float.
+Value newInt(int64_t, Heap&);
+
+/// Returns a (non-object) Int value if possible;
 /// else creates a Float.
 Value newNumber(double, Heap&);
 

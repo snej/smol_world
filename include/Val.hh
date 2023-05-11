@@ -146,7 +146,7 @@ protected:
 /// Application code never creates values of this type; use `Value` instead.
 class Val : public ValBase<uintpos> {
 public:
-    static constexpr int MaxInt = (1 << (sizeof(uintpos)-TagSize-1)) - 1;
+    static constexpr int MaxInt = (1 << (sizeof(uintpos)*8 - TagSize - 1)) - 1;
     static constexpr int MinInt = -MaxInt - 1;
 
     constexpr Val() = default;
