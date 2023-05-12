@@ -18,14 +18,14 @@ namespace snej::smol {
     The byte immediately before the block contains the flags that indicate the size.
 
                   0xxxxxxx |            = Small: the x bits are the size in bytes, 0-127
-         <1 byte> 100xxxxx |            = Medium: size is 128  + xxxxxyyyyyyyy, up to 8199
-        <2 bytes> 101xxxxx |            = Large: size is 8200 - 2 million
-        <3 bytes> 110xxxxx |            = Huge; size up to 2^29
+         <1 byte> 100xxxxx |            = Medium: size is xxxxxyyyyyyyy, up to 8192 (2^13)
+        <2 bytes> 101xxxxx |            = Large: size is 8200 - 2MB (2^21)
+        <3 bytes> 110xxxxx |            = Huge; size up to 128MB (2^29)
 
     If the flag bits are 111, the block has been forwarded, moved to another heap,
     and the rest of the byte plus the first 3 bytes of the block give the address:
 
-                  111xxxxx <3 bytes>    = Forward -- xxxxx + next 3 bytes are 29-bit address
+            111xxxxx | <3 bytes>    = Forward -- xxxxx + next 3 bytes are 29-bit address
 
     This implies every block has to occupy at least 4 bytes (3 bytes data), to leave room.
     This is not reflected in the header! So a 2-byte block has a size 2 in its header, but
@@ -33,7 +33,6 @@ namespace snej::smol {
 
     NOTE: The Heap class may add a 'hint' byte just before the header, to enable it to iterate
           its blocks.
-
  */
 
 /// A heap block header; always created inside a Heap.

@@ -41,7 +41,6 @@
 		2705301429776CB2003D4C93 /* smol_world.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = smol_world.hh; sourceTree = "<group>"; };
 		2705301D2978B4FB003D4C93 /* Test_Heap.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_Heap.cc; sourceTree = "<group>"; };
 		2705301F2978B556003D4C93 /* TestsMain.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = TestsMain.cc; sourceTree = "<group>"; };
-		271E33BB2A008DEE0070BE9A /* InPlaceHeap.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = InPlaceHeap.hh; sourceTree = "<group>"; };
 		272AF5E4298C35D8008943C3 /* JSON.hh */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.h; path = JSON.hh; sourceTree = "<group>"; };
 		272AF5E5298C35D8008943C3 /* JSON.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = JSON.cc; sourceTree = "<group>"; };
 		272AF5E7298C4375008943C3 /* Test_JSON.cc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Test_JSON.cc; sourceTree = "<group>"; };
@@ -144,7 +143,6 @@
 				272AF5E5298C35D8008943C3 /* JSON.cc */,
 				2762F6E3299ABF5A003363E3 /* sparse_hash.hh */,
 				2762F6E6299C0A00003363E3 /* sparse_hash_io.hh */,
-				271E33BB2A008DEE0070BE9A /* InPlaceHeap.hh */,
 			);
 			path = src;
 			sourceTree = "<group>";

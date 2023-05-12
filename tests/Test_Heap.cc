@@ -17,7 +17,6 @@
 //
 
 #include "smol_world.hh"
-#include "InPlaceHeap.hh"
 #include "catch.hpp"
 #include <iomanip>
 #include <iostream>

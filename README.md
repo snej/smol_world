@@ -22,11 +22,11 @@
 
 * A memory space called a “heap”, which internally uses 32-bit pointers
 * A super fast “bump” or “arena” memory allocator
-* Allocated blocks with only two bytes of overhead, including a type tag and object size. For further space savings, blocks are byte-aligned.
+* Heap blocks with very little space overhead: only one byte for blocks under 128 bytes (which is most of them.) For further space savings, blocks are byte-aligned, no padding.
 * A simple Cheney-style garbage collector that copies the live blocks to a new heap
 * Basic JSON-ish object types: strings, arrays and dictionaries/maps (plus binary blobs.) There’s also a JSON parser and generator.
 * Symbols, i.e. unique de-duplicated strings used as dictionary keys
-* A polymorphic 32-bit `Val` type that represents either an object pointer, a 31-bit integer, or null
+* A tagged polymorphic 32-bit `Val` type representing all the above types.
 * Friendly C++ wrapper classes for type-safe and null-safe operations on values
 
 The idea is that you can easily plug this into an interpreter of some kind and have a complete virtual machine.
@@ -34,8 +34,9 @@ The idea is that you can easily plug this into an interpreter of some kind and h
 ## Goals
 
 1. Have fun hacking on a small C++20 codebase with no external dependencies
-2. Build some cool, useful & reuseable data structures
-3. Keep everything as compact as possible to improve cache coherence (q.v.)
+2. Learn more about memory allocators and garbage collectors
+3. Build some cool, useful & reuseable data structures
+4. **Keep everything as compact as possible** to improve cache coherence (q.v.)
 
 ## Status
 
@@ -75,11 +76,13 @@ A lot of the objects we allocate are variable-size collections: strings, blobs, 
 
 With unaligned memory blocks, the heap metadata contains the *exact* block size. The smol Heap makes the block size available in the API so the higher-level string and collection classes can use it instead of storing their own.
 
+For example, in a smol heap an eight-item array occupies exactly 33 bytes of memory. By comparison, a comparable C++ std::vector on a 64-bit CPU would use at least 88: 24 for the vector structure itself (pointer, size, capacity), 64 bytes for the array of pointers. And that doesn’t count the unknown overhead of the heap block.
+
 # Architecture
 
 ## Heaps
 
-A `Heap` has a (native) pointer to an area of up to 2^30^ bytes (~1GB.) It can `malloc` the memory for you, or you can point it to memory you got some other way, like with `mmap`.
+A `Heap` has a (native) pointer to an area of up to 2^28^ bytes (256MB.) It can `malloc` the memory for you, or you can point it to memory you got some other way, like with `mmap`.
 
 You can persist or transmit a heap if you want, by writing the memory range given by its `contents` property to a file or socket. It can be reconstituted by calling `Heap::existing()`. This works because a heap contains no absolute pointers, only relative offsets (q.v.)
 
@@ -100,7 +103,7 @@ I originally used the first type because they’re simpler. But since dereferenc
 
 So I switched to relative pointers. This was trickier to implement, but it made almost everything else a lot cleaner, especially the API. 
 
-> (The trick to getting this to work was to delete `Val`’s copy constructor. You can’t let Vals be copyable or they’re likely to end up on the stack, and there’s no guarantee the stack is within ±2GB of a pointer’s target. Of course this change broke a ton of my code and I had to adapt to passing Vals by reference. Also there were some really, really annoying things I had to do in the Dict implementation and the garbage collector.)
+> (The trick to getting this to work in C++ was to delete `Val`’s copy constructor. You can’t let Vals be copyable or they’re likely to end up on the stack, and there’s no guarantee the stack is within ±2GB of a pointer’s target. Of course this change broke a ton of my code and I had to adapt to passing Vals by reference. Also there were some really, really annoying things I had to do in the Dict implementation and the garbage collector.)
 
 ### The allocator
 
@@ -114,13 +117,31 @@ If `_cur` would pass the heap’s `_end`, the Heap instead calls a user-supplied
 
 ### Heap blocks
 
-The class `Block` represents a heap block. After the allocator reserves some memory, it constructs a `Block` instance at that address. 
+An allocated block is prefixed by 1-4 header bytes that give its size and indicate whether it's been forwarded by the GC.. The header byte immediately before the block also has flags that indicate how many other header bytes there are.
 
-The `Block` class usually uses the first two bytes, or 16 bits. Six of those bits are flags: Three indicate the type of object stored in the block, one is a “mark” flag for the garbage collector, another is a flag for heap iteration, and the last indicates whether it’s a large block. That leaves 10 bits for the size, up to 1023 bytes.
+This diagram shows how the header is interpreted; the `|` denotes the address of the block.
 
-A block of 1024 or more bytes sets the “large” flag bit, and stores 16 more bits of size in the next two bytes. That makes the maximum size of a block 64MB.
+```
+                           0wwwwwww |                             :Small  (0-127)
+                  xxxxxxxx 100wwwww |                             :Medium (up to 8192)
+         yyyyyyyy xxxxxxxx 101wwwww |                             :Large  (up to 2MB)
+zzzzzzzz yyyyyyyy xxxxxxxx 110wwwww |                             :Huge   (up to 128MB)
+                           111wwwww | xxxxxxxx yyyyyyyy zzzzzzzz  :Forwarded (29-bit address)
+```
 
-Since each block starts with its size, it effectively points to the next block, meaning that it’s easy to traverse the heap as a linked list.
+In multi-byte headers the bit fields are concatenated with w the most significant and z the least; for example, a medium header denotes a size of `wwwwwxxxxxxxx`.
+
+The garbage collector marks blocks as forwarded while it runs. This can’t alter other blocks, so it can’t use more than the first byte of the header. Instead it overwrites three bytes of the block data, which is OK since the block’s been moved. This does mean that every block has to occupy at least 3 bytes, so blocks whose size is 0–2 will have some padding after the end.
+
+In real world programs most values are under 128 bytes -- that's room for a 31-item array or 15-item dictionary -- so they have only one byte of overhead.
+
+#### Iterable mode and hints
+
+The cost of this compactness is that it's not possible to decode a block header by starting at its front (low address) ... so the heap's blocks can't be iterated. If you start at a block and add its size to its address you get to the first byte of the header of the next block, but without being able to determine the header's size, you can't find where the next block starts.
+
+This isn't a problem in normal use, but it gets in the way of debugging and diagnostics since there's no way to dump the heap in human-readable form or to check that all the block metadata is valid. To solve that problem, the heap has an optional "iterable mode". In this mode it inserts a “hint” byte before each block’s header. This byte’s bits are assigned `SSSTTTTV`. `SSS` is the size of the block _header_, `TTTT` is the type of value, and `V` is a Visited flag.
+
+This solves the iteration problem: the byte immediately following a block is the next block’s hint, which says how many header bytes to skip to reach the start of the block itself. The type hint allows a heap dump to display a block’s value, and the Visited flag allows the heap to be traversed through the object graph itself.
 
 ## Values
 
@@ -135,30 +156,38 @@ The root data type is `Value`. There are currently seven subtypes:
 - `Array` (of values)
 - `Dict` (maps Symbols to Values)
 
-`Null`, `Bool` and `Integer` are tagged types stored in the `Value` itself; the others are references to objects allocated on the heap, and the flag bits in the heap `Block` give its type.
+`Null`, `Bool` and `Integer` are tagged types stored in the `Value` itself; the others are references to objects allocated on the heap.
+
+The tag occupies the three least significant bits:
+
+```
+…0000000000000'000 = null
+…0000000000001'000 = nullish
+…0000000000010'000 = false
+…0000000000011'000 = true
+…iiiiiiiiiiiii'001 = int
+
+…ppppppppppppp'010 = float64
+…ppppppppppppp'011 = string
+…ppppppppppppp'100 = symbol
+…ppppppppppppp'101 = blob
+…ppppppppppppp'110 = array
+…ppppppppppppp'111 = dict
+```
+
+Note that `Bool` shares a tag with `Null`.
 
 ### Val
 
-There are actually two forms of value. `Value` is the main type used in the API and application code; it contains a real (64-bit) pointer so it’s faster and easier to work with. 
+There are actually two forms of value. `Value` is the main type used in the API and application code; it’s the size of a native pointer, and its `pppp` bits are absolute addresses, so it’s faster and easier to work with.
 
-But when a value is stored in the heap, in an `Array` or `Dict`, it’s stored in a 32-bit form called `Val`.
-
-`Val` has one tag bit. If the LSB is 1, the other 31 bits hold an integer; if not, a smol pointer, except for special values for null, false and true:
-
-```
-00000000000000000000000000000000 = null (aka JS `undefined`)
-00000000000000000000000000000010 = nullish (aka JSON `null`)
-00000000000000000000000000000100 = false
-00000000000000000000000000000110 = true
-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx0 = Pointer (except the values above)
-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1 = Integer
-```
+But when a value is stored in the heap, in an `Array` or `Dict`, it’s stored in a 32-bit form called `Val`. The `pppp` bits are a 29-bit signed relative byte offset, as discussed in the **Pointers** section above.
 
 ## Objects
 
 All the heap-based object types are arrays of some kind: of `char`, `byte`, `Val` or `DictEntry`  (a key-value pair of `Val`s.)
 
-No separate size field is needed since the size is easily computed by right-shifting the `Block`’s size by 0–2 bytes.
+No separate size/capacity field is needed, since the size is easily computed by right-shifting the `Block`’s size by 0–2 bytes.
 
 `Dict` always keeps its `{key, value}` entries sorted by key. It’s literally just a descending sort of the 32-bit raw key; descending because we want the null (0x00) values representing empty pairs to collect at the end. This means that keys are compared by pointer equality, so if you use strings as keys you need to de-duplicate them – fortunately, `Symbol` objects do exactly that.
 
@@ -167,8 +196,6 @@ Symbols are managed by a `SymbolTable`, which owns a global-per-Heap `Array` tha
 ### count vs. capacity
 
 None of these collections have a separate `count` field to distinguish how much of the available capacity (block size) is used. That’s slightly awkward, but I didn’t want to add more bytes to the header. What I’m doing so far in Dict and Array is leaving `null` values at the end. This works well with Dict because its key sort puts the nulls last, so operations are still O(log n). It’s a bit awkward for Array, though; the `count` and `append` methods have to scan backwards to find a non-`null` item. But `insert` isn’t slowed down; it just pushes items ahead to the next slot until it hits a `null`.
-
-I’ve also tweaked the garbage collector so that when it copies an `Array` or `Dict`, it truncates the empty space. This seems like a good idea in general, but I suspect it will have some awkward edge cases where you allocate an instance with extra space to fill in, but allocating the objects to put in it triggers a GC, which gets rid of the empty space… Perfect solution TBD.
 
 ## The Garbage Collector
 

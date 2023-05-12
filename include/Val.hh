@@ -27,7 +27,7 @@ enum class Type : uint8_t {
     Array   = 6,
     Dict    = 7,
 
-    Bool    = 8,    // not actually stored in tag; encoded as Null tag
+    Bool    = 8,    // not actually stored in a Val's tag (see diagram below)
 
     Max = Bool,
 }; // Note: If you change this you must update TypeSet::All below and kTypeNames[] in Val.cc

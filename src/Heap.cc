@@ -276,6 +276,7 @@ void* Heap::rawAllocFailed(heapsize size) {
 }
 
 
+/// The hint byte placed before each block header when `_iterable` is true.
 struct Heap::BlockHint {
     uint8_t headerSize  :3;
     Type    type        :4;
